@@ -1,10 +1,4 @@
-//
-// Created by user on 7/18/25.
-//
-
 #include "training.h"
-
-#include <iostream>
 
 #include "../network/neural_net.h"
 #include "backpropogation.h"
@@ -32,17 +26,6 @@ void train(llm& model, const std::span<const token_id_t> input) {
 
     data.logit_input = acc;
     data.predictions = model.generate_logits(acc).softmax();
-
-    // std::cout << "Training Data:\n";
-    //
-    // std::cout << "Forward Results:\n";
-    // for (const auto& result : data.forward_results) {
-    //     std::cout << "Layer Input:\n" << result.layer_input.to_string() << std::endl;
-    //     std::cout << "Activation Input:\n" << result.activation_input.to_string() << std::endl;
-    //     std::cout << "Activation Output:\n" << result.activation_output.to_string() << std::endl;
-    // }
-    //
-    // std::cout << "Logit input:\n" << data.logit_input.to_string(6) << std::endl;
 
     backpropogate(model, data);
 }

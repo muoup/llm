@@ -5,8 +5,8 @@
 #include "neural_net.h"
 
 void llm::randomize() {
-    constexpr auto min = 0.0f;
-    constexpr auto max = 0.05f;
+    constexpr auto min = -0.25f;
+    constexpr auto max = 0.25f;
 
     for (auto &embedding : m_embeddings) {
         embedding.data.randomize(min, max);

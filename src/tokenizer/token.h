@@ -33,14 +33,12 @@ struct token_map_t {
         if (!free_ids.empty()) {
             const token_id_t id = free_ids.front();
             free_ids.pop();
-            tokens[id] = token_t {};
+            tokens[id] = token;
             return id;
         }
 
         tokens.push_back(token);
-
-        auto id = static_cast<token_id_t>(tokens.size() - 1);
-        return id;
+        return tokens.size() - 1;
     }
 
     void remove(const token_id_t id) {
@@ -72,3 +70,4 @@ std::string debug_string(const combo_token_t &token);
 std::string debug_string(token_t token);
 
 std::string token_to_plaintext(const token_map_t &token_map, const token_t &token);
+std::string tokens_to_plaintext(const token_map_t &token_map, const std::span<const token_id_t> &tokens);

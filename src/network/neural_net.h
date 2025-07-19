@@ -58,9 +58,9 @@ struct llm {
 
     matrix forward_l1(const matrix& input, size_t layer) const;
     static matrix activate(const matrix& input);
-    matrix forward_l2(const matrix& input, const size_t layer) const;
+    matrix forward_l2(const matrix& input, size_t layer) const;
 
-    matrix forward(const matrix& input, const size_t layer) const {
+    matrix feed_forward(const matrix& input, const size_t layer) const {
         const matrix l1_output = forward_l1(input, layer);
         const matrix activated = activate(l1_output);
         const matrix l2_output = forward_l2(l1_output, layer);
@@ -84,7 +84,7 @@ struct llm {
         matrix forwarded { 0, 0 };
 
         for (size_t i = 0; i < m_ff_layer.size(); ++i) {
-            forwarded = forward(input, i);
+            forwarded = feed_forward(input, i);
         }
 
         const matrix logits = generate_logits(forwarded);
@@ -96,7 +96,7 @@ struct llm {
             predictions.set(0, i, logits.get(last_logit_idx, i));
         }
 
-        return predictions.softmax();
+        return predictions;
     }
 
     token_id_t predict(const std::span<const token_id_t> tokens) const {
