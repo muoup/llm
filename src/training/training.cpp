@@ -1,5 +1,7 @@
 #include "training.h"
 
+#include <iostream>
+
 #include "../network/neural_net.h"
 #include "backpropogation.h"
 

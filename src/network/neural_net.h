@@ -38,14 +38,14 @@ static auto logistic(const float f) {
 }
 
 struct llm {
-    constexpr static size_t projection_scale = 4;
     size_t m_dimensions;
 
     std::vector<embedding> m_embeddings;
     std::vector<ff_layer> m_ff_layer;
     logit_layer m_logit_layer;
 
-    llm(const size_t vocab_size, const size_t layer_count, const size_t dimensions)
+    llm(const size_t vocab_size, const size_t layer_count,
+        const size_t dimensions, const size_t projection_scale = 4)
         : m_dimensions(dimensions),
           m_embeddings(vocab_size, embedding { dimensions }),
           m_ff_layer(layer_count, ff_layer { dimensions, dimensions * projection_scale }),
@@ -59,24 +59,9 @@ struct llm {
     matrix forward_l1(const matrix& input, size_t layer) const;
     static matrix activate(const matrix& input);
     matrix forward_l2(const matrix& input, size_t layer) const;
+    matrix generate_logits(const matrix &input) const;
 
-    matrix feed_forward(const matrix& input, const size_t layer) const {
-        const matrix l1_output = forward_l1(input, layer);
-        const matrix activated = activate(l1_output);
-        const matrix l2_output = forward_l2(l1_output, layer);
-
-        return l2_output;
-    }
-
-    matrix generate_logits(const matrix &input) const {
-        matrix logits = input.cross_multiply_map(m_logit_layer.w, logistic);
-
-        for (size_t i = 0; i < logits.rows; ++i) {
-            logits.add_row_vector(i, m_logit_layer.b);
-        }
-
-        return logits;
-    }
+    matrix feed_forward(const matrix& input, size_t layer) const;
 
     matrix prediction_matrix(const std::span<const token_id_t> tokens) const {
         const matrix input = embed_tokens(tokens);

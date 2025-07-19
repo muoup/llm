@@ -27,4 +27,14 @@ struct training_data {
           tokens(tokens.begin(), tokens.end()) {}
 };
 
+struct optimization_results {
+    matrix embeddings_gradient;
+
+    std::vector<matrix> ff_weight_gradients;
+    std::vector<matrix> ff_bias_gradients;
+
+    matrix logit_weight_gradient;
+    matrix logit_bias_gradient;
+};
+
 void backpropogate(llm& model, const training_data& data);

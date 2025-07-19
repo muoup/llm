@@ -26,6 +26,10 @@ float matrix::min() const {
                     std::numeric_limits<float>::max());
 }
 
+float matrix::absmax() const {
+    return this->reduce<float>([](const float a, const float b) { return std::max(a, std::abs(b)); },0);
+}
+
 float matrix::variance() const {
     const float sum = this->reduce<float>([](const float acc, const float value) { return acc + value; }, 0.0f);
     const float sum_sq = this->reduce<float>([](const float acc, const float value) { return acc + value * value; }, 0.0f);

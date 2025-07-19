@@ -9,7 +9,9 @@ find_package(OpenMP)
 
 file(GLOB_RECURSE SOURCE "src/*.cpp")
 
-add_executable(llm ${SOURCE})
+add_executable(llm ${SOURCE}
+        src/training/testing.cpp
+        src/training/testing.h)
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(llm PUBLIC OpenMP::OpenMP_CXX)

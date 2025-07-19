@@ -6,7 +6,7 @@
 #include <memory>
 #include <span>
 
-#define MATRIX_CHECKS
+// #define MATRIX_CHECKS
 
 #ifdef MATRIX_CHECKS
 #include "../util/assert.h"
@@ -84,14 +84,19 @@ struct matrix {
         });
 
         for (size_t i = 0; i < rows; ++i) {
-            auto row_sum = this->row_sum(i);
-
-            if (row_sum == 0.0f) row_sum += 1e-10f; // Prevent division by zero
+            const auto row_sum = this->row_sum(i);
 
             for (size_t j = 0; j < cols; ++j) {
                 set(i, j, get(i, j) / row_sum);
             }
         }
+
+        return *this;
+    }
+
+    matrix& normalize() {
+        const auto range = this->max() - this->min();
+        this->scale(1.0f / range);
 
         return *this;
     }
@@ -129,39 +134,39 @@ struct matrix {
         return result;
     }
 
-    matrix cross_multiply(const matrix& other) const {
-        return cross_multiply_map(other, identity);
-    }
+    // matrix cross_multiply(const matrix& other) const {
+    //     return cross_multiply_map(other, identity);
+    // }
 
-//     matrix cross_multiply(const matrix &other) const {
-//         verify_cross_multiply(other);
-//         matrix result { this->rows, other.cols };
-//
-// #ifndef MATRIX_CHECKS
-// #pragma omp parallel for
-// #endif
-//         for (size_t i = 0; i < this->rows; ++i) {
-//             for (size_t k = 0; k < other.rows; ++k) {
-//                 for (size_t j = 0; j < other.cols; ++j) {
-//                     const auto value = this->get(i, k);
-//                     const auto other_value = other.get(k, j);
-//                     const auto product = value * other_value;
-//
-//                     result.offset(i, j, value * other_value);
-//
-// #ifdef MATRIX_CHECKS
-//                     if (std::isnan(product) || std::isinf(product)) {
-//                         throw std::runtime_error("Invalid value encountered during cross multiplication: \n"
-//                                                ",\nvalue = " + std::to_string(value) +
-//                                                ",\nother_value = " + std::to_string(other_value));
-//                     }
-// #endif
-//                 }
-//             }
-//         }
-//
-//         return result;
-//     }
+    matrix cross_multiply(const matrix &other) const {
+        verify_cross_multiply(other);
+        matrix result { this->rows, other.cols };
+
+#ifndef MATRIX_CHECKS
+#pragma omp parallel for
+#endif
+        for (size_t i = 0; i < this->rows; ++i) {
+            for (size_t k = 0; k < other.rows; ++k) {
+                for (size_t j = 0; j < other.cols; ++j) {
+                    const auto value = this->get(i, k);
+                    const auto other_value = other.get(k, j);
+                    const auto product = value * other_value;
+
+                    result.offset(i, j, value * other_value);
+
+#ifdef MATRIX_CHECKS
+                    if (std::isnan(product) || std::isinf(product)) {
+                        throw std::runtime_error("Invalid value encountered during cross multiplication: \n"
+                                               ",\nvalue = " + std::to_string(value) +
+                                               ",\nother_value = " + std::to_string(other_value));
+                    }
+#endif
+                }
+            }
+        }
+
+        return result;
+    }
 
     matrix& scale(const float factor) {
         this->map([factor](const float value) {
@@ -245,6 +250,7 @@ struct matrix {
 
     float min() const;
     float max() const;
+    float absmax() const;
     float variance() const;
     float stddev() const;
 
