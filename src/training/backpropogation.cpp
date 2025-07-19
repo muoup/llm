@@ -10,13 +10,13 @@
 #include "../network/neural_net.h"
 #include "../tokenizer/token.h"
 
-constexpr auto learning_rate = 0.01f;
+constexpr auto learning_rate = 0.001f;
 
 float adjustments = 0.0f;
 float total_loss = 0.0f;
 
 float norm_clip_factor(const matrix& gradient) {
-    constexpr auto max_magnitude = 2.5f;
+    constexpr auto max_magnitude = 1.0f;
 
     const auto max = gradient.min();
     const auto min = gradient.max();
@@ -45,15 +45,14 @@ void adjust_matrix(matrix& adjust, const matrix& gradient) {
 
     for (size_t i = 0; i < adjust.rows; ++i) {
         for (size_t j = 0; j < adjust.cols; ++j) {
-            const auto val = adjust.get(i, j);
             const auto delta = gradient.get(i, j) * factor * learning_rate;
 
-            if (std::abs(delta) > 5) {
-                throw;
-            }
+            // if (std::abs(delta) > 5) {
+                // throw;
+            // }
 
             adjustments += std::abs(delta);
-            adjust.set(i, j, val - delta);
+            adjust.offset(i, j, -delta);
         }
     }
 }
@@ -91,13 +90,15 @@ matrix backpropogate_ff_layer(
 
     matrix b2_gradient { 1, post_layer_gradient.size() };
     for (size_t i = 0; i < post_layer_gradient.cols; ++i) {
-        const auto row_sum = post_layer_gradient.col_sum(i);
-        b2_gradient.set(0, i, row_sum);
+        const auto col_sum = post_layer_gradient.col_sum(i);
+        b2_gradient.set(0, i, col_sum);
     }
     adjust_matrix(layer.b2, b2_gradient);
 
-    const matrix w2_gradient = activation_output.transposed().cross_multiply(post_layer_gradient);
-    adjust_matrix(layer.w2, w2_gradient);
+    const matrix a1_t = activation_output.transposed();
+    const matrix w2_gradient = a1_t.cross_multiply(post_layer_gradient);
+
+    adjust_matrix(layer.w2, w2_gradient.scaled(-1));
 
     const matrix a1_gradient = post_layer_gradient.cross_multiply(layer.w2.transposed());
     matrix z1_gradient = a1_gradient;
@@ -111,15 +112,14 @@ matrix backpropogate_ff_layer(
         }
     }
 
-    matrix b1_gradient { 1, z1_gradient.size() };
-    for (size_t i = 0; i < post_layer_gradient.cols; ++i) {
+    matrix b1_gradient{1, z1_gradient.size()};
+    for (size_t i = 0; i < z1_gradient.cols; ++i) {
         const auto row_sum = z1_gradient.col_sum(i);
-
         b1_gradient.set(0, i, row_sum);
     }
-    adjust_matrix(layer.b1, b1_gradient);
+    adjust_matrix(layer.b1, b1_gradient.scaled(-1));
 
-    const matrix w1_gradient = layer_input.transposed().cross_multiply(z1_gradient);
+    const matrix w1_gradient = layer_input.transposed().cross_multiply(z1_gradient).scaled(-1);
     adjust_matrix(layer.w1, w1_gradient);
 
     return z1_gradient.cross_multiply(w1_gradient.transposed());

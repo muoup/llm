@@ -83,11 +83,15 @@ struct matrix {
             return std::exp(f);
         });
 
-        const auto sum = this->reduce<float>([](const float acc, const float value) {
-            return acc + value;
-        });
+        for (size_t i = 0; i < rows; ++i) {
+            auto row_sum = this->row_sum(i);
 
-        this->scale(1 / sum);
+            if (row_sum == 0.0f) row_sum += 1e-10f; // Prevent division by zero
+
+            for (size_t j = 0; j < cols; ++j) {
+                set(i, j, get(i, j) / row_sum);
+            }
+        }
 
         return *this;
     }
@@ -167,6 +171,12 @@ struct matrix {
         return *this;
     }
 
+    matrix scaled(const float factor) const {
+        matrix copy { *this };
+        copy.scale(factor);
+        return copy;
+    }
+
     matrix& offset(const matrix &offset) {
 #ifdef MATRIX_CHECKS
         llm_assert(this->cols == offset.cols && this->rows == offset.rows,
@@ -190,6 +200,12 @@ struct matrix {
         }
 
         return *this;
+    }
+
+    matrix mapped(const auto mapping) const {
+        matrix copy { *this };
+        copy.map(mapping);
+        return copy;
     }
 
     template <typename ret>

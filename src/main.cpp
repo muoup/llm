@@ -7,7 +7,7 @@
 #include "training/training.h"
 
 int main() {
-    srand(time(nullptr));
+    srand(123);
 
     const auto data = get_file_data("../data/talking_heads.txt").substr(0, 25);
     const auto [tokens, token_map] = tokenize(data, 256 - 128);//235 - 128);
@@ -21,7 +21,7 @@ int main() {
     const auto prompt_span = std::span { tokens.begin(), 10 };
     auto prompt = std::vector<token_id_t> { prompt_span.begin(), prompt_span.end() };
 
-    for (size_t i = 0; i < 1000; i++) {
+    for (size_t i = 0; i < 2500; i++) {
         train(model, tokens);
     }
 
