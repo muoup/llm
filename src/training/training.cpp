@@ -27,7 +27,10 @@ void train(llm& model, const std::span<const token_id_t> input) {
     }
 
     data.logit_input = acc;
-    data.predictions = model.generate_logits(acc).softmax();
+    data.predictions = model.generate_logits(acc);
+
+    std::cout << "data.predictions: " << data.predictions.to_string(4) << '\n';
+    data.predictions.softmax();
 
     backpropogate(model, data);
 }

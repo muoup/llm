@@ -73,15 +73,7 @@ struct llm {
         }
 
         const matrix logits = generate_logits(forwarded);
-        matrix predictions { 1, m_logit_layer.vocab_size };
-
-        const size_t last_logit_idx = logits.rows - 1;
-
-        for (size_t i = 0; i < logits.cols; ++i) {
-            predictions.set(0, i, logits.get(last_logit_idx, i));
-        }
-
-        return predictions;
+        return logits;
     }
 
     token_id_t predict(const std::span<const token_id_t> tokens) const {
@@ -106,7 +98,9 @@ struct llm {
             ss << "Layer " << i + 1 << ": W1 (" << m_ff_layer[i].w1.rows << " x " << m_ff_layer[i].w1.cols
                << "), W2 (" << m_ff_layer[i].w2.rows << " x " << m_ff_layer[i].w2.cols << ")\n";
             ss << "\n" << m_ff_layer[i].w1.to_string() << "\n";
+            ss << "\n" << m_ff_layer[i].b1.to_string() << "\n";
             ss << "\n" << m_ff_layer[i].w2.to_string() << "\n";
+            ss << "\n" << m_ff_layer[i].b2.to_string() << "\n";
         }
         return ss.str();
     }

@@ -10,20 +10,20 @@
 #include "../network/neural_net.h"
 #include "../tokenizer/token.h"
 
-constexpr float learning_rate = 0.001f;
-constexpr float regularization_strength = 0.01f;
+constexpr float learning_rate = 0.01f;
+constexpr float regularization_strength = 0.1f;
 
 float adjustments = 0.0f;
 float total_loss = 0.0f;
 
 float norm_clip_factor(const matrix& gradient) {
-    constexpr auto max_magnitude = 1.0f;
+    constexpr auto max_magnitude = 2.5f;
 
     const auto max = gradient.absmax();
-    float factor = 1 / max;
+    float factor = 1;
 
-    // if (max > max_magnitude)
-        // factor = max_magnitude / max;
+    if (max > max_magnitude)
+        factor = max_magnitude / max;
 
 #ifdef MATRIX_CHECKS
     if (std::isinf(factor) || std::isnan(factor) || factor > 1.0f) {
@@ -35,6 +35,24 @@ float norm_clip_factor(const matrix& gradient) {
 #endif
 
     return factor;
+}
+
+void norm_clip(matrix& gradient) {
+    const float factor = norm_clip_factor(gradient);
+    gradient.scale(factor);
+}
+
+void regularize_weight_gradient(matrix& gradient, const matrix& weights) {
+    norm_clip(gradient);
+
+    for (size_t i = 0; i < gradient.rows; ++i) {
+        for (size_t j = 0; j < gradient.cols; ++j) {
+            const auto weight_value = weights.get(i, j);
+            const auto regularization_term = 2 * regularization_strength * weight_value;
+
+            gradient.set(i, j, gradient.get(i, j) + regularization_term);
+        }
+    }
 }
 
 void adjust_matrix(matrix& adjust, const matrix& gradient) {
@@ -59,7 +77,7 @@ matrix backpropogate_logit_row(
 
     for (size_t i = 0; i < predictions.rows; ++i) {
         for (size_t j = 0; j < predictions.cols; ++j) {
-            const auto delta_loss = predictions.get(i, j) - (j == actual[i] ? 1.0f : 0.0f);
+            const auto delta_loss = predictions.get(i, j) - (j == actual[i + 1] ? 1.0f : 0.0f);
             logit_loss_gradient.set(i, j, delta_loss);
 
             if (j == actual[i]) {
@@ -68,9 +86,10 @@ matrix backpropogate_logit_row(
         }
     }
 
-    const matrix weight_output_gradient = last_ff_output.transposed().cross_multiply(logit_loss_gradient);
+    matrix weight_output_gradient = last_ff_output.transposed().cross_multiply(logit_loss_gradient);
     const matrix h_final_gradient = logit_loss_gradient.cross_multiply(model.m_logit_layer.w.transposed());
 
+    regularize_weight_gradient(weight_output_gradient, model.m_logit_layer.w);
     adjust_matrix(model.m_logit_layer.w, weight_output_gradient);
 
     // Return dJ/dH_final or the gradient of the final ff layer
@@ -94,7 +113,8 @@ matrix backpropogate_ff_layer(
     adjust_matrix(layer.b2, b2_gradient);
 
     const matrix a1_t = activation_output.transposed();
-    const matrix w2_gradient = a1_t.cross_multiply(post_layer_gradient);
+    matrix w2_gradient = a1_t.cross_multiply(post_layer_gradient);
+    regularize_weight_gradient(w2_gradient, layer.w2);
 
     adjust_matrix(layer.w2, w2_gradient);
 
@@ -117,7 +137,9 @@ matrix backpropogate_ff_layer(
     }
     adjust_matrix(layer.b1, b1_gradient);
 
-    const matrix w1_gradient = layer_input.transposed().cross_multiply(z1_gradient);
+    matrix w1_gradient = layer_input.transposed().cross_multiply(z1_gradient);
+    // regularize_weight_gradient(w1_gradient, layer.w1);
+
     adjust_matrix(layer.w1, w1_gradient);
 
     const auto input_gradient = z1_gradient.cross_multiply(layer.w1.transposed());
@@ -130,11 +152,11 @@ void backpropogate_embedding(llm& model, const std::span<const token_id_t> token
         auto &embedding = model.m_embeddings[token];
 
         matrix embedding_gradient_row { 1, embedding.data.cols };
-
         for (size_t i = 0; i < embedding.data.cols; i++) {
             embedding_gradient_row.set(0, i, x_gradient.get(t, i));
         }
 
+        regularize_weight_gradient(embedding_gradient_row, embedding.data);
         adjust_matrix(embedding.data, embedding_gradient_row);
     }
 }
@@ -150,12 +172,16 @@ void backpropogate(llm& model, const training_data& data) {
         data.tokens
     );
 
+    // norm_clip(previous_final_gradient);
+
     for (int i = model.m_ff_layer.size() - 1; i >= 0; i--) {
         previous_final_gradient = backpropogate_ff_layer(
             model.m_ff_layer.at(i),
             data.forward_results.at(i),
             previous_final_gradient
         );
+
+        // norm_clip(previous_final_gradient);
     }
 
     backpropogate_embedding(model, data.tokens, previous_final_gradient);

@@ -3,10 +3,11 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <span>
 
-// #define MATRIX_CHECKS
+#define MATRIX_CHECKS
 
 #ifdef MATRIX_CHECKS
 #include "../util/assert.h"
@@ -49,7 +50,7 @@ struct matrix {
         verify_bounds(row, col);
 
 #ifdef MATRIX_CHECKS
-        if (std::isnan(value)) {
+        if (std::isnan(value) || std::isinf(value)) {
             throw std::runtime_error("Invalid value: NaN is not allowed in matrix");
         }
 #endif
@@ -79,12 +80,14 @@ struct matrix {
     }
 
     matrix& softmax() {
+        normalize();
+
         this->map([](const float f) {
             return std::exp(f);
         });
 
         for (size_t i = 0; i < rows; ++i) {
-            const auto row_sum = this->row_sum(i);
+            const auto row_sum = this->row_sum(i) + 1e-8f; // Adding a small value to avoid division by zero
 
             for (size_t j = 0; j < cols; ++j) {
                 set(i, j, get(i, j) / row_sum);
@@ -95,8 +98,7 @@ struct matrix {
     }
 
     matrix& normalize() {
-        const auto range = this->max() - this->min();
-        this->scale(1.0f / range);
+        this->scale(1.0f / this->absmax());
 
         return *this;
     }
@@ -200,7 +202,8 @@ struct matrix {
     matrix& map(const auto mapping) {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
-                set(i, j, mapping(get(i, j)));
+                const auto value = get(i, j);
+                set(i, j, mapping(value));
             }
         }
 

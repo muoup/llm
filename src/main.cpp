@@ -7,14 +7,43 @@
 #include "training/testing.h"
 #include "training/training.h"
 
+void log_neuron_maxes(const llm& model) {
+    auto embedding_max = 0.0f;
+
+    for (const auto& embedding : model.m_embeddings) {
+        embedding_max = std::max(embedding_max, embedding.data.absmax());
+    }
+
+    std::cout << "Embedding max: " << embedding_max << "\n";
+
+    for (const auto& layer : model.m_ff_layer) {
+        const auto w1_max = layer.w1.absmax();
+        const auto w2_max = layer.w2.absmax();
+        const auto b1_max = layer.b1.absmax();
+        const auto b2_max = layer.b2.absmax();
+
+        std::cout << "Layer maxes: "
+                  << "W1: " << w1_max << ", "
+                  << "W2: " << w2_max << ", "
+                  << "B1: " << b1_max << ", "
+                  << "B2: " << b2_max << '\n';
+    }
+
+    const auto logit_w_max = model.m_logit_layer.w.absmax();
+    const auto logit_b_max = model.m_logit_layer.b.absmax();
+
+    std::cout << "Logit layer maxes: "
+              << "W: " << logit_w_max << ", "
+              << "B: " << logit_b_max << '\n';
+}
+
 int main() {
     srand(123);
 
-    // test_minimal_llm();
-    //
-    // return 0;
+    test_minimal_llm();
+    return 0;
 
-    const auto data = get_file_data("../data/talking_heads.txt").substr(0, 100);
+    const auto data = get_file_data("../data/talking_heads.txt").substr(0, 25);
     const auto [tokens, token_map] = tokenize(data, 512 - 128);//235 - 128);
 
     std::cout << "String length: " << data.size() << "\n";
@@ -26,36 +55,12 @@ int main() {
     const auto prompt_span = std::span { tokens.begin(), 10 };
     auto prompt = std::vector<token_id_t> { prompt_span.begin(), prompt_span.end() };
 
-    for (size_t i = 0; i < 250; i++) {
+    for (size_t i = 0; i < 200; i++) {
         train(model, tokens);
 
-        auto max_neuron = std::max(model.m_logit_layer.w.max(), model.m_logit_layer.b.max());
-        auto min_neuron = std::min(model.m_logit_layer.w.min(), model.m_logit_layer.b.min());
-
-        for (size_t j = 0; j < model.m_embeddings.size(); j++) {
-            auto& embedding = model.m_embeddings[j];
-
-            max_neuron = std::max(max_neuron, embedding.data.max());
-            min_neuron = std::min(min_neuron, embedding.data.min());
-            max_neuron = std::max(max_neuron, embedding.data.min());
-            min_neuron = std::min(min_neuron, embedding.data.max());
-        }
-
-        for (size_t j = 0; j < model.m_ff_layer.size(); j++) {
-            auto& layer = model.m_ff_layer[j];
-
-            max_neuron = std::max(max_neuron, layer.w1.max());
-            min_neuron = std::min(min_neuron, layer.w1.min());
-            max_neuron = std::max(max_neuron, layer.b1.max());
-            min_neuron = std::min(min_neuron, layer.b1.min());
-            max_neuron = std::max(max_neuron, layer.w2.max());
-            min_neuron = std::min(min_neuron, layer.w2.min());
-            max_neuron = std::max(max_neuron, layer.b2.max());
-            min_neuron = std::min(min_neuron, layer.b2.min());
-        }
-
-        std::cout << "Max neuron value: " << max_neuron << '\n';
-        std::cout << "Min neuron value: " << min_neuron << '\n';
+        std::cout << "Iteration " << i + 1 << " complete.\n";
+        log_neuron_maxes(model);
+        std::cout << '\n';
     }
 
     std::cout << "Prompt: " << tokens_to_plaintext(token_map, prompt) << '\n';
