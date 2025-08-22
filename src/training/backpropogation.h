@@ -6,7 +6,7 @@
 #include "../tokenizer/token.h"
 #include "../util/matrix.h"
 
-class llm;
+struct llm;
 
 struct forward_result {
     matrix layer_input;

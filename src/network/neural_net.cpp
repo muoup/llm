@@ -30,7 +30,6 @@ matrix llm::embed_tokens(const std::span<const token_id_t> tokens) const {
     }
 
     positional_encoding(output);
-
     return output;
 }
 

@@ -97,10 +97,10 @@ struct llm {
         for (size_t i = 0; i < m_ff_layer.size(); ++i) {
             ss << "Layer " << i + 1 << ": W1 (" << m_ff_layer[i].w1.rows << " x " << m_ff_layer[i].w1.cols
                << "), W2 (" << m_ff_layer[i].w2.rows << " x " << m_ff_layer[i].w2.cols << ")\n";
-            ss << "\n" << m_ff_layer[i].w1.to_string() << "\n";
-            ss << "\n" << m_ff_layer[i].b1.to_string() << "\n";
-            ss << "\n" << m_ff_layer[i].w2.to_string() << "\n";
-            ss << "\n" << m_ff_layer[i].b2.to_string() << "\n";
+            ss << "\nff w1 i=" << i << " " << m_ff_layer[i].w1.to_string() << "\n";
+            ss << "\nff b1 i=" << i << " " << m_ff_layer[i].b1.to_string() << "\n";
+            ss << "\nff w2 i=" << i << " " << m_ff_layer[i].w2.to_string() << "\n";
+            ss << "\nff b2 i=" << i << " " << m_ff_layer[i].b2.to_string() << "\n";
         }
         return ss.str();
     }

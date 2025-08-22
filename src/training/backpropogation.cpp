@@ -10,14 +10,14 @@
 #include "../network/neural_net.h"
 #include "../tokenizer/token.h"
 
-constexpr float learning_rate = 0.01f;
-constexpr float regularization_strength = 0.1f;
+constexpr float learning_rate = 0.001f;
+constexpr float regularization_strength = 0.0f;
 
 float adjustments = 0.0f;
 float total_loss = 0.0f;
 
 float norm_clip_factor(const matrix& gradient) {
-    constexpr auto max_magnitude = 2.5f;
+    constexpr auto max_magnitude = 5.0f;
 
     const auto max = gradient.absmax();
     float factor = 1;
@@ -74,23 +74,32 @@ matrix backpropogate_logit_row(
     const std::span<const token_id_t> actual
 ) {
     matrix logit_loss_gradient { actual.size() - 1, model.vocab_size() };
+    matrix logit_bias_gradient { 1, model.vocab_size() };
 
     for (size_t i = 0; i < predictions.rows; ++i) {
         for (size_t j = 0; j < predictions.cols; ++j) {
             const auto delta_loss = predictions.get(i, j) - (j == actual[i + 1] ? 1.0f : 0.0f);
             logit_loss_gradient.set(i, j, delta_loss);
+            logit_bias_gradient.offset(0, j, delta_loss);
 
-            if (j == actual[i]) {
-                total_loss += std::abs(delta_loss);
+            if (j == actual[i + 1]) {
+                total_loss += -std::log(predictions.get(i, j));
             }
         }
     }
 
-    matrix weight_output_gradient = last_ff_output.transposed().cross_multiply(logit_loss_gradient);
-    const matrix h_final_gradient = logit_loss_gradient.cross_multiply(model.m_logit_layer.w.transposed());
+    // std::cout << "logit_bias_gradient: \n" << logit_bias_gradient.to_string(4) << '\n';
 
-    regularize_weight_gradient(weight_output_gradient, model.m_logit_layer.w);
-    adjust_matrix(model.m_logit_layer.w, weight_output_gradient);
+    adjust_matrix(model.m_logit_layer.b, logit_bias_gradient);
+
+    const matrix h_final_gradient = logit_loss_gradient.cross_multiply(model.m_logit_layer.w.transposed());
+    matrix logit_weight_gradient = last_ff_output.transposed().cross_multiply(logit_loss_gradient);
+
+    // std::cout << "logit_weight_gradient: \n" << logit_weight_gradient.to_string(4) << '\n';
+    // std::cout << "h_final_gradient: \n" << h_final_gradient.to_string(4) << '\n';
+
+    regularize_weight_gradient(logit_weight_gradient, model.m_logit_layer.w);
+    adjust_matrix(model.m_logit_layer.w, logit_weight_gradient);
 
     // Return dJ/dH_final or the gradient of the final ff layer
     return h_final_gradient;
@@ -114,23 +123,23 @@ matrix backpropogate_ff_layer(
 
     const matrix a1_t = activation_output.transposed();
     matrix w2_gradient = a1_t.cross_multiply(post_layer_gradient);
-    regularize_weight_gradient(w2_gradient, layer.w2);
 
+    regularize_weight_gradient(w2_gradient, layer.w2);
     adjust_matrix(layer.w2, w2_gradient);
 
     const matrix a1_gradient = post_layer_gradient.cross_multiply(layer.w2.transposed());
-    matrix z1_gradient = a1_gradient;
+    matrix z1_gradient { a1_gradient.rows, a1_gradient.cols };
 
-    for (size_t i = 0; i < a1_gradient.rows; i++) {
-        for (size_t j = 0; j < a1_gradient.cols; j++) {
+    for (size_t i = 0; i < z1_gradient.rows; i++) {
+        for (size_t j = 0; j < z1_gradient.cols; j++) {
             const auto z1_value = activation_input.get(i, j);
-            const auto self_value = z1_gradient.get(i, j);
+            const auto self_value = a1_gradient.get(i, j);
 
             z1_gradient.set(i, j, self_value * (z1_value > 0 ? 1.0f : 0.0f));
         }
     }
 
-    matrix b1_gradient{1, z1_gradient.size()};
+    matrix b1_gradient{1, z1_gradient.cols };
     for (size_t i = 0; i < z1_gradient.cols; ++i) {
         const auto row_sum = z1_gradient.col_sum(i);
         b1_gradient.set(0, i, row_sum);
@@ -138,7 +147,7 @@ matrix backpropogate_ff_layer(
     adjust_matrix(layer.b1, b1_gradient);
 
     matrix w1_gradient = layer_input.transposed().cross_multiply(z1_gradient);
-    // regularize_weight_gradient(w1_gradient, layer.w1);
+    regularize_weight_gradient(w1_gradient, layer.w1);
 
     adjust_matrix(layer.w1, w1_gradient);
 
@@ -172,7 +181,7 @@ void backpropogate(llm& model, const training_data& data) {
         data.tokens
     );
 
-    // norm_clip(previous_final_gradient);
+    norm_clip(previous_final_gradient);
 
     for (int i = model.m_ff_layer.size() - 1; i >= 0; i--) {
         previous_final_gradient = backpropogate_ff_layer(
@@ -181,13 +190,11 @@ void backpropogate(llm& model, const training_data& data) {
             previous_final_gradient
         );
 
-        // norm_clip(previous_final_gradient);
+        norm_clip(previous_final_gradient);
     }
 
     backpropogate_embedding(model, data.tokens, previous_final_gradient);
 
     std::cout << "Adjustments: " << adjustments << '\n';
-
-    std::cout << std::fixed << std::setprecision(8);
     std::cout << "Total Loss: " << total_loss << '\n';
 }
