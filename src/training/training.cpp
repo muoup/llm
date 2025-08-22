@@ -21,7 +21,7 @@ void train(llm& model, const std::span<const token_id_t> input) {
 
         data.forward_results.emplace_back(acc, l1_output, activated);
 
-        acc = l2_output;
+        acc.offset(l2_output);
     }
 
     data.logit_input = acc;

@@ -10,11 +10,11 @@
 #include "../network/neural_net.h"
 #include "../tokenizer/token.h"
 
-constexpr float learning_rate = 0.001f;
+constexpr float learning_rate = 0.0001f;
 constexpr float regularization_strength = 0.0f;
 
 float adjustments = 0.0f;
-float total_loss = 0.0f;
+double total_loss = 0.0f;
 
 float norm_clip_factor(const matrix& gradient) {
     constexpr auto max_magnitude = 5.0f;
@@ -83,20 +83,15 @@ matrix backpropogate_logit_row(
             logit_bias_gradient.offset(0, j, delta_loss);
 
             if (j == actual[i + 1]) {
-                total_loss += -std::log(predictions.get(i, j));
+                total_loss -= std::log(predictions.get(i, j));
             }
         }
     }
-
-    // std::cout << "logit_bias_gradient: \n" << logit_bias_gradient.to_string(4) << '\n';
 
     adjust_matrix(model.m_logit_layer.b, logit_bias_gradient);
 
     const matrix h_final_gradient = logit_loss_gradient.cross_multiply(model.m_logit_layer.w.transposed());
     matrix logit_weight_gradient = last_ff_output.transposed().cross_multiply(logit_loss_gradient);
-
-    // std::cout << "logit_weight_gradient: \n" << logit_weight_gradient.to_string(4) << '\n';
-    // std::cout << "h_final_gradient: \n" << h_final_gradient.to_string(4) << '\n';
 
     regularize_weight_gradient(logit_weight_gradient, model.m_logit_layer.w);
     adjust_matrix(model.m_logit_layer.w, logit_weight_gradient);
@@ -135,7 +130,7 @@ matrix backpropogate_ff_layer(
             const auto z1_value = activation_input.get(i, j);
             const auto self_value = a1_gradient.get(i, j);
 
-            z1_gradient.set(i, j, self_value * (z1_value > 0 ? 1.0f : 0.0f));
+            z1_gradient.set(i, j, self_value * (z1_value > 0 ? 1.0f : 0.01f));
         }
     }
 
@@ -151,7 +146,9 @@ matrix backpropogate_ff_layer(
 
     adjust_matrix(layer.w1, w1_gradient);
 
-    const auto input_gradient = z1_gradient.cross_multiply(layer.w1.transposed());
+    auto input_gradient = z1_gradient
+        .cross_multiply(layer.w1.transposed())
+        .offset(post_layer_gradient);
     return input_gradient;
 }
 

@@ -1,6 +1,7 @@
 #include "neural_net.h"
 
 #include <iostream>
+#include <sstream>
 
 void llm::randomize() {
     constexpr auto min = -0.5f;
@@ -57,12 +58,12 @@ matrix llm::forward_l1(const matrix& input, const size_t layer) const {
 }
 
 matrix llm::activate(const matrix& input) {
-    constexpr static auto relu = [](const float f) {
-        return f < 0 ? 0 : f;
+    constexpr static auto leaky_relu = [](const float f) {
+        return f < 0 ? 0.01f * f : f;
     };
 
     matrix output { input };
-    return output.map(relu);
+    return output.map(leaky_relu);
 }
 
 matrix llm::forward_l2(const matrix& input, const size_t layer) const {
@@ -90,7 +91,51 @@ matrix llm::generate_logits(const matrix& input) const {
 matrix llm::feed_forward(const matrix& input, const size_t layer) const {
     const matrix l1_output = forward_l1(input, layer);
     const matrix activated = activate(l1_output);
-    const matrix l2_output = forward_l2(l1_output, layer);
+    const matrix l2_output = forward_l2(activated, layer);
 
     return l2_output;
+}
+
+matrix llm::prediction_matrix(const std::span<const token_id_t> tokens) const {
+    matrix acc = embed_tokens(tokens);
+
+    for (size_t i = 0; i < m_ff_layer.size(); ++i) {
+        const matrix l1_output = forward_l1(acc, i);
+        const matrix activated = activate(l1_output);
+        const matrix l2_output = forward_l2(activated, i);
+
+        acc.offset(l2_output);
+    }
+
+    const matrix logits = generate_logits(acc);
+    return logits;
+}
+
+token_id_t llm::predict(const std::span<const token_id_t> tokens) const {
+    const auto predictions = prediction_matrix(tokens);
+
+    auto max_idx = 0;
+    const size_t last_row = predictions.rows - 1;
+
+    for (size_t i = 1; i < predictions.cols; i++) {
+        if (predictions.get(last_row, i) > predictions.get(last_row, max_idx)) {
+            max_idx = i;
+        }
+    }
+
+    return max_idx;
+}
+
+std::string llm::to_string() const {
+    std::stringstream ss;
+    ss << "LLM with " << m_embeddings.size() << " embeddings and " << m_ff_layer.size() << " layers.\n";
+    for (size_t i = 0; i < m_ff_layer.size(); ++i) {
+        ss << "Layer " << i + 1 << ": W1 (" << m_ff_layer[i].w1.rows << " x " << m_ff_layer[i].w1.cols
+           << "), W2 (" << m_ff_layer[i].w2.rows << " x " << m_ff_layer[i].w2.cols << ")\n";
+        ss << "\nff w1 i=" << i << " " << m_ff_layer[i].w1.to_string() << "\n";
+        ss << "\nff b1 i=" << i << " " << m_ff_layer[i].b1.to_string() << "\n";
+        ss << "\nff w2 i=" << i << " " << m_ff_layer[i].w2.to_string() << "\n";
+        ss << "\nff b2 i=" << i << " " << m_ff_layer[i].b2.to_string() << "\n";
+    }
+    return ss.str();
 }

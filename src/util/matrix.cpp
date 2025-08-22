@@ -7,6 +7,12 @@
 #include <cmath>
 #include <iomanip>
 
+void matrix::verify_bounds(const size_t row, const size_t col) const {
+    matrix_assert(row < rows && col < cols,
+                  "Index out of bounds: (" + std::to_string(row) + ", " + std::to_string(col) +
+                  ") for matrix of size (" + std::to_string(rows) + "x" + std::to_string(cols) + ")");
+}
+
 void matrix::randomize(const float min, const float max) {
     for (size_t i = 0; i < rows; ++i) {
         for (size_t j = 0; j < cols; ++j) {

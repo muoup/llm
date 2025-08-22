@@ -3,11 +3,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <span>
-
-#define MATRIX_CHECKS
 
 #ifdef MATRIX_CHECKS
 #include "../util/assert.h"
@@ -16,6 +13,14 @@
 
 static float identity(const float f) {
     return f;
+}
+
+static void matrix_assert(const bool condition, const std::string& message) {
+#ifdef MATRIX_CHECKS
+    if (!condition) {
+        throw std::runtime_error("Matrix assertion failed: " + message);
+    }
+#endif
 }
 
 struct matrix {
@@ -41,19 +46,11 @@ struct matrix {
 
     [[nodiscard]] float get(const size_t row, const size_t col) const {
         verify_bounds(row, col);
-
-        const auto value = data[col + row * cols];
-        return value;
+        return data[col + row * cols];
     }
 
-    void set(const size_t row, const size_t col, const float value) {
+    void matrix::set(const size_t row, const size_t col, const float value) {
         verify_bounds(row, col);
-
-#ifdef MATRIX_CHECKS
-        if (std::isnan(value) || std::isinf(value)) {
-            throw std::runtime_error("Invalid value: NaN is not allowed in matrix");
-        }
-#endif
 
         data[col + row * cols] = value;
     }
@@ -64,7 +61,8 @@ struct matrix {
     }
 
     void set_row_vector(const size_t row, const matrix& row_vector) {
-        verify_row_addition(row_vector);
+        matrix_assert(this->cols == row_vector.cols,
+                      "Row vector must have the same number of columns as the matrix");
 
         for (size_t j = 0; j < row_vector.cols; ++j) {
             set(row, j, row_vector.get(0, j));
@@ -72,7 +70,8 @@ struct matrix {
     }
 
     void add_row_vector(const size_t row, const matrix &other) {
-        verify_row_addition(other);
+        matrix_assert(this->cols == other.cols,
+                      "Row vector must have the same number of columns as the matrix");
 
         for (size_t i = 0; i < cols; ++i) {
             set(row, i, get(row, i) + other.get(0, i));
@@ -80,7 +79,20 @@ struct matrix {
     }
 
     matrix& softmax() {
-        normalize();
+        for (size_t i = 0; i < rows; ++i) {
+            // Find the maximum value in the row
+            float max_val = get(i, 0);
+            for (size_t j = 1; j < cols; ++j) {
+                if (get(i, j) > max_val) {
+                    max_val = get(i, j);
+                }
+            }
+
+            // Subtract the max value from each element in the row to prevent overflow
+            for (size_t j = 0; j < cols; ++j) {
+                set(i, j, get(i, j) - max_val);
+            }
+        }
 
         this->map([](const float f) {
             return std::exp(f);
@@ -103,67 +115,24 @@ struct matrix {
         return *this;
     }
 
-    matrix cross_multiply_map(const matrix &other, float(*const mapping)(float)) const {
-        verify_cross_multiply(other);
-
-        const matrix other_transposed = other.transposed();
-        matrix result { this->rows, other.cols };
-
-        for (size_t i = 0; i < this->rows; ++i) {
-            for (size_t j = 0; j < other.cols; ++j) {
-                float sum = 0.0f;
-                for (size_t k = 0; k < other.rows; ++k) {
-                    const auto value = this->get(i, k);
-                    const auto other_value = other_transposed.get(j, k);
-                    const auto prev_sum = sum;
-
-                    sum += value * other_value;
-
-#ifdef MATRIX_CHECKS
-                    if (std::isnan(sum) || std::isinf(sum)) {
-                        throw std::runtime_error("Invalid value encountered during cross multiplication: \n"
-                                               "previous sum = " + std::to_string(prev_sum) +
-                                               ",\nvalue = " + std::to_string(value) +
-                                               ",\nother_value = " + std::to_string(other_value));
-                    }
-#endif
-                }
-
-                result.set(i, j, mapping(sum));
-            }
-        }
-
-        return result;
-    }
-
-    // matrix cross_multiply(const matrix& other) const {
-    //     return cross_multiply_map(other, identity);
-    // }
-
     matrix cross_multiply(const matrix &other) const {
-        verify_cross_multiply(other);
+        matrix_assert(this->cols == other.rows,
+                      "Matrix dimensions do not match for cross multiplication");
+
         matrix result { this->rows, other.cols };
+        const matrix other_t = other.transposed();
 
 #ifndef MATRIX_CHECKS
 #pragma omp parallel for
 #endif
         for (size_t i = 0; i < this->rows; ++i) {
-            for (size_t k = 0; k < other.rows; ++k) {
-                for (size_t j = 0; j < other.cols; ++j) {
-                    const auto value = this->get(i, k);
-                    const auto other_value = other.get(k, j);
-                    const auto product = value * other_value;
-
-                    result.offset(i, j, value * other_value);
-
-#ifdef MATRIX_CHECKS
-                    if (std::isnan(product) || std::isinf(product)) {
-                        throw std::runtime_error("Invalid value encountered during cross multiplication: \n"
-                                               ",\nvalue = " + std::to_string(value) +
-                                               ",\nother_value = " + std::to_string(other_value));
-                    }
-#endif
+            for (size_t j = 0; j < other.cols; ++j) {
+                float sum = 0.0f;
+                for (size_t k = 0; k < this->cols; ++k) {
+                    sum += this->get(i, k) * other_t.get(j, k);
                 }
+                result.set(i, j, sum);
+                verify_bounds(i, j);
             }
         }
 
@@ -279,33 +248,5 @@ struct matrix {
     }
 
 private:
-    void verify_bounds(const size_t row, const size_t col) const {
-#ifdef MATRIX_CHECKS
-        if (col >= cols || row >= rows)
-            throw std::out_of_range("Index out of bounds: (" + std::to_string(row) + ", " + std::to_string(col) +
-                                    ") (rows: " + std::to_string(rows) + ", cols: " + std::to_string(cols) + ")");
-#endif
-    }
-
-    void verify_cross_multiply(const matrix& other) const {
-#ifdef MATRIX_CHECKS
-        if (this->cols != other.rows) {
-            std::stringstream ss;
-            ss << "Invalid cross multiplication: (" << this->rows << "x" << this->cols << ") * ("
-               << other.rows << "x" << other.cols << ")";
-            throw std::invalid_argument(ss.str());
-        }
-#endif
-    }
-
-    void verify_row_addition(const matrix& other) const {
-#ifdef MATRIX_CHECKS
-        if (other.rows != 1 || this->cols != other.cols) {
-            std::stringstream ss;
-            ss << "Invalid row addition: (" << this->rows << "x" << this->cols << ") + ("
-               << other.rows << "x" << other.cols << ")";
-            throw std::invalid_argument(ss.str());
-        }
-#endif
-    }
+    void verify_bounds(const size_t row, const size_t col) const;
 };

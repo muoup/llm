@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <cmath>
-#include <sstream>
 
 #include "../util/matrix.h"
 #include "../tokenizer/token.h"
@@ -33,7 +32,7 @@ struct logit_layer {
           b(1, vocab_size) {}
 };
 
-static auto logistic(const float f) {
+static constexpr auto logistic(const float f) {
     return 1.0f / (1.0f + std::exp(-f));
 }
 
@@ -63,47 +62,10 @@ struct llm {
 
     matrix feed_forward(const matrix& input, size_t layer) const;
 
-    matrix prediction_matrix(const std::span<const token_id_t> tokens) const {
-        const matrix input = embed_tokens(tokens);
+    matrix prediction_matrix(std::span<const token_id_t> tokens) const;
+    token_id_t predict(std::span<const token_id_t> tokens) const;
 
-        matrix forwarded { 0, 0 };
-
-        for (size_t i = 0; i < m_ff_layer.size(); ++i) {
-            forwarded = feed_forward(input, i);
-        }
-
-        const matrix logits = generate_logits(forwarded);
-        return logits;
-    }
-
-    token_id_t predict(const std::span<const token_id_t> tokens) const {
-        const auto predictions = prediction_matrix(tokens);
-
-        auto max_idx = 0;
-        const size_t last_row = predictions.rows - 1;
-
-        for (size_t i = 1; i < predictions.cols; i++) {
-            if (predictions.get(last_row, i) > predictions.get(last_row, max_idx)) {
-                max_idx = i;
-            }
-        }
-
-        return max_idx;
-    }
-
-    std::string to_string() const {
-        std::stringstream ss;
-        ss << "LLM with " << m_embeddings.size() << " embeddings and " << m_ff_layer.size() << " layers.\n";
-        for (size_t i = 0; i < m_ff_layer.size(); ++i) {
-            ss << "Layer " << i + 1 << ": W1 (" << m_ff_layer[i].w1.rows << " x " << m_ff_layer[i].w1.cols
-               << "), W2 (" << m_ff_layer[i].w2.rows << " x " << m_ff_layer[i].w2.cols << ")\n";
-            ss << "\nff w1 i=" << i << " " << m_ff_layer[i].w1.to_string() << "\n";
-            ss << "\nff b1 i=" << i << " " << m_ff_layer[i].b1.to_string() << "\n";
-            ss << "\nff w2 i=" << i << " " << m_ff_layer[i].w2.to_string() << "\n";
-            ss << "\nff b2 i=" << i << " " << m_ff_layer[i].b2.to_string() << "\n";
-        }
-        return ss.str();
-    }
+    std::string to_string() const;
 
     size_t vocab_size() const {
         return m_logit_layer.vocab_size;
