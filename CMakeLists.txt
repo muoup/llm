@@ -1,11 +1,14 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.25)
 project(llm LANGUAGES CXX)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -O3 -flto")
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(OpenMP)
+add_compile_options(-fopenmp -O3)
+add_compile_options(-fno-exceptions -Wall -Wextra -Wpedantic -Werror)
+add_link_options(-fopenmp)
 
 file(GLOB_RECURSE SOURCE "src/*.cpp")
 
@@ -15,6 +18,4 @@ target_compile_definitions(llm PRIVATE
     $<$<CONFIG:Debug>:MATRIX_CHECKS>
 )
 
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(llm PUBLIC OpenMP::OpenMP_CXX)
-endif()
+target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

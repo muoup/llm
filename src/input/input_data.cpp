@@ -44,7 +44,7 @@ std::string format_data(std::string data) {
         if (std::iswspace(*ptr)) {
             if (valid_whitespace(ptr, data.begin(), data.end()))
                 formatted_data.append(1, ' ');
-        } else if (ch >= 0 && ch < 128) {
+        } else if (std::isprint(ch)) {
             formatted_data.append(1, ch);
         }
     }

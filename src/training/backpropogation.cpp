@@ -4,7 +4,6 @@
 
 #include "backpropogation.h"
 
-#include <iomanip>
 #include <iostream>
 
 #include "../network/neural_net.h"

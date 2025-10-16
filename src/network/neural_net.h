@@ -3,8 +3,8 @@
 #include <vector>
 #include <cmath>
 
-#include "../util/matrix.h"
-#include "../tokenizer/token.h"
+#include <util/matrix.h>
+#include <tokenizer/token.h>
 
 struct embedding {
     matrix data;

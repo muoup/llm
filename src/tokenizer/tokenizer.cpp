@@ -1,24 +1,18 @@
 #include "tokenizer.h"
 
-#include <iostream>
+#include <cctype>
 #include <map>
-#include <span>
 
 using frequency_map_t = std::map<combo_token_t, std::size_t>;
 
 token_list_t collect_char_data(const std::string_view input, token_map_t &token_map) {
-    token_list_t tokens;
 
     for (int i = 0; i < 128; ++i) {
         token_map.insert(token_t { static_cast<char>(i) });
     }
-
+  
+    token_list_t tokens;
     for (const char ch : input) {
-        if (ch < 0 || ch >= 128) {
-            std::cerr << "Warning: Character '" << ch << "' is out of range (0-127) and will be skipped.\n";
-            continue;
-        }
-
         tokens.push_back(ch);
     }
 
@@ -91,7 +85,7 @@ tokenize_results_t tokenize(const std::string_view input, const size_t tokenize_
     token_map_t token_map;
     token_list_t tokens = collect_char_data(input, token_map);
 
-    for (int i = 0; i < tokenize_size; ++i) {
+    for (size_t i = 0; i < tokenize_size; ++i) {
         auto [highest_frequency_pair, frequency] = get_highest_frequency_pair(tokens);
 
         // Token pairs that appear less than 3 times are not considered semantically meaningful

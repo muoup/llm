@@ -55,9 +55,6 @@ void print_prediction_process(const llm& model, const std::span<const token_id_t
 }
 
 void test_fixed_llm() {
-    constexpr auto seed = 1752983838; // time(nullptr);
-    // std::cout << "Seed: " << seed << '\n';
-
     std::vector tokens { static_cast<token_id_t>(0), static_cast<token_id_t>(1) };
 
     llm model { 2, 1, 1, 1 };

@@ -11,17 +11,17 @@
 #include <sstream>
 #endif
 
-static float identity(const float f) {
-    return f;
-}
-
-static void matrix_assert(const bool condition, const std::string& message) {
 #ifdef MATRIX_CHECKS
-    if (!condition) {
-        throw std::runtime_error("Matrix assertion failed: " + message);
+#define MATRIX_ASSERT(condition, message, ...) \
+    if (!(condition)) { \
+        std::println("Matrix assertion failed: " message, __VA_ARGS__); \
+        std::abort(); \
     }
+#else
+#define MATRIX_ASSERT(condition, message, ...) \
+    (void)(condition); \
+    (void)(message);
 #endif
-}
 
 struct matrix {
     size_t rows, cols;
@@ -31,13 +31,13 @@ struct matrix {
         : rows(rows), cols(cols), data(std::make_unique<float[]>(cols * rows)) {
         std::memset(data.get(), 0, cols * rows * sizeof(float));
     }
-    matrix(matrix&&) = default;
-    matrix(const matrix& other) : matrix(other.rows, other.cols) {
+    matrix(matrix &&) = default;
+    matrix(const matrix &other) : matrix(other.rows, other.cols) {
         std::memcpy(data.get(), other.data.get(), cols * rows * sizeof(float));
     }
 
-    matrix& operator=(matrix&&) = default;
-    matrix& operator=(const matrix& other) {
+    matrix &operator=(matrix &&) = default;
+    matrix &operator=(const matrix &other) {
         *this = matrix(other);
         return *this;
     }
@@ -49,7 +49,7 @@ struct matrix {
         return data[col + row * cols];
     }
 
-    void matrix::set(const size_t row, const size_t col, const float value) {
+    void set(const size_t row, const size_t col, const float value) {
         verify_bounds(row, col);
 
         data[col + row * cols] = value;
@@ -60,9 +60,10 @@ struct matrix {
         data[col + row * cols] += offset;
     }
 
-    void set_row_vector(const size_t row, const matrix& row_vector) {
-        matrix_assert(this->cols == row_vector.cols,
-                      "Row vector must have the same number of columns as the matrix");
+    void set_row_vector(const size_t row, const matrix &row_vector) {
+        MATRIX_ASSERT(
+            this->cols == row_vector.cols,
+            "Row vector must have the same number of columns as the matrix");
 
         for (size_t j = 0; j < row_vector.cols; ++j) {
             set(row, j, row_vector.get(0, j));
@@ -70,15 +71,16 @@ struct matrix {
     }
 
     void add_row_vector(const size_t row, const matrix &other) {
-        matrix_assert(this->cols == other.cols,
-                      "Row vector must have the same number of columns as the matrix");
+        MATRIX_ASSERT(
+            this->cols == other.cols,
+            "Row vector must have the same number of columns as the matrix");
 
         for (size_t i = 0; i < cols; ++i) {
             set(row, i, get(row, i) + other.get(0, i));
         }
     }
 
-    matrix& softmax() {
+    matrix &softmax() {
         for (size_t i = 0; i < rows; ++i) {
             // Find the maximum value in the row
             float max_val = get(i, 0);
@@ -88,18 +90,19 @@ struct matrix {
                 }
             }
 
-            // Subtract the max value from each element in the row to prevent overflow
+            // Subtract the max value from each element in the row to prevent
+            // overflow
             for (size_t j = 0; j < cols; ++j) {
                 set(i, j, get(i, j) - max_val);
             }
         }
 
-        this->map([](const float f) {
-            return std::exp(f);
-        });
+        this->map([](const float f) { return std::exp(f); });
 
         for (size_t i = 0; i < rows; ++i) {
-            const auto row_sum = this->row_sum(i) + 1e-8f; // Adding a small value to avoid division by zero
+            const auto row_sum
+                = this->row_sum(i)
+                  + 1e-8f; // Adding a small value to avoid division by zero
 
             for (size_t j = 0; j < cols; ++j) {
                 set(i, j, get(i, j) / row_sum);
@@ -109,17 +112,18 @@ struct matrix {
         return *this;
     }
 
-    matrix& normalize() {
+    matrix &normalize() {
         this->scale(1.0f / this->absmax());
 
         return *this;
     }
 
     matrix cross_multiply(const matrix &other) const {
-        matrix_assert(this->cols == other.rows,
-                      "Matrix dimensions do not match for cross multiplication");
+        MATRIX_ASSERT(
+            this->cols == other.rows,
+            "Matrix dimensions do not match for cross multiplication");
 
-        matrix result { this->rows, other.cols };
+        matrix result{ this->rows, other.cols };
         const matrix other_t = other.transposed();
 
 #ifndef MATRIX_CHECKS
@@ -139,21 +143,19 @@ struct matrix {
         return result;
     }
 
-    matrix& scale(const float factor) {
-        this->map([factor](const float value) {
-            return value * factor;
-        });
+    matrix &scale(const float factor) {
+        this->map([factor](const float value) { return value * factor; });
 
         return *this;
     }
 
     matrix scaled(const float factor) const {
-        matrix copy { *this };
+        matrix copy{ *this };
         copy.scale(factor);
         return copy;
     }
 
-    matrix& offset(const matrix &offset) {
+    matrix &offset(const matrix &offset) {
 #ifdef MATRIX_CHECKS
         llm_assert(this->cols == offset.cols && this->rows == offset.rows,
                    "Matrix dimensions do not match for offset operation");
@@ -168,7 +170,7 @@ struct matrix {
         return *this;
     }
 
-    matrix& map(const auto mapping) {
+    matrix &map(const auto mapping) {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 const auto value = get(i, j);
@@ -180,13 +182,12 @@ struct matrix {
     }
 
     matrix mapped(const auto mapping) const {
-        matrix copy { *this };
+        matrix copy{ *this };
         copy.map(mapping);
         return copy;
     }
 
-    template <typename ret>
-    ret reduce(const auto reducer, ret acc = 0) const {
+    template <typename ret> ret reduce(const auto reducer, ret acc = 0) const {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 acc = reducer(acc, get(i, j));
@@ -197,7 +198,7 @@ struct matrix {
     }
 
     matrix get_row_vector(const size_t row) const {
-        matrix row_vector { 1, cols };
+        matrix row_vector{ 1, cols };
         for (size_t j = 0; j < cols; ++j) {
             row_vector.set(0, j, get(row, j));
         }
@@ -227,7 +228,7 @@ struct matrix {
     float stddev() const;
 
     matrix transposed() const {
-        matrix transposed { cols, rows };
+        matrix transposed{ cols, rows };
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 transposed.set(j, i, get(i, j));
@@ -243,10 +244,8 @@ struct matrix {
         return std::span(data.get(), cols * rows);
     }
 
-    [[nodiscard]] size_t size() const {
-        return cols * rows;
-    }
+    [[nodiscard]] size_t size() const { return cols * rows; }
 
-private:
+  private:
     void verify_bounds(const size_t row, const size_t col) const;
 };

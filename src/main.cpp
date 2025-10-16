@@ -1,5 +1,4 @@
 #include <iostream>
-#include <chrono>
 
 #include "input/input_data.h"
 #include "tokenizer/tokenizer.h"
@@ -9,9 +8,13 @@
 
 int main() {
     srand(123);
+    
+#ifdef MATRIX_CHECKS
+    std::cout << "Matrix checks enabled.\n";
+#endif
 
-    const auto data = get_file_data("../data/talking_heads.txt").substr(0, 250);
-    const auto [tokens, token_map] = tokenize(data, 512 - 128);//235 - 128);
+    const auto data = get_file_data("data/talking_heads.txt").substr(0, 250);
+    const auto [tokens, token_map] = tokenize(data, 235 - 128);
 
     std::cout << "String length: " << data.size() << "\n";
     std::cout << "Token length: " << tokens.size() << "\n";
