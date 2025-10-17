@@ -12,15 +12,37 @@ int handle_train_tokenizer(int argc, char* argv[]) {
     std::string corpus_path = get_arg_value(argc, argv, "--corpus");
     std::string output_path = get_arg_value(argc, argv, "--output");
     std::string vocab_size_str = get_arg_value(argc, argv, "--vocab-size");
+    std::string type_str = get_arg_value(argc, argv, "--dataset-type");
 
     if (corpus_path.empty() || output_path.empty() || vocab_size_str.empty()) {
-        std::cerr << "Usage: ./llm train-tokenizer --corpus <path> --output <path> --vocab-size <size>" << std::endl;
+        std::cerr << "Usage: ./llm train-tokenizer --corpus <path> --output <path> --vocab-size <size> [--dataset-type raw|row-based]" << std::endl;
         return 1;
     }
 
+    dataset_type type = dataset_type::RAW;
+    if (type_str == "row-based") {
+        type = dataset_type::ROW_BASED;
+    }
+
     size_t vocab_size = std::stoul(vocab_size_str);
+
+    std::cout << "Training tokenizer..." << std::endl;
+    std::cout << "  Corpus: " << corpus_path << std::endl;
+    std::cout << "  Dataset type: " << (type == dataset_type::RAW ? "raw" : "row-based") << std::endl;
+
+    std::string corpus_data;
+    try {
+        auto dataset = create_dataset(corpus_path, type);
+        dataset->for_each([&corpus_data](std::string_view row) {
+            corpus_data.append(row);
+            corpus_data.append("\n");
+        });
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+
     tokenizer tokenizer;
-   
     auto dataset = create_dataset(corpus_path, dataset_type::ROW_BASED);
 
     std::printf("Training tokenizer from row-based dataset...\b");

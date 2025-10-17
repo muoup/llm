@@ -15,10 +15,16 @@ int handle_train(int argc, char* argv[]) {
     std::string tokenizer_path = get_arg_value(argc, argv, "--tokenizer");
     std::string output_model_path = get_arg_value(argc, argv, "--output-model");
     std::string input_model_path = get_arg_value(argc, argv, "--input-model");
+    std::string type_str = get_arg_value(argc, argv, "--dataset-type");
 
     if (data_path.empty() || tokenizer_path.empty() || output_model_path.empty()) {
-        std::cerr << "Usage: ./llm train --data <path> --tokenizer <path> --output-model <path> [--input-model <path>]" << std::endl;
+        std::cerr << "Usage: ./llm train --data <path> --tokenizer <path> --output-model <path> [--input-model <path>] [--dataset-type raw|row-based]" << std::endl;
         return 1;
+    }
+
+    dataset_type type = dataset_type::RAW;
+    if (type_str == "row-based") {
+        type = dataset_type::ROW_BASED;
     }
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;
@@ -45,13 +51,26 @@ int handle_train(int argc, char* argv[]) {
 
     std::cout << "Starting training process..." << std::endl;
     
-    auto dataset = create_dataset(data_path, dataset_type::ROW_BASED);
-    std::cout << "Dataset loaded. Iterating over rows..." << std::endl;
+    try {
+        auto dataset = create_dataset(data_path, type);
+        std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows (placeholder)..." << std::endl;
 
-    dataset->for_each([&](std::string_view row) {
-        auto tokens = encode(tokenizer, row);
-        train(model, tokens);
-    });
+        // =====================================================
+        // TODO: Implement the actual training loop here.
+        // The dataset->for_each provides the rows one by one.
+        dataset->for_each([&](std::string_view row) {
+            // 1. Tokenize the row
+            // auto tokens = encode(tokenizer, row);
+            
+            // 2. Run forward/backward pass and update weights
+            // train_step(model, tokens);
+        });
+        // =====================================================
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
 
     std::cout << "Training complete. Saving model to: " << output_model_path << std::endl;
     save_llm(model, output_model_path);
