@@ -1,7 +1,7 @@
 #include "training.h"
 
-#include "../network/neural_net.h"
-#include "backpropogation.h"
+#include <network/neural_net.h>
+#include <training/backpropogation.h>
 
 void train(llm& model, const std::span<const token_id_t> input) {
     // since the llm will predict every i + 1 index, we want to uninclude the last token

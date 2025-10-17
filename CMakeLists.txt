@@ -6,9 +6,28 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(-fopenmp -O3)
-add_compile_options(-fno-exceptions -Wall -Wextra -Wpedantic -Werror)
+set(BLA_VENDOR "OpenBLAS")
+find_package(BLAS REQUIRED)
+
+add_compile_options(-fopenmp)
 add_link_options(-fopenmp)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Debug build")
+    add_compile_options(-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+else()
+    message(STATUS "Release build")
+    add_compile_options(-O3 -march=native)
+endif()
+
+include(FetchContent)
+FetchContent_Declare(
+    blaze
+    GIT_REPOSITORY https://bitbucket.org/blaze-lib/blaze.git
+    GIT_TAG        v3.8
+)
+FetchContent_MakeAvailable(blaze)
 
 file(GLOB_RECURSE SOURCE "src/*.cpp")
 
@@ -19,3 +38,4 @@ target_compile_definitions(llm PRIVATE
 )
 
 target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(llm PRIVATE blaze)
