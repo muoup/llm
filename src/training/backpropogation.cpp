@@ -4,6 +4,8 @@
 
 #include "backpropogation.h"
 
+#include <iostream>
+
 #include <network/neural_net.h>
 #include <tokenizer/token.h>
 
@@ -80,7 +82,7 @@ matrix backpropogate_logit_row(
             logit_bias_gradient.offset(0, j, delta_loss);
 
             if (j == actual[i + 1]) {
-                total_loss -= std::log(predictions.get(i, j));
+                total_loss += delta_loss;
             }
         }
     }
@@ -145,14 +147,14 @@ matrix backpropogate_ff_layer(
 
     auto input_gradient = z1_gradient
         .cross_multiply(layer.w1.transposed())
-        .offset(post_layer_gradient);
+        .add(post_layer_gradient);
     return input_gradient;
 }
 
 void backpropogate_embedding(llm& model, const std::span<const token_id_t> tokens, const matrix& x_gradient) {
     for (size_t t = 0; t < tokens.size() - 1; t++) {
         const auto &token = tokens[t];
-        auto &embedding = model.m_embeddings[token];
+        auto &embedding = model.m_embedding_layer.m_embeddings[token];
 
         matrix embedding_gradient_row { 1, embedding.data.cols };
         for (size_t i = 0; i < embedding.data.cols; i++) {
@@ -162,6 +164,73 @@ void backpropogate_embedding(llm& model, const std::span<const token_id_t> token
         regularize_weight_gradient(embedding_gradient_row, embedding.data);
         adjust_matrix(embedding.data, embedding_gradient_row);
     }
+}
+
+matrix backpropagate_attention_layer(
+    attention_layer& layer,
+    const matrix& layer_input,
+    const attention_forward_result &result,
+    const matrix& post_layer_gradient
+) {
+    // Unpack forward pass results
+    const auto& q = result.q;
+    const auto& k = result.k;
+    const auto& v = result.v;
+    const auto& scores = result.scores;
+
+    // Backprop through output projection (wo)
+    matrix wo_gradient = scores.transposed().cross_multiply(post_layer_gradient);
+    matrix scores_gradient = post_layer_gradient.cross_multiply(layer.wo.transposed());
+    regularize_weight_gradient(wo_gradient, layer.wo);
+    adjust_matrix(layer.wo, wo_gradient);
+
+    // Backprop through weighted sum
+    matrix v_gradient = scores.transposed().cross_multiply(scores_gradient);
+    matrix scores_gradient_v = scores_gradient.cross_multiply(v.transposed());
+    regularize_weight_gradient(v_gradient, layer.wv);
+    adjust_matrix(layer.wv, v_gradient);
+
+    // Backprop through softmax
+    matrix softmax_gradient = scores_gradient_v;
+    for (size_t i = 0; i < scores.rows; ++i) {
+        for (size_t j = 0; j < scores.cols; ++j) {
+            float s_ij = scores.get(i, j);
+            float grad_sum = 0.0f;
+            for (size_t l = 0; l < scores.cols; ++l) {
+                float s_il = scores.get(i, l);
+                float delta_jl = (j == l) ? 1.0f : 0.0f;
+                grad_sum += scores_gradient_v.get(i, l) * s_ij * (delta_jl - s_il);
+            }
+            softmax_gradient.set(i, j, grad_sum);
+        }
+    }
+
+    // Backprop through scaling
+    const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
+    softmax_gradient.scale(scale);
+
+    // Backprop through attention scores
+    matrix q_gradient = softmax_gradient.cross_multiply(k);
+    matrix k_gradient = softmax_gradient.transposed().cross_multiply(q);
+
+    // Backprop through Q, K, V projections
+    matrix wq_gradient = layer_input.transposed().cross_multiply(q_gradient);
+    matrix wk_gradient = layer_input.transposed().cross_multiply(k_gradient);
+    matrix wv_gradient = layer_input.transposed().cross_multiply(v_gradient);
+
+    regularize_weight_gradient(wq_gradient, layer.wq);
+    adjust_matrix(layer.wq, wq_gradient);
+    regularize_weight_gradient(wk_gradient, layer.wk);
+    adjust_matrix(layer.wk, wk_gradient);
+    regularize_weight_gradient(wv_gradient, layer.wv);
+    adjust_matrix(layer.wv, wv_gradient);
+
+    // Gradient of the input
+    matrix input_gradient = q_gradient.cross_multiply(layer.wq.transposed());
+    input_gradient.add(k_gradient.cross_multiply(layer.wk.transposed()));
+    input_gradient.add(v_gradient.cross_multiply(layer.wv.transposed()));
+
+    return input_gradient;
 }
 
 void backpropogate(llm& model, const training_data& data) {
@@ -183,12 +252,19 @@ void backpropogate(llm& model, const training_data& data) {
             data.forward_results.at(i),
             previous_final_gradient
         );
+        norm_clip(previous_final_gradient);
 
+        previous_final_gradient = backpropagate_attention_layer(
+            model.m_attention_layers.at(i),
+            data.attention_inputs.at(i),
+            data.attention_forward_results.at(i),
+            previous_final_gradient
+        );
         norm_clip(previous_final_gradient);
     }
 
     backpropogate_embedding(model, data.tokens, previous_final_gradient);
 
-    //std::cout << "Adjustments: " << adjustments << '\n';
-    //std::cout << "Total Loss: " << total_loss << '\n';
+    std::cout << "Adjustments: " << adjustments << '\n';
+    std::cout << "Total Loss: " << total_loss << '\n';
 }

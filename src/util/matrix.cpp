@@ -134,26 +134,30 @@ matrix &matrix::softmax() {
     return *this;
 }
 
-matrix matrix::cross_multiply(const matrix &other) const {
+void matrix::cross_multiply_into(const matrix &other, matrix &out) const {   
     using custom_matrix
         = blaze::CustomMatrix<float, blaze::AlignmentFlag::aligned,
                               blaze::PaddingFlag::padded>;
-
-    MATRIX_ASSERT(this->cols == other.rows,
-                  "Matrix dimensions do not match for cross multiplication");
-
-    matrix result{ this->rows, other.cols };
-
+    
     // This const_cast *should* be safe because blaze is not going to modify the buffer
     // and we can safely assume that no matrix is not going to be optimized away by the compiler
     custom_matrix a(const_cast<float*>(this->data_ptr()), this->rows, this->cols,
                     this->row_width);
     custom_matrix b(const_cast<float*>(other.data_ptr()), other.rows, other.cols,
                     other.row_width);
-    custom_matrix c(result.data_ptr(), result.rows, result.cols,
-                    result.row_width);
+    custom_matrix c(out.data_ptr(), out.rows, out.cols,
+                    out.row_width);
 
     c = a * b;
+}
 
+matrix matrix::cross_multiply(const matrix &other) const {
+    MATRIX_ASSERT(this->cols == other.rows,
+                  "Matrix dimensions do not match for cross multiplication");
+
+    matrix result{ this->rows, other.cols };
+    
+    this->cross_multiply_into(other, result);
+    
     return result;
 }

@@ -50,23 +50,16 @@ int handle_train(int argc, char* argv[]) {
     }
 
     std::cout << "Starting training process..." << std::endl;
-    
+
     try {
         auto dataset = create_dataset(data_path, type);
         std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows (placeholder)..." << std::endl;
 
-        // =====================================================
-        // TODO: Implement the actual training loop here.
-        // The dataset->for_each provides the rows one by one.
-        dataset->for_each([&](std::string_view row) {
-            // 1. Tokenize the row
-            // auto tokens = encode(tokenizer, row);
-            
-            // 2. Run forward/backward pass and update weights
-            // train_step(model, tokens);
+        dataset->enumerate([&](size_t i, std::string_view row) {
+            auto tokens = encode(tokenizer, row);
+            std::cout << "Training on row " << i + 1 << "/" << dataset->size() << " with " << tokens.size() << " tokens." << std::endl;
+            train(model, tokens);
         });
-        // =====================================================
-
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;

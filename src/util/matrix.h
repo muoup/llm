@@ -36,6 +36,7 @@ struct matrix {
 
     constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 8;
 
+    matrix() : rows(0), cols(0), row_width(0), data(nullptr) {}
     matrix(const size_t rows, const size_t cols);
     
     matrix(matrix &&) = default;
@@ -99,6 +100,7 @@ struct matrix {
         return *this;
     }
 
+    void cross_multiply_into(const matrix& other, matrix& out) const;
     matrix cross_multiply(const matrix &other) const;
 
     matrix &scale(const float factor) {
@@ -113,7 +115,7 @@ struct matrix {
         return copy;
     }
 
-    matrix &offset(const matrix &offset) {
+    matrix &add(const matrix &offset) {
 #ifdef MATRIX_CHECKS
         llm_assert(this->cols == offset.cols && this->rows == offset.rows,
                    "Matrix dimensions do not match for offset operation");

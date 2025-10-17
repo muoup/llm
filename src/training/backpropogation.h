@@ -3,20 +3,19 @@
 #include <span>
 #include <vector>
 
+#include <network/attention.h>
+#include <network/feed_forward.h>
+
 #include <tokenizer/token.h>
 #include <util/matrix.h>
 
 struct llm;
 
-struct forward_result {
-    matrix layer_input;
-    matrix activation_input;
-    matrix activation_output;
-};
-
 struct training_data {
     matrix predictions;
     std::vector<forward_result> forward_results;
+    std::vector<attention_forward_result> attention_forward_results;
+    std::vector<matrix> attention_inputs;
     matrix logit_input;
 
     std::span<const token_id_t> tokens;

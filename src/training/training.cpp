@@ -10,22 +10,28 @@ void train(llm& model, const std::span<const token_id_t> input) {
 
     training_data data { input, model.m_dimensions };
 
-    matrix acc = model.embed_tokens(truncated_input);
+    matrix acc = model.m_embedding_layer.apply(truncated_input);
 
     const size_t layer_count = model.m_ff_layer.size();
+    data.attention_forward_results.reserve(layer_count);
+    data.forward_results.reserve(layer_count);
+    data.attention_inputs.reserve(layer_count);
 
     for (size_t i = 0; i < layer_count; i++) {
-        const matrix l1_output = model.forward_l1(acc, i);
-        const matrix activated = model.activate(l1_output);
-        const matrix l2_output = model.forward_l2(activated, i);
+        data.attention_inputs.push_back(acc);
+        matrix residual = acc;
+        auto attention_result = model.m_attention_layers[i].apply(acc);
+        data.attention_forward_results.push_back(attention_result.forward_result);
+        acc = attention_result.output;
+        acc.add(residual);
 
-        data.forward_results.emplace_back(acc, l1_output, activated);
-
-        acc.offset(l2_output);
+        auto ff_result = model.m_ff_layer[i].apply(acc);
+        data.forward_results.push_back(ff_result.forward_result);
+        acc = ff_result.output;
     }
 
     data.logit_input = acc;
-    data.predictions = model.generate_logits(acc).softmax();
+    data.predictions = model.m_logit_layer.apply(acc).softmax();
 
     backpropogate(model, data);
 }
