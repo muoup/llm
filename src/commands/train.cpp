@@ -1,4 +1,5 @@
 #include "train.h"
+#include "training/training.h"
 
 #include <iostream>
 #include <string>
@@ -6,6 +7,8 @@
 #include <commands/arg_parser.h>
 #include <tokenizer/tokenizer.h>
 #include <network/neural_net.h>
+
+#include <dataset/dataset_factory.h>
 
 int handle_train(int argc, char* argv[]) {
     std::string data_path = get_arg_value(argc, argv, "--data");
@@ -40,11 +43,15 @@ int handle_train(int argc, char* argv[]) {
         model.randomize();
     }
 
-    std::cout << "Starting training process... (placeholder)" << std::endl;
+    std::cout << "Starting training process..." << std::endl;
     
-    // =====================================================
-    // TODO: Implement the actual training loop here.
-    // =====================================================
+    auto dataset = create_dataset(data_path, dataset_type::ROW_BASED);
+    std::cout << "Dataset loaded. Iterating over rows..." << std::endl;
+
+    dataset->for_each([&](std::string_view row) {
+        auto tokens = encode(tokenizer, row);
+        train(model, tokens);
+    });
 
     std::cout << "Training complete. Saving model to: " << output_model_path << std::endl;
     save_llm(model, output_model_path);

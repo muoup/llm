@@ -1,0 +1,53 @@
+#include "dataset_factory.h"
+
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+
+// Implementation of the factory function
+std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type) {
+    std::printf("Loading dataset from: %s\n", path.data());
+    std::ifstream file(path);
+    
+    if (!file) {
+        throw std::runtime_error("Could not open dataset file: " + std::string { path });
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string file_content = buffer.str();
+
+    if (type == dataset_type::RAW) {
+        auto ds = std::make_unique<raw_dataset>();
+        ds->data = std::move(file_content);
+        return ds;
+    } else if (type == dataset_type::ROW_BASED) {
+        auto ds = std::make_unique<row_dataset>();
+        ds->data = std::move(file_content);
+        
+        std::string_view remaining_view(ds->data);
+        const std::string_view delimiter = "<|endoftext|>";
+
+        while (!remaining_view.empty()) {
+            size_t delimiter_pos = remaining_view.find(delimiter);
+
+            if (delimiter_pos == std::string_view::npos) {
+                if (!remaining_view.empty()) {
+                    ds->rows.push_back(remaining_view);
+                }
+                break;
+            }
+
+            ds->rows.push_back(remaining_view.substr(0, delimiter_pos));
+            
+            size_t advance_by = delimiter_pos + delimiter.length();
+            if (advance_by < remaining_view.length() && remaining_view[advance_by] == '\n') {
+                advance_by++; // Also skip the newline that often follows the delimiter
+            }
+            remaining_view.remove_prefix(advance_by);
+        }
+        return ds;
+    }
+
+    throw std::runtime_error("Unknown dataset type");
+}

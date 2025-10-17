@@ -14,10 +14,12 @@ struct tokenizer {
     size_t vocab_size() const {
         return token_map.size();
     }
+    
+    tokenizer();
 };
 
 // Train the tokenizer on a corpus to learn the vocabulary and merge rules.
-void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t vocab_size);
+void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t vocab_size, size_t minimum_frequency = 3);
 
 // Encode a piece of text into a sequence of token IDs.
 std::vector<token_id_t> encode(const tokenizer& tokenizer, std::string_view text);

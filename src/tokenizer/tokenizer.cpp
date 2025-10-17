@@ -11,7 +11,7 @@ struct pair_frequency_t {
 };
 
 // Gets the most frequent pair of adjacent tokens in a sequence
-static pair_frequency_t get_most_frequent_pair(const std::vector<token_id_t>& tokens) {
+static pair_frequency_t get_most_frequent_pair(const std::span<const token_id_t> tokens) {
     if (tokens.size() < 2) {
         return {0, 0};
     }
@@ -57,27 +57,23 @@ static void replace_pair(std::vector<token_id_t>& tokens, const combo_token_t& p
 
 // ---[ Public Function Implementations ]---
 
-void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t vocab_size) {
-    tokenizer.token_map.clear();
-    tokenizer.merges.clear();
-
-    // 1. Initialize vocabulary with all single bytes (0-255)
+tokenizer::tokenizer() {
+    // Initialize with all single-byte tokens
+    token_map.reserve(256);
+ 
     for (int i = 0; i < 256; ++i) {
-        tokenizer.token_map.push_back({std::string(1, static_cast<char>(i))});
+        token_map.push_back({std::string(1, static_cast<char>(i))});
     }
+}
 
-    // 2. Convert the corpus into a sequence of initial token IDs (just bytes)
-    std::vector<token_id_t> tokens;
-    tokens.reserve(corpus.size());
-    for (char c : corpus) {
-        tokens.push_back(static_cast<unsigned char>(c));
-    }
-
-    // 3. Learn merges
-    while (tokenizer.token_map.size() < vocab_size) {
+void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t max_vocab_size, size_t minimum_frequency) {
+    // 1. Initialize the corpus as a sequence of raw byte tokens
+    auto tokens = encode(tokenizer, corpus); 
+    
+    while (tokenizer.token_map.size() < max_vocab_size) {
         pair_frequency_t most_frequent_pair = get_most_frequent_pair(tokens);
         
-        if (most_frequent_pair.frequency < 3) {
+        if (most_frequent_pair.frequency < minimum_frequency) {
             break; // Stop if no pair is frequent enough
         }
         
