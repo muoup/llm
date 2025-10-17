@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../tokenizer/token.h"
+#include <tokenizer/token.h>
+#include <span>
 
 struct llm;
 

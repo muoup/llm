@@ -1,73 +1,28 @@
 #pragma once
 
-#include <queue>
-#include <span>
+#include <cstdint>
+#include <string>
 #include <vector>
-#include <string_view>
-#include <unordered_map>
-#include <variant>
 
-using token_id_t = std::uint16_t;
+// A token ID is just an index into the vocabulary vector.
+using token_id_t = uint16_t;
 
-using token_list_t = std::vector<token_id_t>;
-using token_span_t = std::span<const token_id_t>;
-
+// A combo token represents a merge rule.
 struct combo_token_t {
     token_id_t byte1;
     token_id_t byte2;
-
-    auto operator <=>(const combo_token_t &other) const {
+    
+    auto operator<=>(const combo_token_t& other) const {
         return std::tie(byte1, byte2) <=> std::tie(other.byte1, other.byte2);
     }
 };
 
+// Represents a single token in the vocabulary.
+// The `text` field stores the full byte representation of the token.
 struct token_t {
-    std::variant<combo_token_t, char> value;
+    std::string text;
 };
 
-struct token_map_t {
-    std::vector<token_t> tokens;
-    std::queue<token_id_t> free_ids;
-
-    token_id_t insert(const token_t& token) {
-        if (!free_ids.empty()) {
-            const token_id_t id = free_ids.front();
-            free_ids.pop();
-            tokens[id] = token;
-            return id;
-        }
-
-        tokens.push_back(token);
-        return tokens.size() - 1;
-    }
-
-    void remove(const token_id_t id) {
-        if (id < tokens.size()) {
-            tokens[id] = token_t {};
-            free_ids.push(id);
-        }
-    }
-
-    size_t size() const {
-        return tokens.size();
-    }
-
-    token_t& operator[](const token_id_t id) {
-        return tokens[id];
-    }
-
-    const token_t& operator[](const token_id_t id) const {
-        return tokens[id];
-    }
-
-    [[nodiscard]] auto begin() { return tokens.begin(); }
-    [[nodiscard]] auto end() { return tokens.end(); }
-    [[nodiscard]] auto begin() const { return tokens.cbegin(); }
-    [[nodiscard]] auto end() const { return tokens.cend(); }
-};
-
-std::string debug_string(const combo_token_t &token);
-std::string debug_string(token_t token);
-
-std::string token_to_plaintext(const token_map_t &token_map, const token_t &token);
-std::string tokens_to_plaintext(const token_map_t &token_map, const std::span<const token_id_t> &tokens);
+// The vocabulary is a simple vector of tokens.
+// The index of a token is its ID.
+using token_map_t = std::vector<token_t>;

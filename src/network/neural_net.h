@@ -2,9 +2,18 @@
 
 #include <vector>
 #include <cmath>
+#include <string>
 
 #include <util/matrix.h>
 #include <tokenizer/token.h>
+
+struct llm;
+
+// Save the model's parameters to a file.
+void save_llm(const llm& model, const std::string& path);
+
+// Load the model's parameters from a file.
+void load_llm(llm& model, const std::string& path);
 
 struct embedding {
     matrix data;

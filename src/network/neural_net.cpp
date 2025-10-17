@@ -2,6 +2,100 @@
 
 #include <iostream>
 #include <sstream>
+#include <fstream>
+
+// ---[ Helper for writing a matrix ]---
+static void write_matrix(std::ofstream& file, const matrix& m) {
+    uint64_t dims[] = {m.rows, m.cols};
+    file.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+    file.write(reinterpret_cast<const char*>(m.data_ptr()), m.rows * m.cols * sizeof(float));
+}
+
+// ---[ Helper for reading a matrix ]---
+static void read_matrix(std::ifstream& file, matrix& m) {
+    uint64_t dims[2];
+    file.read(reinterpret_cast<char*>(dims), sizeof(dims));
+    m = matrix(dims[0], dims[1]); // Assumes matrix can be resized or reconstructed
+    file.read(reinterpret_cast<char*>(m.data_ptr()), m.rows * m.cols * sizeof(float));
+}
+
+void save_llm(const llm& model, const std::string& path) {
+    std::ofstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        return; // Or throw an exception
+    }
+
+    // 1. Header
+    uint32_t magic = 0x67676d6c; // "ggml"
+    uint32_t version = 1;
+    file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    file.write(reinterpret_cast<const char*>(&version), sizeof(version));
+
+    // 2. LLM dimensions
+    uint32_t dimensions = model.m_dimensions;
+    uint32_t layer_count = model.m_ff_layer.size();
+    uint32_t vocab_size = model.vocab_size();
+    file.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
+    file.write(reinterpret_cast<const char*>(&layer_count), sizeof(layer_count));
+    file.write(reinterpret_cast<const char*>(&vocab_size), sizeof(vocab_size));
+
+    // 3. Parameters
+    for (const auto& embedding : model.m_embeddings) {
+        write_matrix(file, embedding.data);
+    }
+
+    for (const auto& layer : model.m_ff_layer) {
+        write_matrix(file, layer.w1);
+        write_matrix(file, layer.b1);
+        write_matrix(file, layer.w2);
+        write_matrix(file, layer.b2);
+    }
+
+    write_matrix(file, model.m_logit_layer.w);
+    write_matrix(file, model.m_logit_layer.b);
+}
+
+void load_llm(llm& model, const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        return; // Or throw an exception
+    }
+
+    // 1. Header
+    uint32_t magic, version;
+    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+    file.read(reinterpret_cast<char*>(&version), sizeof(version));
+    if (magic != 0x67676d6c || version != 1) {
+        return; // Invalid file format
+    }
+
+    // 2. LLM dimensions
+    uint32_t dimensions, layer_count, vocab_size;
+    file.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
+    file.read(reinterpret_cast<char*>(&layer_count), sizeof(layer_count));
+    file.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
+
+    // It's up to the caller to ensure the model architecture matches the file.
+    // A more robust implementation would reconstruct the model here.
+    if (model.m_dimensions != dimensions || model.m_ff_layer.size() != layer_count || model.vocab_size() != vocab_size) {
+        return; // Model architecture mismatch
+    }
+
+    // 3. Parameters
+    for (auto& embedding : model.m_embeddings) {
+        read_matrix(file, embedding.data);
+    }
+
+    for (auto& layer : model.m_ff_layer) {
+        read_matrix(file, layer.w1);
+        read_matrix(file, layer.b1);
+        read_matrix(file, layer.w2);
+        read_matrix(file, layer.b2);
+    }
+
+    read_matrix(file, model.m_logit_layer.w);
+    read_matrix(file, model.m_logit_layer.b);
+}
 
 void llm::randomize() {
     constexpr auto min = -0.5f;
