@@ -5,7 +5,7 @@
 #include "backpropogation.h"
 
 #include <network/neural_net.h>
-#include <network/tokenizer/token.h>
+#include <tokenizer/token.h>
 
 constexpr float learning_rate = 0.0001f;
 constexpr float regularization_strength = 0.0f;
