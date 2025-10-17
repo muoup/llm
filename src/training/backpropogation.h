@@ -3,8 +3,8 @@
 #include <span>
 #include <vector>
 
-#include "../tokenizer/token.h"
-#include "../util/matrix.h"
+#include <network/tokenizer/token.h>
+#include <util/matrix.h>
 
 struct llm;
 

@@ -1,10 +1,10 @@
 #include <iostream>
 
-#include "input/input_data.h"
-#include "tokenizer/tokenizer.h"
-#include "network/neural_net.h"
-#include "training/testing.h"
-#include "training/training.h"
+#include <input/input_data.h>
+#include <network/tokenizer/tokenizer.h>
+#include <network/neural_net.h>
+#include <training/testing.h>
+#include <training/training.h>
 
 int main() {
     srand(123);
