@@ -74,7 +74,8 @@ matrix backpropogate_logit_row(
 ) {
     matrix logit_loss_gradient { actual.size() - 1, model.vocab_size() };
     matrix logit_bias_gradient { 1, model.vocab_size() };
-
+    
+#pragma omp parallel for
     for (size_t i = 0; i < predictions.rows; ++i) {
         for (size_t j = 0; j < predictions.cols; ++j) {
             const auto delta_loss = predictions.get(i, j) - (j == actual[i + 1] ? 1.0f : 0.0f);
@@ -82,7 +83,7 @@ matrix backpropogate_logit_row(
             logit_bias_gradient.offset(0, j, delta_loss);
 
             if (j == actual[i + 1]) {
-                total_loss += delta_loss;
+                total_loss -= std::log(predictions.get(i, j) + 1e-10f);
             }
         }
     }
@@ -152,6 +153,7 @@ matrix backpropogate_ff_layer(
 }
 
 void backpropogate_embedding(llm& model, const std::span<const token_id_t> tokens, const matrix& x_gradient) {
+#pragma omp parallel for
     for (size_t t = 0; t < tokens.size() - 1; t++) {
         const auto &token = tokens[t];
         auto &embedding = model.m_embedding_layer.m_embeddings[token];
@@ -177,21 +179,25 @@ matrix backpropagate_attention_layer(
     const auto& k = result.k;
     const auto& v = result.v;
     const auto& scores = result.scores;
+    
+    matrix scores_t = scores.transposed();
 
     // Backprop through output projection (wo)
-    matrix wo_gradient = scores.transposed().cross_multiply(post_layer_gradient);
+    matrix wo_gradient = scores_t.cross_multiply(post_layer_gradient);
     matrix scores_gradient = post_layer_gradient.cross_multiply(layer.wo.transposed());
     regularize_weight_gradient(wo_gradient, layer.wo);
     adjust_matrix(layer.wo, wo_gradient);
 
     // Backprop through weighted sum
-    matrix v_gradient = scores.transposed().cross_multiply(scores_gradient);
+    matrix v_gradient = scores_t.cross_multiply(scores_gradient);
     matrix scores_gradient_v = scores_gradient.cross_multiply(v.transposed());
     regularize_weight_gradient(v_gradient, layer.wv);
     adjust_matrix(layer.wv, v_gradient);
 
     // Backprop through softmax
-    matrix softmax_gradient = scores_gradient_v;
+    matrix softmax_gradient { scores_gradient_v.rows, scores_gradient_v.cols };
+    
+#pragma omp parallel for
     for (size_t i = 0; i < scores.rows; ++i) {
         for (size_t j = 0; j < scores.cols; ++j) {
             float s_ij = scores.get(i, j);
@@ -214,9 +220,11 @@ matrix backpropagate_attention_layer(
     matrix k_gradient = softmax_gradient.transposed().cross_multiply(q);
 
     // Backprop through Q, K, V projections
-    matrix wq_gradient = layer_input.transposed().cross_multiply(q_gradient);
-    matrix wk_gradient = layer_input.transposed().cross_multiply(k_gradient);
-    matrix wv_gradient = layer_input.transposed().cross_multiply(v_gradient);
+    matrix layer_input_t = layer_input.transposed();
+     
+    matrix wq_gradient = layer_input_t.cross_multiply(q_gradient);
+    matrix wk_gradient = layer_input_t.cross_multiply(k_gradient);
+    matrix wv_gradient = layer_input_t.cross_multiply(v_gradient);
 
     regularize_weight_gradient(wq_gradient, layer.wq);
     adjust_matrix(layer.wq, wq_gradient);

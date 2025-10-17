@@ -16,10 +16,21 @@ int handle_train(int argc, char* argv[]) {
     std::string output_model_path = get_arg_value(argc, argv, "--output-model");
     std::string input_model_path = get_arg_value(argc, argv, "--input-model");
     std::string type_str = get_arg_value(argc, argv, "--dataset-type");
+    std::string n_str = get_arg_value(argc, argv, "-n");
 
     if (data_path.empty() || tokenizer_path.empty() || output_model_path.empty()) {
-        std::cerr << "Usage: ./llm train --data <path> --tokenizer <path> --output-model <path> [--input-model <path>] [--dataset-type raw|row-based]" << std::endl;
+        std::cerr << "Usage: ./llm train --data <path> --tokenizer <path> --output-model <path> [--input-model <path>] [--dataset-type raw|row-based] [-n <amount>]" << std::endl;
         return 1;
+    }
+
+    size_t n_rows = 0;
+    if (!n_str.empty()) {
+        try {
+            n_rows = std::stoul(n_str);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: Invalid value for -n: " << n_str << std::endl;
+            return 1;
+        }
     }
 
     dataset_type type = dataset_type::RAW;
@@ -53,13 +64,13 @@ int handle_train(int argc, char* argv[]) {
 
     try {
         auto dataset = create_dataset(data_path, type);
-        std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows (placeholder)..." << std::endl;
+        std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows..." << std::endl;
 
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(tokenizer, row);
             std::cout << "Training on row " << i + 1 << "/" << dataset->size() << " with " << tokens.size() << " tokens." << std::endl;
             train(model, tokens);
-        });
+        }, n_rows);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
