@@ -33,10 +33,7 @@ int handle_train(int argc, char* argv[]) {
         }
     }
 
-    dataset_type type = dataset_type::RAW;
-    if (type_str == "row-based") {
-        type = dataset_type::ROW_BASED;
-    }
+    dataset_type type = detect_dataset_type(type_str);
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;
     tokenizer tokenizer;

@@ -42,3 +42,21 @@ struct raw_dataset : public dataset {
         func(data);
     }
 };
+
+// For use with ensuring that a model's training loop works correctly.
+// Takes the first 250 characters of data and functions as if it is a dataset
+// of that same data repeated multiple times, allowing for the model to overfit
+// on that small sample.
+struct overfit_dataset : public dataset {
+    std::string data;
+    size_t repeat_count = 1000;
+
+    size_t size() const override {
+        return repeat_count;
+    }
+    void for_each(std::function<void(std::string_view)> func) const override {
+        for (size_t i = 0; i < repeat_count; ++i) {
+            func(data);
+        }
+    }
+};

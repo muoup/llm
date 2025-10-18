@@ -47,7 +47,37 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
             remaining_view.remove_prefix(advance_by);
         }
         return ds;
+    } else if (type == dataset_type::OVERFIT) {
+        auto ds = std::make_unique<overfit_dataset>();
+        ds->repeat_count = 1000;
+        ds->data = file_content.substr(0, 250); // Take first 250 characters
+        return ds;
     }
 
     throw std::runtime_error("Unknown dataset type");
+}
+
+dataset_type detect_dataset_type(std::string_view type_str) {
+    if (type_str == "raw") {
+        return dataset_type::RAW;
+    } else if (type_str == "row-based") {
+        return dataset_type::ROW_BASED;
+    } else if (type_str == "overfit") {
+        return dataset_type::OVERFIT;
+    } else {
+        throw std::invalid_argument("Unknown dataset type: " + std::string(type_str));
+    }
+}
+
+std::string to_string(dataset_type type) {
+    switch (type) {
+        case dataset_type::RAW:
+            return "raw";
+        case dataset_type::ROW_BASED:
+            return "row-based";
+        case dataset_type::OVERFIT:
+            return "overfit";
+        default:
+            return "unknown";
+    }
 }
