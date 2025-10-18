@@ -40,15 +40,10 @@ struct matrix {
     matrix(const size_t rows, const size_t cols);
     
     matrix(matrix &&) = default;
-    matrix(const matrix &other) : matrix(other.rows, other.cols) {
-        std::memcpy(this->data_ptr(), other.data_ptr(), buffer_size());
-    }
+    matrix(const matrix &other) = delete;
 
     matrix &operator=(matrix &&) = default;
-    matrix &operator=(const matrix &other) {
-        *this = matrix(other);
-        return *this;
-    }
+    matrix &operator=(const matrix &other) = delete;
 
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
@@ -102,10 +97,12 @@ struct matrix {
     }
 
     void cross_multiply_into(const matrix& other, matrix& out) const;
-    matrix cross_multiply(const matrix &other) const;
+    matrix cross_multiplied(const matrix &other) const;
     
     matrix clone() const {
-        return matrix{ *this };
+        matrix copy{ this->rows, this->cols };
+        std::memcpy(copy.data_ptr(), this->data_ptr(), this->buffer_size());
+        return copy;
     }
 
     matrix &scale(const float factor) {
@@ -115,7 +112,7 @@ struct matrix {
     }
 
     matrix scaled(const float factor) const {
-        matrix copy{ *this };
+        auto copy = this->clone();
         copy.scale(factor);
         return copy;
     }
@@ -147,7 +144,7 @@ struct matrix {
     }
 
     matrix mapped(const auto mapping) const {
-        matrix copy{ *this };
+        auto copy = this->clone();
         copy.map(mapping);
         return copy;
     }

@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <fstream>
 
 #include <commands/arg_parser.h>
 #include <tokenizer/tokenizer.h>
@@ -88,7 +89,13 @@ int handle_train(int argc, char* argv[]) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-
+    
+    auto file = std::ifstream("datasets/wiki-trunc/th.txt");
+    auto contents = std::string((std::istreambuf_iterator<char>(file)),
+                                std::istreambuf_iterator<char>());
+    
+    auto test_tokens = encode(_tokenizer, contents);
+    
     std::cout << "Training complete. Saving model to: " << output_model_path << std::endl;
     save_llm(model, output_model_path);
     return 0;

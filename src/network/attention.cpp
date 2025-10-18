@@ -12,12 +12,12 @@ void attention_layer::randomize(const float min, const float max) {
 
 attention_apply_result attention_layer::apply(const matrix &input) const {
     attention_forward_result forward_result;
-    forward_result.q = input.cross_multiply(wq);
-    forward_result.k = input.cross_multiply(wk);
-    forward_result.v = input.cross_multiply(wv);
+    forward_result.q = input.cross_multiplied(wq);
+    forward_result.k = input.cross_multiplied(wk);
+    forward_result.v = input.cross_multiplied(wv);
 
     // Attention scores
-    forward_result.scores = forward_result.q.cross_multiply(forward_result.k.transposed());
+    forward_result.scores = forward_result.q.cross_multiplied(forward_result.k.transposed());
 
     // Scale
     const float scale = 1.0f / std::sqrt(static_cast<float>(forward_result.q.cols));
@@ -28,9 +28,9 @@ attention_apply_result attention_layer::apply(const matrix &input) const {
     forward_result.scores.softmax();
 
     // Weighted sum
-    matrix output = forward_result.scores.cross_multiply(forward_result.v);
+    matrix output = forward_result.scores.cross_multiplied(forward_result.v);
     forward_result.output = std::move(output);
 
     // Output projection
-    return { forward_result.output.cross_multiply(wo), forward_result };
+    return { .output = forward_result.output.cross_multiplied(wo), .forward_result = std::move(forward_result) };
 }

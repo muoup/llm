@@ -19,7 +19,7 @@ void log_neuron_maxes(const llm& model) {
 
     std::cout << "Embedding max: " << embedding_max << "\n";
 
-    for (const auto& layer : model.m_ff_layer) {
+    for (const auto& layer : model.m_ff_layers) {
         const auto w1_max = layer.w1.absmax();
         const auto w2_max = layer.w2.absmax();
         const auto b1_max = layer.b1.absmax();

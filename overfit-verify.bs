@@ -1,0 +1,44 @@
+#!/usr/bin/sh
+
+# This script runs a very simple overfitting test to see if the LLM can memorize a small chunk of text.
+
+text="datasets/wiki-trunc/th.txt"
+prompt="Talking Heads"
+
+./build.bs
+
+echo "Tokenizing"
+build/llm train-tokenizer \
+    --corpus "$text" \
+    --output ".models/overfit-tokenizer.dat" \
+    --vocab-size 512 \
+    --dataset-type overfit
+
+if [ $? -ne 0 ]; then
+    echo "Tokenizer training failed"
+    exit 1
+fi
+
+echo "Training"
+build/llm train \
+    --data "$text" \
+    --tokenizer ".models/overfit-tokenizer.dat" \
+    --output-model ".models/overfit-model.dat" \
+    --dataset-type overfit \
+    -n 200
+    
+if [ $? -ne 0 ]; then
+    echo "Model training failed"
+    exit 1
+fi
+
+echo "Prediction"
+build/llm predict \
+    --tokenizer ".models/overfit-tokenizer.dat" \
+    --model ".models/overfit-model.dat" \
+    --prompt "$prompt"
+    
+if [ $? -ne 0 ]; then
+    echo "Prediction failed"
+    exit 1
+fi

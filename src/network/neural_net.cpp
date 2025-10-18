@@ -48,7 +48,7 @@ void save_llm(const llm& model, const std::string& path) {
         write_matrix(file, layer.wv);
         write_matrix(file, layer.wo);
     }
-    for (const auto& layer : model.m_ff_layer) {
+    for (const auto& layer : model.m_ff_layers) {
         write_matrix(file, layer.w1);
         write_matrix(file, layer.b1);
         write_matrix(file, layer.w2);
@@ -85,7 +85,7 @@ std::optional<llm> load_llm(const std::string& path) {
         read_matrix(file, layer.wv);
         read_matrix(file, layer.wo);
     }
-    for (auto& layer : model.m_ff_layer) {
+    for (auto& layer : model.m_ff_layers) {
         read_matrix(file, layer.w1);
         read_matrix(file, layer.b1);
         read_matrix(file, layer.w2);
@@ -110,7 +110,7 @@ void llm::randomize() {
     for (auto &layer : m_attention_layers) {
         layer.randomize(min / 10, max / 10);
     }
-    for (auto &layer : m_ff_layer) {
+    for (auto &layer : m_ff_layers) {
         layer.randomize(min, max);
     }
     
@@ -120,14 +120,18 @@ void llm::randomize() {
 matrix llm::prediction_matrix(const std::span<const token_id_t> tokens) const {
     matrix acc = m_embedding_layer.apply(tokens);
     
-    for (size_t i = 0; i < m_ff_layer.size(); ++i) {
-        matrix residual = acc;
+    for (size_t i = 0; i < m_ff_layers.size(); ++i) {
+        matrix residual = acc.clone();
+        
         acc = m_attention_layers[i].apply(acc).output;
         acc.add(residual);
-        acc = m_ff_layer[i].apply(acc).output;
+        acc = m_ff_layers[i].apply(acc).output;
     }
     
-    return m_logit_layer.apply(acc).softmax();
+    matrix logits = m_logit_layer.apply(acc);
+    logits.softmax();
+
+    return logits;
 }
 
 token_id_t llm::predict(const std::span<const token_id_t> tokens) const {
@@ -146,6 +150,48 @@ token_id_t llm::predict(const std::span<const token_id_t> tokens) const {
 
 std::string llm::to_string() const {
     std::stringstream ss;
-    ss << "LLM with " << m_embedding_layer.m_embeddings.size() << " embeddings and " << m_ff_layer.size() << " layers.\n";
+    ss << "LLM with " << m_embedding_layer.m_embeddings.size() << " embeddings and " << m_ff_layers.size() << " layers.\n";
     return ss.str();
+}
+
+bool llm::equals(const llm& other, const float epsilon) const {
+    if (m_dimensions != other.m_dimensions || m_layer_count != other.m_layer_count ||
+        m_embedding_layer.m_embeddings.size() != other.m_embedding_layer.m_embeddings.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < m_embedding_layer.m_embeddings.size(); ++i) {
+        const auto& emb1 = m_embedding_layer.m_embeddings[i].data;
+        const auto& emb2 = other.m_embedding_layer.m_embeddings[i].data;
+        for (size_t r = 0; r < emb1.rows; ++r) {
+            for (size_t c = 0; c < emb1.cols; ++c) {
+                if (std::abs(emb1.get(r, c) - emb2.get(r, c)) > epsilon) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    for (size_t l = 0; l < m_attention_layers.size(); ++l) {
+        const auto& layer1 = m_attention_layers[l];
+        const auto& layer2 = other.m_attention_layers[l];
+        const matrix* matrices1[] = { &layer1.wq, &layer1.wk, &layer1.wv, &layer1.wo };
+        const matrix* matrices2[] = { &layer2.wq, &layer2.wk, &layer2.wv, &layer2.wo };
+
+        for (size_t m = 0; m < 4; ++m) {
+            const auto& mat1 = *matrices1[m];
+            const auto& mat2 = *matrices2[m];
+            for (size_t r = 0; r < mat1.rows; ++r) {
+                for (size_t c = 0; c < mat1.cols; ++c) {
+                    if (std::abs(mat1.get(r, c) - mat2.get(r, c)) > epsilon) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    // Similar comparison can be done for ff_layer and logit_layer if needed.
+
+    return true;
 }

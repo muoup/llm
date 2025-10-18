@@ -30,18 +30,22 @@ struct llm {
         const size_t dimensions, const size_t projection_scale = 4, const size_t head_count = 4)
         : m_dimensions(dimensions), m_layer_count(layer_count),
           m_embedding_layer(vocab_size, dimensions),
-          m_attention_layers(layer_count, attention_layer{ dimensions, dimensions / head_count }),
-          m_ff_layer(layer_count,
-                     ff_layer{ dimensions, dimensions * projection_scale }),
-          m_logit_layer(dimensions, vocab_size) {}
+          m_logit_layer(dimensions, vocab_size) {
+              for (size_t i = 0; i < layer_count; ++i) {
+                  m_attention_layers.emplace_back(dimensions, dimensions / head_count);
+                  m_ff_layers.emplace_back(dimensions, dimensions * projection_scale);
+              }
+          }
 
     size_t vocab_size() const { return m_logit_layer.vocab_size; }
 
     size_t m_dimensions;
     size_t m_layer_count;
+    
+    bool equals(const llm &other, const float epsilon = 1e-6f) const;
 
     embedding_layer m_embedding_layer;
     std::vector<attention_layer> m_attention_layers;
-    std::vector<ff_layer> m_ff_layer;
+    std::vector<ff_layer> m_ff_layers;
     logit_layer m_logit_layer;
 };
