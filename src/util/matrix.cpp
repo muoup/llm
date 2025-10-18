@@ -161,3 +161,19 @@ matrix matrix::cross_multiply(const matrix &other) const {
     
     return result;
 }
+
+bool matrix::equals(const matrix &other, const float epsilon) const {
+    if (this->rows != other.rows || this->cols != other.cols) {
+        return false;
+    }
+
+    for (size_t i = 0; i < this->rows; ++i) {
+        for (size_t j = 0; j < this->cols; ++j) {
+            if (std::abs(this->get(i, j) - other.get(i, j)) > epsilon) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}

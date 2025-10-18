@@ -46,8 +46,8 @@ attention_apply_result attention_layer::apply(const matrix &input) const {
 
     // Weighted sum
     matrix output = forward_result.scores.cross_multiply(forward_result.v);
-    forward_result.output = output;
+    forward_result.output = std::move(output);
 
     // Output projection
-    return {output.cross_multiply(wo), forward_result};
+    return { forward_result.output.cross_multiply(wo), forward_result };
 }

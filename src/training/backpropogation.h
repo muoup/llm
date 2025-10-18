@@ -20,10 +20,10 @@ struct training_data {
 
     std::span<const token_id_t> tokens;
 
-    explicit training_data(const std::span<const token_id_t> tokens, const size_t dimensions)
-        : predictions(tokens.size(), 1),
-          logit_input( tokens.size(), dimensions ),
-          tokens(tokens.begin(), tokens.end()) {}
+    explicit training_data(const std::span<const token_id_t> token_span, const size_t dimensions)
+        : predictions(token_span.size(), 1),
+          logit_input(token_span.size(), dimensions),
+          tokens(token_span) {}
 };
 
 struct optimization_results {

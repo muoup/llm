@@ -207,6 +207,8 @@ struct matrix {
     std::span<const float> to_span() const {
         return std::span(this->data_ptr(), buffer_size() / sizeof(float));
     }
+    
+    bool equals(const matrix &other, const float epsilon = 1e-6f) const;
 
     [[nodiscard]] size_t size() const { return cols * rows; }
 

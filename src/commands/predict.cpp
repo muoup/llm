@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <string>
-#include <fstream>
 
 #include <commands/arg_parser.h>
 #include <tokenizer/tokenizer.h>
@@ -55,9 +54,6 @@ int handle_predict(int argc, char* argv[]) {
     std::cout << "\nPrompt: " << prompt << std::endl;
     std::vector<token_id_t> tokens = encode(_tokenizer, prompt);
 
-    std::cout << "Prompt: " << '\n';
-    print_tokens(tokens);
-
     std::cout << "Generating: " << std::flush;
 
     for (size_t i = 0; i < length; ++i) {
@@ -67,16 +63,6 @@ int handle_predict(int argc, char* argv[]) {
             std::cout << _tokenizer.token_map[next_token].text << std::flush;
         }
     }
-
-    std::ifstream file("datasets/wiki-trunc/th.txt");
-    auto contents = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    auto expected_tokens = encode(_tokenizer, contents);
-
-    std::cout << "\n\nExpected tokens: ";
-    print_tokens(expected_tokens);
-
-    std::cout << "\nPredicted tokens: ";
-    print_tokens(tokens);
 
     std::cout << "\n\nPrediction complete." << std::endl;
     return 0;

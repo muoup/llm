@@ -3,20 +3,24 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <cstring>
 
-// ---[ Serialization Helpers ]---
-static void write_matrix(std::ofstream& file, const matrix& m) {
-    uint64_t dims[] = {m.rows, m.cols};
-    file.write(reinterpret_cast<const char*>(dims), sizeof(dims));
-    file.write(reinterpret_cast<const char*>(m.data_ptr()), m.rows * m.cols * sizeof(float));
-}
-
-static void read_matrix(std::ifstream& file, matrix& m) {
-    uint64_t dims[2];
-    file.read(reinterpret_cast<char*>(dims), sizeof(dims));
-    m = matrix(dims[0], dims[1]);
-    file.read(reinterpret_cast<char*>(m.data_ptr()), m.rows * m.cols * sizeof(float));
-}
+ // ---[ Serialization Helpers ]---
+ static void write_matrix(std::ofstream& file, const matrix& m) {
+     // Write dimensions as before
+     uint64_t dims[] = {m.rows, m.cols};
+     file.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+     file.write(reinterpret_cast<const char*>(m.data_ptr()), m.buffer_size());
+ }
+ 
+ static void read_matrix(std::ifstream& file, matrix& m) {
+     uint64_t dims[2];
+     file.read(reinterpret_cast<char*>(dims), sizeof(dims));
+     m = matrix(dims[0], dims[1]);
+     
+     const auto buffer_size = m.buffer_size();
+     file.read(reinterpret_cast<char*>(m.data_ptr()), buffer_size);
+ }
 
 // ---[ Serialization Functions ]---
 void save_llm(const llm& model, const std::string& path) {
@@ -52,6 +56,9 @@ void save_llm(const llm& model, const std::string& path) {
     }
     write_matrix(file, model.m_logit_layer.w);
     write_matrix(file, model.m_logit_layer.b);
+    
+    std::cout << "Model saved: " << path << std::endl;
+    std::cout << "Dimensions: " << dimensions << ", Layers: " << layer_count << ", Vocab Size: " << vocab_size << std::endl;
 }
 
 std::optional<llm> load_llm(const std::string& path) {
@@ -67,7 +74,7 @@ std::optional<llm> load_llm(const std::string& path) {
     file.read(reinterpret_cast<char*>(&layer_count), sizeof(layer_count));
     file.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
 
-    llm model(dimensions, layer_count, vocab_size);
+    llm model(vocab_size, layer_count, dimensions);
     
     for (auto& embedding : model.m_embedding_layer.m_embeddings) {
         read_matrix(file, embedding.data);
@@ -86,6 +93,9 @@ std::optional<llm> load_llm(const std::string& path) {
     }
     read_matrix(file, model.m_logit_layer.w);
     read_matrix(file, model.m_logit_layer.b);
+    
+    std::cout << "Model loaded: " << path << std::endl;
+    std::cout << "Dimensions: " << dimensions << ", Layers: " << layer_count << ", Vocab Size: " << vocab_size << std::endl;
     
     return model;
 }

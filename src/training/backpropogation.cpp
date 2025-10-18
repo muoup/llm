@@ -6,7 +6,7 @@
 #include <tokenizer/token.h>
 
 constexpr float learning_rate = 0.0001f;
-constexpr float regularization_strength = 0.0f;
+constexpr float regularization_strength = 0.01f;
 
 float adjustments = 0.0f;
 double total_loss = 0.0f;
@@ -71,7 +71,6 @@ matrix backpropogate_logit_row(
     matrix logit_loss_gradient { actual.size() - 1, model.vocab_size() };
     matrix logit_bias_gradient { 1, model.vocab_size() };
 
-#pragma omp parallel for
     for (size_t i = 0; i < predictions.rows; ++i) {
         for (size_t j = 0; j < predictions.cols; ++j) {
             const auto delta_loss = predictions.get(i, j) - (j == actual[i + 1] ? 1.0f : 0.0f);
