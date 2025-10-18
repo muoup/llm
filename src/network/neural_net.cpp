@@ -54,23 +54,21 @@ void save_llm(const llm& model, const std::string& path) {
     write_matrix(file, model.m_logit_layer.b);
 }
 
-void load_llm(llm& model, const std::string& path) {
+std::optional<llm> load_llm(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) return;
+    if (!file.is_open()) return std::nullopt;
 
     uint32_t magic, version, dimensions, layer_count, vocab_size;
     file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
     file.read(reinterpret_cast<char*>(&version), sizeof(version));
-    if (magic != 0x67676d6c || version != 1) return;
+    if (magic != 0x67676d6c || version != 1) return std::nullopt;
 
     file.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     file.read(reinterpret_cast<char*>(&layer_count), sizeof(layer_count));
     file.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
 
-    if (model.m_dimensions != dimensions || model.m_layer_count != layer_count || model.vocab_size() != vocab_size) {
-        return; // Model architecture mismatch
-    }
-
+    llm model(dimensions, layer_count, vocab_size);
+    
     for (auto& embedding : model.m_embedding_layer.m_embeddings) {
         read_matrix(file, embedding.data);
     }
@@ -88,11 +86,11 @@ void load_llm(llm& model, const std::string& path) {
     }
     read_matrix(file, model.m_logit_layer.w);
     read_matrix(file, model.m_logit_layer.b);
+    
+    return model;
 }
 
 // ---[ Model Operations ]---
-
-
 
 void llm::randomize() {
     constexpr auto min = -0.5f;
@@ -100,7 +98,7 @@ void llm::randomize() {
 
     m_embedding_layer.randomize(min, max);
     for (auto &layer : m_attention_layers) {
-        layer.randomize(min, max);
+        layer.randomize(min / 10, max / 10);
     }
     for (auto &layer : m_ff_layer) {
         layer.randomize(min, max);
@@ -119,7 +117,7 @@ matrix llm::prediction_matrix(const std::span<const token_id_t> tokens) const {
         acc = m_ff_layer[i].apply(acc).output;
     }
     
-    return m_logit_layer.apply(acc);
+    return m_logit_layer.apply(acc).softmax();
 }
 
 token_id_t llm::predict(const std::span<const token_id_t> tokens) const {

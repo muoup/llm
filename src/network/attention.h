@@ -5,6 +5,7 @@
 struct attention_forward_result {
     matrix q, k, v;
     matrix scores;
+    matrix output;
 };
 
 struct attention_apply_result {

@@ -1,7 +1,3 @@
-//
-// Created by user on 7/17/25.
-//
-
 #include "backpropogation.h"
 
 #include <iostream>
@@ -74,7 +70,7 @@ matrix backpropogate_logit_row(
 ) {
     matrix logit_loss_gradient { actual.size() - 1, model.vocab_size() };
     matrix logit_bias_gradient { 1, model.vocab_size() };
-    
+
 #pragma omp parallel for
     for (size_t i = 0; i < predictions.rows; ++i) {
         for (size_t j = 0; j < predictions.cols; ++j) {
@@ -147,8 +143,7 @@ matrix backpropogate_ff_layer(
     adjust_matrix(layer.w1, w1_gradient);
 
     auto input_gradient = z1_gradient
-        .cross_multiply(layer.w1.transposed())
-        .add(post_layer_gradient);
+        .cross_multiply(layer.w1.transposed());
     return input_gradient;
 }
 
@@ -174,54 +169,70 @@ matrix backpropagate_attention_layer(
     const attention_forward_result &result,
     const matrix& post_layer_gradient
 ) {
-    // Unpack forward pass results
+    // Unpack forward pass results (including stored pre-projection output)
     const auto& q = result.q;
     const auto& k = result.k;
     const auto& v = result.v;
     const auto& scores = result.scores;
-    
-    matrix scores_t = scores.transposed();
+    const auto& output = result.output;
 
     // Backprop through output projection (wo)
-    matrix wo_gradient = scores_t.cross_multiply(post_layer_gradient);
+    matrix output_t = output.transposed();
+    matrix wo_gradient = output_t.cross_multiply(post_layer_gradient);
     matrix scores_gradient = post_layer_gradient.cross_multiply(layer.wo.transposed());
     regularize_weight_gradient(wo_gradient, layer.wo);
     adjust_matrix(layer.wo, wo_gradient);
 
-    // Backprop through weighted sum
+    // Backprop through weighted sum: output = scores * v
+    matrix scores_t = scores.transposed();
     matrix v_gradient = scores_t.cross_multiply(scores_gradient);
     matrix scores_gradient_v = scores_gradient.cross_multiply(v.transposed());
-    regularize_weight_gradient(v_gradient, layer.wv);
-    adjust_matrix(layer.wv, v_gradient);
 
-    // Backprop through softmax
+    // Backprop through softmax (correct Jacobian)
     matrix softmax_gradient { scores_gradient_v.rows, scores_gradient_v.cols };
-    
+
 #pragma omp parallel for
     for (size_t i = 0; i < scores.rows; ++i) {
-        for (size_t j = 0; j < scores.cols; ++j) {
-            float s_ij = scores.get(i, j);
-            float grad_sum = 0.0f;
+        // Vectorized softmax backprop per-row:
+        // For a row: s = softmax(scores_row), g = dL/ds (scores_gradient_v row)
+        // s_dot = dot(g, s)
+        // dL/dz = s * (g - s_dot)
+        float s_dot = 0.0f;
+        for (size_t l = 0; l < scores.cols; ++l) {
+            s_dot += scores_gradient_v.get(i, l) * scores.get(i, l);
+        }
+
+#ifdef ATTENTION_DEBUG
+            // Optional per-row diagnostics: max probability and entropy
+            float row_max = scores.get(i, 0);
+            float entropy = 0.0f;
             for (size_t l = 0; l < scores.cols; ++l) {
-                float s_il = scores.get(i, l);
-                float delta_jl = (j == l) ? 1.0f : 0.0f;
-                grad_sum += scores_gradient_v.get(i, l) * s_ij * (delta_jl - s_il);
+                const float s = scores.get(i, l);
+                if (s > row_max) row_max = s;
+                entropy -= s * std::log(s + 1e-12f);
             }
-            softmax_gradient.set(i, j, grad_sum);
+            std::cout << "[ATTN_SOFTMAX_ROW] row=" << i << " max=" << row_max
+                      << " entropy=" << entropy << " s_dot=" << s_dot << std::endl;
+#endif
+
+        for (size_t j = 0; j < scores.cols; ++j) {
+            const float s_j = scores.get(i, j);
+            const float g_j = scores_gradient_v.get(i, j);
+            softmax_gradient.set(i, j, s_j * (g_j - s_dot));
         }
     }
 
-    // Backprop through scaling
+    // Backprop through scaling (scale was applied before softmax)
     const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
     softmax_gradient.scale(scale);
 
-    // Backprop through attention scores
+    // Backprop through attention scores to Q,K
     matrix q_gradient = softmax_gradient.cross_multiply(k);
     matrix k_gradient = softmax_gradient.transposed().cross_multiply(q);
 
-    // Backprop through Q, K, V projections
+    // Backprop through Q, K, V projections to their weight matrices
     matrix layer_input_t = layer_input.transposed();
-     
+
     matrix wq_gradient = layer_input_t.cross_multiply(q_gradient);
     matrix wk_gradient = layer_input_t.cross_multiply(k_gradient);
     matrix wv_gradient = layer_input_t.cross_multiply(v_gradient);
@@ -233,10 +244,31 @@ matrix backpropagate_attention_layer(
     regularize_weight_gradient(wv_gradient, layer.wv);
     adjust_matrix(layer.wv, wv_gradient);
 
-    // Gradient of the input
+#ifdef ATTENTION_DEBUG
+    // Optional debug logging for attention backpropagation gradients.
+    // Define ATTENTION_DEBUG at compile time to enable these prints.
+    std::cout << "[ATTN_BACKPROP] wo_grad.absmax=" << wo_gradient.absmax()
+              << " softmax_grad.absmax=" << softmax_gradient.absmax()
+              << " v_act_grad.absmax=" << v_gradient.absmax()
+              << " wq_grad.absmax=" << wq_gradient.absmax()
+              << " wk_grad.absmax=" << wk_gradient.absmax()
+              << " wv_grad.absmax=" << wv_gradient.absmax()
+              << " post_grad.absmax=" << post_layer_gradient.absmax()
+              << std::endl;
+#endif
+
+    // Gradient of the input: sum of contributions via each projection
     matrix input_gradient = q_gradient.cross_multiply(layer.wq.transposed());
     input_gradient.add(k_gradient.cross_multiply(layer.wk.transposed()));
     input_gradient.add(v_gradient.cross_multiply(layer.wv.transposed()));
+
+    // Account for the residual (skip) connection: the layer input was
+    // X, the attention produced O, and the forward did Y = O + X (residual).
+    // The gradient flowing into this function (post_layer_gradient) is dL/dY.
+    // Part of that gradient flows directly back to the input via the identity
+    // skip connection and must be added to the gradient coming through
+    // the attention projections.
+    input_gradient.add(post_layer_gradient);
 
     return input_gradient;
 }

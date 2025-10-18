@@ -20,23 +20,6 @@ int handle_train_tokenizer(int argc, char* argv[]) {
     }
 
     dataset_type type = detect_dataset_type(type_str);
-
-    std::cout << "Training tokenizer..." << std::endl;
-    std::cout << "  Corpus: " << corpus_path << std::endl;
-    std::cout << "  Dataset type: " << (type == dataset_type::RAW ? "raw" : "row-based") << std::endl;
-
-    std::string corpus_data;
-    try {
-        auto dataset = create_dataset(corpus_path, type);
-        dataset->for_each([&corpus_data](std::string_view row) {
-            corpus_data.append(row);
-            corpus_data.append("\n");
-        });
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
-
     size_t vocab_size = std::stoul(vocab_size_str);
 
     std::cout << "Training tokenizer..." << std::endl;

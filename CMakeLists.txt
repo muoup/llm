@@ -14,6 +14,7 @@ add_link_options(-fopenmp)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build")
+    add_compile_options(-DMATRIX_CHECKS -DATTENTION_DEBUG)
     add_compile_options(-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
 else()

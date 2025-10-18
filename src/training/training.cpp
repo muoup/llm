@@ -21,13 +21,13 @@ void train(llm& model, const std::span<const token_id_t> input) {
         data.attention_inputs.push_back(acc);
         matrix residual = acc;
         auto attention_result = model.m_attention_layers[i].apply(acc);
-        data.attention_forward_results.push_back(attention_result.forward_result);
-        acc = attention_result.output;
+        data.attention_forward_results.push_back(std::move(attention_result.forward_result));
+        acc = std::move(attention_result.output);
         acc.add(residual);
 
         auto ff_result = model.m_ff_layer[i].apply(acc);
-        data.forward_results.push_back(ff_result.forward_result);
-        acc = ff_result.output;
+        data.forward_results.push_back(std::move(ff_result.forward_result));
+        acc = std::move(ff_result.output);
     }
 
     data.logit_input = acc;

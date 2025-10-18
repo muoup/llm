@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <optional>
 
 #include <tokenizer/token.h>
 #include <util/matrix.h>
@@ -15,7 +16,7 @@ struct llm;
 
 // ---[ Serialization ]---
 void save_llm(const llm &model, const std::string &path);
-void load_llm(llm &model, const std::string &path);
+std::optional<llm> load_llm(const std::string &path);
 
 struct llm {
     void randomize();

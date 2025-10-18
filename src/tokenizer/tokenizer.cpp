@@ -139,9 +139,9 @@ void save_tokenizer(const tokenizer& tokenizer, const std::string& path) {
     }
 }
 
-void load_tokenizer(tokenizer& tokenizer, const std::string& path) {
+std::optional<tokenizer> load_tokenizer(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) return;
+    if (!file.is_open()) return std::nullopt;
 
     uint32_t magic, version, vocab_size;
     file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
@@ -149,10 +149,12 @@ void load_tokenizer(tokenizer& tokenizer, const std::string& path) {
 
     if (magic != 0x67676d6c || version != 1) {
         // Handle error: invalid file format
-        return;
+        return std::nullopt;
     }
 
     file.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
+    
+    tokenizer tokenizer;
 
     tokenizer.token_map.clear();
     tokenizer.token_map.reserve(vocab_size);
@@ -183,4 +185,6 @@ void load_tokenizer(tokenizer& tokenizer, const std::string& path) {
             }
         }
     }
+    
+    return tokenizer;
 }

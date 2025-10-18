@@ -6,6 +6,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <optional>
 
 struct tokenizer {
     token_map_t token_map;
@@ -31,4 +32,4 @@ std::string decode(const tokenizer& tokenizer, const std::span<const token_id_t>
 void save_tokenizer(const tokenizer& tokenizer, const std::string& path);
 
 // Load the tokenizer's state from a file.
-void load_tokenizer(tokenizer& tokenizer, const std::string& path);
+std::optional<tokenizer> load_tokenizer(const std::string& path);

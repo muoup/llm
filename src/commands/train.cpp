@@ -36,9 +36,13 @@ int handle_train(int argc, char* argv[]) {
     dataset_type type = detect_dataset_type(type_str);
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;
-    tokenizer tokenizer;
-    load_tokenizer(tokenizer, tokenizer_path);
-    if (tokenizer.vocab_size() == 0) {
+    tokenizer _tokenizer = *load_tokenizer(tokenizer_path).or_else([]() {
+        std::cerr << "Error loading tokenizer." << std::endl;
+        std::abort();
+        
+        return (std::optional<tokenizer>) std::nullopt;
+    });
+    if (_tokenizer.vocab_size() == 0) {
         std::cerr << "Error: Failed to load tokenizer." << std::endl;
         return 1;
     }
@@ -47,14 +51,26 @@ int handle_train(int argc, char* argv[]) {
     size_t layers = 4;
     size_t dimensions = 128;
 
-    llm model(tokenizer.vocab_size(), layers, dimensions);
-
-    if (!input_model_path.empty()) {
-        std::cout << "Loading existing model from: " << input_model_path << std::endl;
-        load_llm(model, input_model_path);
-    } else {
-        std::cout << "Creating and randomizing new model." << std::endl;
-        model.randomize();
+    llm model = [&]() {
+        if (!input_model_path.empty()) {
+            std::cout << "Loading existing model from: " << input_model_path << std::endl;
+            return *load_llm(input_model_path).or_else([&]() {
+                std::cerr << "Error loading model." << std::endl;
+                std::abort();
+                
+                return (std::optional<llm>) std::nullopt;
+            });
+        } else {
+            std::cout << "Creating and randomizing new model." << std::endl;
+            llm model(_tokenizer.vocab_size(), dimensions, layers);
+            model.randomize();
+            return model;
+        }
+    }();
+    
+    if (model.vocab_size() != _tokenizer.token_map.size()) {
+        std::cerr << "Model vocabulary size does not match tokenizer size." << std::endl;
+        std::abort();
     }
 
     std::cout << "Starting training process..." << std::endl;
@@ -64,7 +80,7 @@ int handle_train(int argc, char* argv[]) {
         std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows..." << std::endl;
 
         dataset->enumerate([&](size_t i, std::string_view row) {
-            auto tokens = encode(tokenizer, row);
+            auto tokens = encode(_tokenizer, row);
             std::cout << "Training on row " << i + 1 << "/" << dataset->size() << " with " << tokens.size() << " tokens." << std::endl;
             train(model, tokens);
         }, n_rows);
