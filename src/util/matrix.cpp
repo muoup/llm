@@ -134,7 +134,16 @@ matrix &matrix::softmax() {
     return *this;
 }
 
-void matrix::cross_multiply_into(const matrix &other, matrix &out) const {   
+matrix& matrix::mask_upper_triangular(const float mask_value) {
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = i + 1; j < cols; ++j) {
+            set(i, j, mask_value);
+        }
+    }
+    return *this;
+}
+
+void matrix::cross_multiply_into(const matrix &other, matrix &out) const {     
     using custom_matrix
         = blaze::CustomMatrix<float, blaze::AlignmentFlag::aligned,
                               blaze::PaddingFlag::padded>;

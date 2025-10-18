@@ -93,6 +93,7 @@ struct matrix {
     }
 
     matrix &softmax();
+    matrix &mask_upper_triangular(float mask_value = -std::numeric_limits<float>::infinity());
 
     matrix &normalize() {
         this->scale(1.0f / this->absmax());
@@ -102,6 +103,10 @@ struct matrix {
 
     void cross_multiply_into(const matrix& other, matrix& out) const;
     matrix cross_multiply(const matrix &other) const;
+    
+    matrix clone() const {
+        return matrix{ *this };
+    }
 
     matrix &scale(const float factor) {
         this->map([factor](const float value) { return value * factor; });

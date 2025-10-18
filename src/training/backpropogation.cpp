@@ -305,5 +305,5 @@ void backpropogate(llm& model, const training_data& data) {
     backpropogate_embedding(model, data.tokens, previous_final_gradient);
 
     std::cout << "Adjustments: " << adjustments << '\n';
-    std::cout << "Total Loss: " << total_loss << '\n';
+    std::cout << "Loss per token: " << (total_loss / static_cast<double>(data.tokens.size() - 1)) << '\n';
 }
