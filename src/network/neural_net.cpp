@@ -134,12 +134,14 @@ token_id_t llm::predict(const std::span<const token_id_t> tokens) const {
     const auto predictions = prediction_matrix(tokens);
     auto max_idx = 0;
     const size_t last_row = predictions.rows - 1;
-    for (size_t i = 1; i < predictions.cols; i++) {
-        if (predictions.get(last_row, i) > predictions.get(last_row, max_idx)) {
-            max_idx = i;
+    
+    for (size_t j = 1; j < predictions.cols; ++j) {
+        if (predictions.get(last_row, j) > predictions.get(last_row, max_idx)) {
+            max_idx = j;
         }
     }
-    return max_idx;
+    
+    return static_cast<token_id_t>(max_idx);
 }
 
 std::string llm::to_string() const {

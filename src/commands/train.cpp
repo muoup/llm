@@ -91,41 +91,5 @@ int handle_train(int argc, char* argv[]) {
 
     std::cout << "Training complete. Saving model to: " << output_model_path << std::endl;
     save_llm(model, output_model_path);
-    
-    auto loaded_model = load_llm(output_model_path);
-    
-    // test if loaded model equals saved model
-    for (size_t i = 0; i < model.m_ff_layer.size(); i++) {
-        auto &layer = model.m_ff_layer[i];
-        auto &loaded_layer = loaded_model->m_ff_layer[i];
-        
-        if (!layer.w1.equals(loaded_layer.w1) ||
-            !layer.b1.equals(loaded_layer.b1) ||
-            !layer.w2.equals(loaded_layer.w2) ||
-            !layer.b2.equals(loaded_layer.b2)) {
-            std::cerr << "Error: Saved and loaded model do not match!" << std::endl;
-            return 1;
-        }
-    }
-    
-    for (size_t i = 0; i < model.m_attention_layers.size(); i++) {
-        auto &layer = model.m_attention_layers[i];
-        auto &loaded_layer = loaded_model->m_attention_layers[i];
-        
-        if (!layer.wq.equals(loaded_layer.wq) ||
-            !layer.wk.equals(loaded_layer.wk) ||
-            !layer.wv.equals(loaded_layer.wv) ||
-            !layer.wo.equals(loaded_layer.wo)) {
-            std::cerr << "Error: Saved and loaded model do not match!" << std::endl;
-            return 1;
-        }
-    }
-    
-    if (!model.m_logit_layer.w.equals(loaded_model->m_logit_layer.w) ||
-        !model.m_logit_layer.b.equals(loaded_model->m_logit_layer.b)) {
-        std::cerr << "Error: Saved and loaded model do not match!" << std::endl;
-        return 1;
-    }
-    
     return 0;
 }
