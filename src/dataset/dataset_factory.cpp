@@ -1,5 +1,7 @@
 #include "dataset_factory.h"
 
+#include "omp.h"
+
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -7,7 +9,7 @@
 // Implementation of the factory function
 std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type) {
     std::printf("Loading dataset from: %s\n", path.data());
-    std::ifstream file(path);
+    std::ifstream file(path.data());
     
     if (!file) {
         throw std::runtime_error("Could not open dataset file: " + std::string { path });

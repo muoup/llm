@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <string_view>
+#include <string>
 
 struct dataset {
     virtual ~dataset() = default;

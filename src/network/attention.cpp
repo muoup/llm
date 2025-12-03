@@ -2,7 +2,6 @@
 #include <cmath>
 
 // ---[ Layer Operations ]---
-
 void attention_layer::randomize(const float min, const float max) {
     wq.randomize(min, max);
     wk.randomize(min, max);

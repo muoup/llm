@@ -4,6 +4,7 @@
 #include <cstring>
 #include <span>
 #include <memory>
+#include <numeric>
 
 #ifdef MATRIX_CHECKS
 #include "../util/assert.h"
