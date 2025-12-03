@@ -1,6 +1,8 @@
 #pragma once
 
-#include <util/matrix.h>
+#include <util/matrix.hpp>
+
+#include <istream>
 
 struct attention_forward_result {
     matrix q, k, v;
@@ -13,7 +15,6 @@ struct attention_apply_result {
     attention_forward_result forward_result;
 };
 
-// ---[ Data Structs ]---
 struct attention_layer {
     matrix wq, wk, wv, wo;
 
@@ -22,5 +23,11 @@ struct attention_layer {
           wv({ dimensions, head_size }), wo({ head_size, dimensions }) {}
 
     void randomize(float min, float max);
-    attention_apply_result apply(const matrix &input) const;
+    
+    attention_apply_result forward(const matrix &input) const;
+    void backpropogate(const attention_forward_result &forward_result,
+                       const matrix &grad_output, float learning_rate);
+    
+    void save(std::ostream& out) const;
+    static attention_layer load(std::istream& in);
 };

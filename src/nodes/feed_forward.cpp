@@ -1,4 +1,4 @@
-#include "feed_forward.h"
+#include "feed_forward.hpp"
 
 // ---[ Layer Operations ]---
 

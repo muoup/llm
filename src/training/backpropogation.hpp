@@ -3,11 +3,11 @@
 #include <span>
 #include <vector>
 
-#include <network/attention.h>
-#include <network/feed_forward.h>
+#include <nodes/attention.hpp>
+#include <nodes/feed_forward.hpp>
 
-#include <tokenizer/token.h>
-#include <util/matrix.h>
+#include <tokenizer/token.hpp>
+#include <util/matrix.hpp>
 
 struct llm;
 
@@ -36,4 +36,5 @@ struct optimization_results {
     matrix logit_bias_gradient;
 };
 
-void backpropogate(llm& model, const training_data& data);
+void regularize_weight_gradient(matrix &gradient, const matrix &weights);
+void adjust_matrix(matrix &weights, const matrix &gradient, float learning_rate);

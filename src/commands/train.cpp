@@ -1,15 +1,15 @@
-#include "train.h"
-#include "training/training.h"
+#include "train.hpp"
+#include "training/training.hpp"
 
 #include <iostream>
 #include <string>
 #include <fstream>
 
-#include <commands/arg_parser.h>
-#include <tokenizer/tokenizer.h>
-#include <network/neural_net.h>
+#include <commands/arg_parser.hpp>
+#include <tokenizer/tokenizer.hpp>
+#include <nodes/neural_net.hpp>
 
-#include <dataset/dataset_factory.h>
+#include <dataset/dataset_factory.hpp>
 
 int handle_train(int argc, char* argv[]) {
     std::string data_path = get_arg_value(argc, argv, "--data");

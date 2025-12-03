@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <dataset/dataset_factory.h>
+#include <dataset/dataset_factory.hpp>
 
 // A simple helper to find the value of an argument like "--key value"
 std::string get_arg_value(int argc, char* argv[], const std::string& arg_name);

@@ -1,12 +1,12 @@
-#include "train_tokenizer.h"
+#include "train_tokenizer.hpp"
 
 #include <iostream>
 #include <string>
 
-#include <commands/arg_parser.h>
-#include <tokenizer/tokenizer.h>
+#include <commands/arg_parser.hpp>
+#include <tokenizer/tokenizer.hpp>
 
-#include "../dataset/dataset_factory.h"
+#include "../dataset/dataset_factory.hpp"
 
 int handle_train_tokenizer(int argc, char* argv[]) {
     std::string corpus_path = get_arg_value(argc, argv, "--corpus");

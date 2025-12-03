@@ -2,7 +2,7 @@
 // Created by user on 7/18/25.
 //
 
-#include "input_data.h"
+#include "input_data.hpp"
 
 #include <fstream>
 #include <sstream>

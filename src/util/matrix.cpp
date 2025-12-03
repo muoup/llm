@@ -2,7 +2,7 @@
 // Created by user on 7/17/25.
 //
 
-#include "matrix.h"
+#include "matrix.hpp"
 
 #include <blaze/math/shims/NextMultiple.h>
 #include <blaze/math/CustomMatrix.h>
@@ -195,4 +195,21 @@ bool matrix::equals(const matrix &other, const float epsilon) const {
     }
 
     return true;
+}
+
+void matrix::save(std::ostream &out) const {
+    out.write(reinterpret_cast<const char*>(&rows), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(&cols), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(data_ptr()), buffer_size());
+}
+
+matrix matrix::load(std::istream &in) {
+    size_t new_rows, new_cols;
+    in.read(reinterpret_cast<char*>(&new_rows), sizeof(size_t));
+    in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
+
+    matrix new_matrix(new_rows, new_cols);
+    in.read(reinterpret_cast<char*>(new_matrix.data_ptr()), new_matrix.buffer_size());
+    
+    return new_matrix;
 }

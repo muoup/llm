@@ -1,6 +1,6 @@
 #pragma once
 
-#include <util/matrix.h>
+#include <util/matrix.hpp>
 
 // ---[ Data Structs ]---
 struct logit_layer {

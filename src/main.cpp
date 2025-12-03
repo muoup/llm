@@ -3,9 +3,9 @@
 #include <map>
 #include <functional>
 
-#include "commands/train_tokenizer.h"
-#include "commands/train.h"
-#include "commands/predict.h"
+#include "commands/train_tokenizer.hpp"
+#include "commands/train.hpp"
+#include "commands/predict.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {

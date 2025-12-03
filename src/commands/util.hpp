@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 
-#include <network/neural_net.h>
+#include <nodes/neural_net.hpp>
 
 // tokens_span should be the original input tokens used for training
 inline void check_teacher_forcing(const llm &model, const std::span<const token_id_t> tokens) {

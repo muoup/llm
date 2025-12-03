@@ -1,13 +1,14 @@
 #pragma once
 
+#include <iostream>
 #include <cstdlib>
 #include <cstring>
 #include <span>
 #include <memory>
-#include <numeric>
+#include <vector>
 
 #ifdef MATRIX_CHECKS
-#include "../util/assert.h"
+#include "../util/assert.hpp"
 #include <sstream>
 #endif
 
@@ -202,6 +203,15 @@ struct matrix {
 
     std::string header() const;
     std::string to_string(std::uint8_t precision = 4) const;
+    
+    template <typename ... Args>
+    static std::vector<matrix> construct_vec(Args&& ... args) {
+        std::vector<matrix> vec;
+        
+        (vec.emplace_back(std::forward<Args>(args)), ...);
+        
+        return vec;
+    }
 
     std::span<float> to_span() {
         return std::span(this->data_ptr(), buffer_size() / sizeof(float));
@@ -210,6 +220,9 @@ struct matrix {
     std::span<const float> to_span() const {
         return std::span(this->data_ptr(), buffer_size() / sizeof(float));
     }
+    
+    void save(std::ostream &out) const;
+    static matrix load(std::istream &in);
     
     bool equals(const matrix &other, const float epsilon = 1e-6f) const;
 

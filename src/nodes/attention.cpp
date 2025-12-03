@@ -1,4 +1,4 @@
-#include "attention.h"
+#include "attention.hpp"
 #include <cmath>
 
 // ---[ Layer Operations ]---
@@ -9,7 +9,7 @@ void attention_layer::randomize(const float min, const float max) {
     wo.randomize(min, max);
 }
 
-attention_apply_result attention_layer::apply(const matrix &input) const {
+attention_apply_result attention_layer::forward(const matrix &input) const {
     attention_forward_result forward_result;
     forward_result.q = input.cross_multiplied(wq);
     forward_result.k = input.cross_multiplied(wk);

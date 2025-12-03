@@ -1,7 +1,7 @@
-#include "training.h"
+#include "training.hpp"
 
-#include <network/neural_net.h>
-#include <training/backpropogation.h>
+#include <nodes/neural_net.hpp>
+#include <training/backpropogation.hpp>
 
 void train(llm& model, const std::span<const token_id_t> input) {
     // since the llm will predict every i + 1 index, we want to uninclude the last token
@@ -10,7 +10,7 @@ void train(llm& model, const std::span<const token_id_t> input) {
 
     training_data data { input, model.m_dimensions };
 
-    matrix acc = model.m_embedding_layer.apply(truncated_input);
+    matrix acc = model.m_embedding_layer.forward(truncated_input);
 
     const size_t layer_count = model.m_ff_layers.size();
     data.attention_forward_results.reserve(layer_count);
@@ -21,7 +21,7 @@ void train(llm& model, const std::span<const token_id_t> input) {
         data.attention_inputs.emplace_back(acc.clone());
         
         matrix residual = acc.clone();
-        auto attention_result = model.m_attention_layers[i].apply(acc);
+        auto attention_result = model.m_attention_layers[i].forward(acc);
         data.attention_forward_results.push_back(std::move(attention_result.forward_result));
         acc = std::move(attention_result.output);
         acc.add(residual);

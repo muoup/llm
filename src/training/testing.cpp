@@ -2,19 +2,18 @@
 // Created by user on 7/19/25.
 //
 
-#include "testing.h"
+#include "testing.hpp"
 
 #include <iostream>
 
-#include "training.h"
-#include "../network/neural_net.h"
+#include "../nodes/neural_net.hpp"
 
 
 void log_neuron_maxes(const llm& model) {
     auto embedding_max = 0.0f;
 
     for (const auto& embedding : model.m_embedding_layer.m_embeddings) {
-        embedding_max = std::max(embedding_max, embedding.data.absmax());
+        embedding_max = std::max(embedding_max, embedding.m_data.absmax());
     }
 
     std::cout << "Embedding max: " << embedding_max << "\n";

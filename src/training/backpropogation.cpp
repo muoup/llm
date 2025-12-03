@@ -1,9 +1,9 @@
-#include "backpropogation.h"
+#include "backpropogation.hpp"
 
 #include <iostream>
 
-#include <network/neural_net.h>
-#include <tokenizer/token.h>
+#include <nodes/neural_net.hpp>
+#include <tokenizer/token.hpp>
 
 constexpr float learning_rate = 0.0001f;
 constexpr float regularization_strength = 0.01f;
@@ -52,7 +52,7 @@ void regularize_weight_gradient(matrix &gradient, const matrix &weights) {
     }
 }
 
-void adjust_matrix(matrix &adjust, const matrix &gradient) {
+void adjust_matrix(matrix &adjust, const matrix &gradient, float learning_rate) {
     const float factor = norm_clip_factor(gradient);
 
     for (size_t i = 0; i < adjust.rows; ++i) {
@@ -158,13 +158,13 @@ void backpropogate_embedding(llm &model,
         const auto &token = tokens[t];
         auto &embedding = model.m_embedding_layer.m_embeddings[token];
 
-        matrix embedding_gradient_row{ 1, embedding.data.cols };
-        for (size_t i = 0; i < embedding.data.cols; i++) {
+        matrix embedding_gradient_row{ 1, embedding.m_data.cols };
+        for (size_t i = 0; i < embedding.m_data.cols; i++) {
             embedding_gradient_row.set(0, i, x_gradient.get(t, i));
         }
 
-        regularize_weight_gradient(embedding_gradient_row, embedding.data);
-        adjust_matrix(embedding.data, embedding_gradient_row);
+        regularize_weight_gradient(embedding_gradient_row, embedding.m_data);
+        adjust_matrix(embedding.m_data, embedding_gradient_row);
     }
 }
 

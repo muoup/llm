@@ -1,4 +1,4 @@
-#include "neural_net.h"
+#include "neural_net.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -8,7 +8,8 @@
  // ---[ Serialization Helpers ]---
  static void write_matrix(std::ofstream& file, const matrix& m) {
      // Write dimensions as before
-     uint64_t dims[] = {m.rows, m.cols};
+     uint64_t dims[] = { m.rows, m.cols };
+     
      file.write(reinterpret_cast<const char*>(dims), sizeof(dims));
      file.write(reinterpret_cast<const char*>(m.data_ptr()), m.buffer_size());
  }
@@ -118,7 +119,7 @@ void llm::randomize() {
 }
 
 matrix llm::prediction_matrix(const std::span<const token_id_t> tokens) const {
-    matrix acc = m_embedding_layer.apply(tokens);
+    matrix acc = m_embedding_layer.forward(tokens);
     
     for (size_t i = 0; i < m_ff_layers.size(); ++i) {
         matrix residual = acc.clone();

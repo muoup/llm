@@ -4,13 +4,13 @@
 #include <vector>
 #include <optional>
 
-#include <tokenizer/token.h>
-#include <util/matrix.h>
+#include <tokenizer/token.hpp>
+#include <util/matrix.hpp>
 
-#include <network/embedding.h>
-#include <network/feed_forward.h>
-#include <network/attention.h>
-#include <network/logit_layer.h>
+#include <nodes/embedding.hpp>
+#include <nodes/feed_forward.hpp>
+#include <nodes/attention.hpp>
+#include <nodes/logit_layer.hpp>
 
 struct llm;
 

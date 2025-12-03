@@ -1,4 +1,4 @@
-#include "arg_parser.h"
+#include "arg_parser.hpp"
 
 std::string get_arg_value(int argc, char* argv[], const std::string& arg_name) {
     for (int i = 2; i < argc - 1; ++i) {

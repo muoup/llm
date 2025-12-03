@@ -1,4 +1,4 @@
-#include "logit_layer.h"
+#include "logit_layer.hpp"
 
 // ---[ Layer Operations ]---
 

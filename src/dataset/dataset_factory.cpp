@@ -1,4 +1,4 @@
-#include "dataset_factory.h"
+#include "dataset_factory.hpp"
 
 #include "omp.h"
 

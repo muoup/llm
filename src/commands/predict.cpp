@@ -1,13 +1,12 @@
-#include "predict.h"
+#include "predict.hpp"
 
 #include <iostream>
 #include <string>
-#include <fstream>
 
-#include <commands/arg_parser.h>
-#include <commands/util.h>
-#include <tokenizer/tokenizer.h>
-#include <network/neural_net.h>
+#include <commands/arg_parser.hpp>
+#include <commands/util.hpp>
+#include <tokenizer/tokenizer.hpp>
+#include <nodes/neural_net.hpp>
 
 void print_tokens(const std::span<const token_id_t> tokens) {
     for (auto token : tokens) {
