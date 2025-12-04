@@ -191,8 +191,8 @@ std::vector<std::vector<matrix>> InferenceModel::forwarding_results(
     results.emplace_back(matrix::construct_vec(embeddings));
 
     for (size_t node_idx : execution_order) {
-        results.emplace_back(
-            this->m_layers.at(node_idx)->forward(results.back()));
+        auto forward_result = this->m_layers.at(node_idx)->forward(results.back());
+        results.emplace_back(std::move(forward_result));
     }
 
     auto logits = m_logit_layer.forward(results.back()[0]);

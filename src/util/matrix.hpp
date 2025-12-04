@@ -78,7 +78,7 @@ struct matrix {
             set(row, j, row_vector.get(0, j));
         }
     }
-
+    
     void add_row_vector(const size_t row, const matrix &other) {
         MATRIX_ASSERT(
             this->cols == other.cols,
@@ -87,6 +87,35 @@ struct matrix {
         for (size_t i = 0; i < cols; ++i) {
             set(row, i, get(row, i) + other.get(0, i));
         }
+    }
+    
+    void set_horizontal_slice(const size_t col_start, const matrix &slice) {
+        MATRIX_ASSERT(
+            this->rows == slice.rows,
+            "Slice must have the same number of rows as the matrix");
+        MATRIX_ASSERT(
+            col_start + slice.cols <= this->cols,
+            "Slice exceeds matrix row bounds");
+
+        for (size_t i = 0; i < slice.rows; ++i) {
+            for (size_t j = 0; j < slice.cols; ++j) {
+                set(i, j + col_start, slice.get(i, j));
+            }
+        }
+    }
+    
+    matrix get_horizontal_slice(const size_t col_start, const size_t slice_cols) const {
+        MATRIX_ASSERT(
+            col_start + slice_cols <= this->cols,
+            "Slice exceeds matrix row bounds");
+
+        matrix slice{ this->rows, slice_cols };
+        for (size_t i = 0; i < this->rows; ++i) {
+            for (size_t j = 0; j < slice_cols; ++j) {
+                slice.set(i, j, this->get(i, j + col_start));
+            }
+        }
+        return slice;
     }
 
     matrix &softmax();
@@ -227,6 +256,10 @@ struct matrix {
     static matrix load(std::istream &in);
     
     bool equals(const matrix &other, const float epsilon = 1e-6f) const;
+    
+    void print_bounds() const {
+        std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols << "\n";
+    }
 
     [[nodiscard]] size_t size() const { return cols * rows; }
 

@@ -37,7 +37,7 @@ static void positional_encoding(matrix &input) {
 }
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
-    matrix output{ tokens.size(), m_dimensions };
+    matrix output = matrix(tokens.size(), m_dimensions);
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const auto &embedding = m_embeddings[tokens[i]];

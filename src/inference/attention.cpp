@@ -7,12 +7,11 @@
 
 NodeType AttentionLayer::getType() const { return NodeType::Attention; }
 
-AttentionLayer::AttentionLayer(size_t dimensions, size_t head_size,
-                               size_t head_count)
+AttentionLayer::AttentionLayer(size_t dimensions, size_t head_count)
     : dimensions(dimensions),
-      head_size(head_size),
+      head_size(dimensions / head_count),
       head_count(head_count),
-      wo(matrix(dimensions, dimensions)) {
+      wo(matrix(head_size * head_count, dimensions)) {
           
           for (size_t i = 0; i < head_count; ++i) {
               heads.emplace_back(AttentionHead{
@@ -40,7 +39,7 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
     // placeholder for the final output to prevent insert(0) additional overhead
     returns.emplace_back();
     // placeholder for the concatenated heads
-    returns.emplace_back(input.rows, input.cols);
+    returns.emplace_back(input.rows, head_count * head_size);
     
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
@@ -48,10 +47,8 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
         matrix k = input.cross_multiplied(head.wk);
         matrix v = input.cross_multiplied(head.wv);
 
-        // Attention scores
+        // Attention score = Q x K^T / sqrt(d_k)
         matrix scores = q.cross_multiplied(k.transposed());
-
-        // Scale
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         scores.scale(scale);
 
@@ -62,11 +59,10 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
         // Weighted sum
         matrix weighted_sum = scores.cross_multiplied(v);
         
-        matrix& output = returns[0];
-        output.set_row_vector(h, weighted_sum);
+        matrix& concatenated_heads = returns[1];
+        concatenated_heads.set_horizontal_slice(h * head_size, weighted_sum);
         
         // returns is not modified, so the output reference will remain valid until this point
-        
         returns.emplace_back(std::move(q));
         returns.emplace_back(std::move(k));
         returns.emplace_back(std::move(v));
@@ -74,12 +70,12 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
         returns.emplace_back(std::move(weighted_sum));
     }
 
-    matrix& output = returns[1];
-    matrix final_output = output.cross_multiplied(wo);
-    returns[0] = std::move(final_output);
-
+    matrix& final_output = returns[0];
+    matrix& concatenated_heads = returns[1];
+    final_output = concatenated_heads.cross_multiplied(wo);
+    
     // Expected returns layout:
-    // [0] -> output matrix
+    // [0] -> concatenated heads
     // [1] -> final output
     // [2] -> q1 (queries head 1)
     // [3] -> k1 (keys head 1)
@@ -99,7 +95,14 @@ std::vector<matrix> AttentionLayer::backpropogate(
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
-    const matrix& final_output = outputs[0];
+
+    // Backprop through output projection (wo)
+    const matrix& post_layer_gradient = gradients[0];
+    matrix wo_gradient = outputs[1].transposed().cross_multiplied(post_layer_gradient);
+    regularize_weight_gradient(wo_gradient, wo, regularization_strength);
+    adjust_matrix(wo, wo_gradient, learning_rate);
+    
+    matrix weighted_sum_gradient_full = post_layer_gradient.cross_multiplied(wo.transposed());
     
     matrix input_gradient(layer_input.rows, layer_input.cols);
     
@@ -108,15 +111,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
         const matrix& k = outputs[2 + h * 5 + 1];
         const matrix& v = outputs[2 + h * 5 + 2];
         const matrix& scores = outputs[2 + h * 5 + 3];
-        const matrix& weighted_sum = outputs[2 + h * 5 + 4];
         
-        const matrix& post_layer_gradient = gradients[0];
-        
-        // Backprop through output projection (wo)
-        matrix wo_gradient
-            = weighted_sum.transposed().cross_multiplied(post_layer_gradient);
-        matrix weighted_sum_gradient
-            = post_layer_gradient.cross_multiplied(wo.transposed());
+        // Slice the gradient for the current head's output
+        matrix weighted_sum_gradient = weighted_sum_gradient_full.get_horizontal_slice(h * head_size, head_size);
         
         // Backprop through weighted sum: weighted_sum = scores * v
         matrix v_gradient
@@ -168,11 +165,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         head_input_gradient.add(v_gradient.cross_multiplied(head.wv.transposed()));
         input_gradient.add(head_input_gradient);
     }
-    
-    // Backprop through output projection (wo)
-    matrix wo_gradient = final_output.transposed().cross_multiplied(gradients[0]);
-    regularize_weight_gradient(wo_gradient, wo, regularization_strength);
-    adjust_matrix(wo, wo_gradient, learning_rate);
 
     return matrix::construct_vec(input_gradient);
 }
@@ -211,6 +203,7 @@ AttentionLayer AttentionLayer::load(std::istream& in) {
             /* .wv = */ matrix::load(in)
         );
     }
-
+    
+    layer.wo = matrix::load(in);
     return layer;
 }

@@ -1,7 +1,6 @@
 #include "standard_model.hpp"
 
 InferenceModel create_standard_model(size_t dimensions, size_t vocab_size, size_t ff_layers) {
-    constexpr size_t head_size = 64;
     constexpr size_t head_count = 8;
     constexpr size_t ffn_multiplier = 4;
     
@@ -11,7 +10,7 @@ InferenceModel create_standard_model(size_t dimensions, size_t vocab_size, size_
     
     for (size_t i = 0; i < ff_layers; ++i) {
         size_t attn_idx = model.add_layer(
-            std::make_unique<AttentionLayer>(dimensions, head_size, head_count));
+            std::make_unique<AttentionLayer>(dimensions, head_count));
         size_t ff_idx = model.add_layer(
             std::make_unique<FeedForwardLayer>(dimensions, dimensions * ffn_multiplier));
 

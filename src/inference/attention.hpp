@@ -23,7 +23,7 @@ struct AttentionHead {
 
 class AttentionLayer final : public INode {
 public:
-    AttentionLayer(size_t dimensions, size_t head_size, size_t head_count);
+    AttentionLayer(size_t dimensions, size_t head_count);
 
     // INode interface implementation
     NodeType getType() const override;
