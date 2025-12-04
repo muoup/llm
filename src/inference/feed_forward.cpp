@@ -94,6 +94,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     adjust_matrix(w1, w1_gradient, learning_rate);
 
     auto result = z1_gradient.cross_multiplied(w1.transposed());
+    norm_clip(result);
     return matrix::construct_vec(result);
 }
 

@@ -10,7 +10,7 @@ InferenceModel create_standard_model(size_t dimensions, size_t vocab_size, size_
     
     for (size_t i = 0; i < ff_layers; ++i) {
         size_t attn_idx = model.add_layer(
-            std::make_unique<AttentionLayer>(dimensions, head_count));
+            std::make_unique<AttentionLayer>(dimensions, 4));
         size_t ff_idx = model.add_layer(
             std::make_unique<FeedForwardLayer>(dimensions, dimensions * ffn_multiplier));
 
