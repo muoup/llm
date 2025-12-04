@@ -2,11 +2,11 @@
 
 #include <iostream>
 #include <string>
+#include <fstream>
 
 #include <commands/arg_parser.hpp>
-#include <commands/util.hpp>
 #include <tokenizer/tokenizer.hpp>
-#include <nodes/neural_net.hpp>
+#include <inference/inference.hpp>
 
 void print_tokens(const std::span<const token_id_t> tokens) {
     for (auto token : tokens) {
@@ -40,13 +40,17 @@ int handle_predict(int argc, char* argv[]) {
     });
 
     std::cout << "Loading model from: " << model_path << std::endl;
-    auto model = *load_llm(model_path).or_else([]() {
-        std::cerr << "Error loading model." << std::endl;
-        std::abort();
-
-        return (std::optional<llm>) std::nullopt;
-    });
-
+    auto fstream = std::ifstream{ model_path };
+    
+    if (!fstream.is_open()) {
+        std::cerr << "Error: Could not open model file." << std::endl;
+        return 1;
+    }
+    
+    auto model = InferenceModel::load(fstream);
+    
+    std::cout << "Model loaded. Vocabulary size: " << model.vocab_size() << std::endl;
+    
     if (model.vocab_size() != _tokenizer.token_map.size()) {
         std::cerr << "Model vocabulary size does not match tokenizer size." << std::endl;
         return 1;
@@ -65,6 +69,8 @@ int handle_predict(int argc, char* argv[]) {
         
         if (next_token < _tokenizer.token_map.size()) {
             std::cout << _tokenizer.token_map[next_token].text << std::flush;
+        } else {
+            std::cout << "<UNK>" << std::flush;
         }
     }
 

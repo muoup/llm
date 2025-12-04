@@ -3,6 +3,6 @@
 #include <tokenizer/token.hpp>
 #include <span>
 
-struct llm;
+struct InferenceModel;
 
-void train(llm& model, std::span<const token_id_t> input);
+void train(InferenceModel& model, const std::span<const token_id_t> input, float learning_rate = 0.0001f);

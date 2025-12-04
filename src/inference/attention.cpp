@@ -3,48 +3,21 @@
 #include <cmath>
 #include <iostream>
 
-// ---[ Backpropagation Helpers (from backpropogation.cpp) ]---
-
-static float norm_clip_factor(const matrix &gradient) {
-    constexpr auto max_magnitude = 5.0f;
-    const auto max = gradient.absmax();
-    if (max > max_magnitude) {
-        return max_magnitude / max;
-    }
-    return 1.0f;
-}
-
-static void adjust_matrix(matrix &adjust, const matrix &gradient, float learning_rate) {
-    const float factor = norm_clip_factor(gradient);
-    for (size_t i = 0; i < adjust.rows; ++i) {
-        for (size_t j = 0; j < adjust.cols; ++j) {
-            const auto delta = gradient.get(i, j) * factor * learning_rate;
-            adjust.offset(i, j, -delta);
-        }
-    }
-}
-
-static void regularize_weight_gradient(matrix &gradient, const matrix &weights, float regularization_strength) {
-    for (size_t i = 0; i < gradient.rows; ++i) {
-        for (size_t j = 0; j < gradient.cols; ++j) {
-            const auto weight_value = weights.get(i, j);
-            const auto regularization_term = 2 * regularization_strength * weight_value;
-            gradient.offset(i, j, regularization_term);
-        }
-    }
-}
-
+#include "training/optimizer.hpp"
 
 // ---[ Construction ]---
 
-NodeType AttentionLayer::getType() const {
-    return NodeType::Attention;
-}
+NodeType AttentionLayer::getType() const { return NodeType::Attention; }
 
-AttentionLayer::AttentionLayer(size_t dimensions, size_t head_size)
-    : wq({ dimensions, head_size }), wk({ dimensions, head_size }),
-      wv({ dimensions, head_size }), wo({ head_size, dimensions }) {}
-
+AttentionLayer::AttentionLayer(size_t dimensions, size_t head_size,
+                               size_t head_count)
+    : dimensions(dimensions),
+      head_size(head_size),
+      head_count(head_count),
+      wq({ dimensions, head_size }),
+      wk({ dimensions, head_size }),
+      wv({ dimensions, head_size }),
+      wo({ head_size, dimensions }) {}
 
 // ---[ Layer Operations ]---
 
@@ -78,27 +51,24 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
 
     // Output projection
     matrix attn_output = weighted_sum.cross_multiplied(wo);
-    
+
     // Residual connection
     matrix final_output = input.clone();
     final_output.add(attn_output);
 
     return matrix::construct_vec(
-        std::move(final_output), // [0] = final output
-        std::move(q),            // [1] = q
-        std::move(k),            // [2] = k
-        std::move(v),            // [3] = v
-        std::move(scores),       // [4] = scores
-        std::move(weighted_sum)  // [5] = weighted_sum (pre-output-projection)
+        final_output,  // [0] = final output
+        q,             // [1] = q
+        k,             // [2] = k
+        v,             // [3] = v
+        scores,        // [4] = scores
+        weighted_sum   // [5] = weighted_sum (pre-output-projection)
     );
 }
 
-std::vector<matrix> AttentionLayer::backpropagate(
-    std::span<const matrix> inputs,
-    std::span<const matrix> outputs,
-    std::span<const matrix> gradients,
-    float learning_rate) {
-    
+std::vector<matrix> AttentionLayer::backpropogate(
+    std::span<const matrix> inputs, std::span<const matrix> outputs,
+    std::span<const matrix> gradients, float learning_rate) {
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
@@ -110,19 +80,23 @@ std::vector<matrix> AttentionLayer::backpropagate(
     const matrix& post_layer_gradient = gradients[0];
 
     // Backprop through output projection (wo)
-    matrix wo_gradient = weighted_sum.transposed().cross_multiplied(post_layer_gradient);
-    matrix weighted_sum_gradient = post_layer_gradient.cross_multiplied(wo.transposed());
-    
+    matrix wo_gradient
+        = weighted_sum.transposed().cross_multiplied(post_layer_gradient);
+    matrix weighted_sum_gradient
+        = post_layer_gradient.cross_multiplied(wo.transposed());
+
     regularize_weight_gradient(wo_gradient, wo, regularization_strength);
     adjust_matrix(wo, wo_gradient, learning_rate);
 
     // Backprop through weighted sum: weighted_sum = scores * v
-    matrix v_gradient = scores.transposed().cross_multiplied(weighted_sum_gradient);
-    matrix scores_gradient_v = weighted_sum_gradient.cross_multiplied(v.transposed());
+    matrix v_gradient
+        = scores.transposed().cross_multiplied(weighted_sum_gradient);
+    matrix scores_gradient_v
+        = weighted_sum_gradient.cross_multiplied(v.transposed());
 
     // Backprop through softmax
     matrix softmax_gradient({ scores_gradient_v.rows, scores_gradient_v.cols });
-    #pragma omp parallel for
+#pragma omp parallel for
     for (size_t i = 0; i < scores.rows; ++i) {
         float s_dot = 0.0f;
         for (size_t l = 0; l < scores.cols; ++l) {
@@ -156,20 +130,25 @@ std::vector<matrix> AttentionLayer::backpropagate(
     regularize_weight_gradient(wv_gradient, wv, regularization_strength);
     adjust_matrix(wv, wv_gradient, learning_rate);
 
-    // Gradient of the input: sum of contributions via each projection + residual
+    // Gradient of the input: sum of contributions via each projection +
+    // residual
     matrix input_gradient = q_gradient.cross_multiplied(wq.transposed());
     input_gradient.add(k_gradient.cross_multiplied(wk.transposed()));
     input_gradient.add(v_gradient.cross_multiplied(wv.transposed()));
-    
+
     // Add gradient from the residual connection
     input_gradient.add(post_layer_gradient);
 
-    return matrix::construct_vec(std::move(input_gradient));
+    return matrix::construct_vec(input_gradient);
 }
 
 // ---[ Serialization ]---
 
 void AttentionLayer::save(std::ostream& out) const {
+    out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
+    out.write(reinterpret_cast<const char*>(&head_size), sizeof(head_size));
+    out.write(reinterpret_cast<const char*>(&head_count), sizeof(head_count));
+    
     wq.save(out);
     wk.save(out);
     wv.save(out);
@@ -177,15 +156,17 @@ void AttentionLayer::save(std::ostream& out) const {
 }
 
 AttentionLayer AttentionLayer::load(std::istream& in) {
-    auto wq = matrix::load(in); // wq
-    const auto dimensions = wq.rows;
+    size_t dimensions, head_size, head_count;
+    in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
+    in.read(reinterpret_cast<char*>(&head_size), sizeof(head_size));
+    in.read(reinterpret_cast<char*>(&head_count), sizeof(head_count));
 
-    AttentionLayer layer(dimensions, wq.cols);
+    AttentionLayer layer(dimensions, head_size, head_count);
 
-    layer.wq = std::move(wq);
+    layer.wq = matrix::load(in);
     layer.wk = matrix::load(in);
     layer.wv = matrix::load(in);
     layer.wo = matrix::load(in);
-    
+
     return layer;
 }

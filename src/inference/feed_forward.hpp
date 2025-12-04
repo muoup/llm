@@ -1,10 +1,9 @@
 #pragma once
 
 #include <util/matrix.hpp>
-#include <nodes/network_node.hpp>
+#include <inference/network_node.hpp>
 #include <vector>
 #include <istream>
-#include <memory>
 
 // Note: The INode forward pass is pure and does not modify layer state.
 // It returns a vector of matrices containing the actual output followed by
@@ -19,19 +18,18 @@ class FeedForwardLayer : public INode {
 public:
     FeedForwardLayer(size_t dimensions, size_t projection_size);
 
-    // INode interface implementation
     NodeType getType() const override;
+    
     std::vector<matrix> forward(std::span<const matrix> inputs) override;
-    std::vector<matrix> backpropagate(
+    std::vector<matrix> backpropogate(
         std::span<const matrix> inputs,
         std::span<const matrix> outputs,
         std::span<const matrix> gradients,
         float learning_rate) override;
 
     void randomize(float min, float max) override;
+    
     void save(std::ostream& out) const override;
-
-    // Static load function for deserialization via a factory
     static FeedForwardLayer load(std::istream& in);
 
 private:

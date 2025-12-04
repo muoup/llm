@@ -205,10 +205,10 @@ struct matrix {
     std::string to_string(std::uint8_t precision = 4) const;
     
     template <typename ... Args>
-    static std::vector<matrix> construct_vec(Args&& ... args) {
+    static std::vector<matrix> construct_vec(Args& ... args) {
         std::vector<matrix> vec;
         
-        (vec.emplace_back(std::forward<Args>(args)), ...);
+        (vec.emplace_back(std::move(args)), ...);
         
         return vec;
     }

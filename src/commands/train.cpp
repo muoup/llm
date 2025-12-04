@@ -1,15 +1,17 @@
 #include "train.hpp"
-#include "training/training.hpp"
 
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <fstream>
 
+#include <inference/inference.hpp>
+#include <training/training.hpp>
 #include <commands/arg_parser.hpp>
 #include <tokenizer/tokenizer.hpp>
-#include <nodes/neural_net.hpp>
 
 #include <dataset/dataset_factory.hpp>
+#include "model_factories/standard_model.hpp"
 
 int handle_train(int argc, char* argv[]) {
     std::string data_path = get_arg_value(argc, argv, "--data");
@@ -37,34 +39,32 @@ int handle_train(int argc, char* argv[]) {
     dataset_type type = detect_dataset_type(type_str);
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;
+    
     tokenizer _tokenizer = *load_tokenizer(tokenizer_path).or_else([]() {
         std::cerr << "Error loading tokenizer." << std::endl;
         std::abort();
         
         return (std::optional<tokenizer>) std::nullopt;
     });
+    
     if (_tokenizer.vocab_size() == 0) {
         std::cerr << "Error: Failed to load tokenizer." << std::endl;
         return 1;
     }
 
     // TODO: Get these from CLI args
-    size_t layers = 4;
     size_t dimensions = 128;
 
-    llm model = [&]() {
+    InferenceModel model = [&]() {
         if (!input_model_path.empty()) {
             std::cout << "Loading existing model from: " << input_model_path << std::endl;
-            return *load_llm(input_model_path).or_else([&]() {
-                std::cerr << "Error loading model." << std::endl;
-                std::abort();
-                
-                return (std::optional<llm>) std::nullopt;
-            });
+            std::ifstream file(input_model_path);
+            
+            return InferenceModel::load(file);
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            llm model(_tokenizer.vocab_size(), layers, dimensions);
-            model.randomize();
+            InferenceModel model = create_standard_model(dimensions, _tokenizer.vocab_size(), 2);
+            
             return model;
         }
     }();
@@ -85,18 +85,27 @@ int handle_train(int argc, char* argv[]) {
             std::cout << "Training on row " << i + 1 << "/" << dataset->size() << " with " << tokens.size() << " tokens." << std::endl;
             train(model, tokens);
         }, n_rows);
+    } catch (const std::out_of_range& e) {
+        std::cerr << "Out of range error during training: " << e.what() << std::endl;
+        return 1;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
     
-    auto file = std::ifstream("datasets/wiki-trunc/th.txt");
+    auto file = std::ifstream(data_path);
+    if (!file.is_open()) {
+        std::cerr << "Error opening data file for final encoding: " << data_path << std::endl;
+        return 1;
+    }
     auto contents = std::string((std::istreambuf_iterator<char>(file)),
                                 std::istreambuf_iterator<char>());
     
     auto test_tokens = encode(_tokenizer, contents);
     
     std::cout << "Training complete. Saving model to: " << output_model_path << std::endl;
-    save_llm(model, output_model_path);
+    
+    std::ofstream file_out(output_model_path);
+    model.save(file_out);
     return 0;
 }

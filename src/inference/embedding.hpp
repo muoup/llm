@@ -7,7 +7,7 @@
 #include <util/matrix.hpp>
 
 // Forward declaration
-struct llm;
+struct InferenceModel;
 
 class Embeddings {
 public:
@@ -18,7 +18,7 @@ public:
 private:
     matrix m_data;
     friend class EmbeddingLayer;
-    friend void backpropogate_embedding(llm &model, const std::span<const token_id_t> tokens, const matrix &x_gradient, float learning_rate);
+    friend void backpropogate_embedding(InferenceModel &model, const std::span<const token_id_t> tokens, const matrix &x_gradient, float learning_rate);
 };
 
 // EmbeddingLayer itself is not an INode. It is a special entry layer mapping
@@ -40,6 +40,4 @@ public:
 private:
     std::vector<Embeddings> m_embeddings;
     size_t m_dimensions;
-
-    friend void backpropogate_embedding(llm &model, const std::span<const token_id_t> tokens, const matrix &x_gradient, float learning_rate);
 };

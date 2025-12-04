@@ -1,5 +1,7 @@
+#include "training/optimizer.hpp"
 #include "embedding.hpp"
 
+#include <cassert>
 #include <cmath>
 
 void Embeddings::randomize(const float min, const float max) {
@@ -9,6 +11,7 @@ void Embeddings::randomize(const float min, const float max) {
 EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
     : m_dimensions(dimensions) {
     m_embeddings.reserve(vocab_size);
+    
     for (size_t i = 0; i < vocab_size; ++i) {
         m_embeddings.emplace_back(dimensions);
     }
@@ -51,21 +54,26 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
 #pragma omp parallel for
     for (size_t t = 0; t < tokens.size() - 1; t++) {
         const auto &token = tokens[t];
-        auto &embedding = this->m_embeddings[token];
+        auto &embedding = m_embeddings[token];
 
-        matrix embedding_gradient_row{ 1, embedding.m_data.cols };
+        matrix embedding_gradient_row({ 1, embedding.m_data.cols });
         for (size_t i = 0; i < embedding.m_data.cols; i++) {
             embedding_gradient_row.set(0, i, x_gradient.get(t, i));
         }
 
-        regularize_weight_gradient(embedding_gradient_row, embedding.m_data);
-        adjust_matrix(embedding.m_data, embedding_gradient_row);
+        regularize_weight_gradient(embedding_gradient_row, embedding.m_data, 0.01f);
+        adjust_matrix(embedding.m_data, embedding_gradient_row, learning_rate);
     }
 }
 
 void EmbeddingLayer::save(std::ostream &out) const {
-    out << "EMBEDDINGLAYER|" << this->m_embeddings.size() << '|'
-        << this->m_dimensions << '|';
+    const size_t embeddings = this->m_embeddings.size();
+    const size_t dimensions = this->m_dimensions;
+    
+    out.write(reinterpret_cast<const char*>(&embeddings), sizeof(embeddings));
+    out.put('|');
+    out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
+    out.put('|');
 
     for (const auto &embedding : m_embeddings) {
         embedding.m_data.save(out);
@@ -74,15 +82,22 @@ void EmbeddingLayer::save(std::ostream &out) const {
 
 EmbeddingLayer EmbeddingLayer::load(std::istream &in) {
     size_t embeddings, dimensions;
-    in >> embeddings;
-    in.get();  // consume '|'
-    in >> dimensions;
-    in.get();  // consume '|'
+    char pipe;
 
+    in.read(reinterpret_cast<char*>(&embeddings), sizeof(embeddings));
+    in.get(pipe);
+    assert(pipe == '|');
+    
+    in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
+    in.get(pipe);
+    assert(pipe == '|');
+
+    std::cout << "Loading EmbeddingLayer with " << embeddings
+              << " embeddings of dimension " << dimensions << "." << std::endl;
     EmbeddingLayer layer(embeddings, dimensions);
 
     for (size_t i = 0; i < embeddings; ++i) {
-        layer.m_embeddings[i].m_data = matrix::load(in);
+        layer.m_embeddings.at(i).m_data = matrix::load(in);
     }
 
     return layer;

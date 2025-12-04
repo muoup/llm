@@ -4,8 +4,8 @@
 
 #include "matrix.hpp"
 
-#include <blaze/math/shims/NextMultiple.h>
 #include <blaze/math/CustomMatrix.h>
+#include <blaze/math/shims/NextMultiple.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -16,21 +16,21 @@
 static constexpr size_t calculate_padded_row_width(const size_t cols) {
     return (matrix::MATRIX_ELEMENT_ALIGNMENT
             - (cols % matrix::MATRIX_ELEMENT_ALIGNMENT))
-           % matrix::MATRIX_ELEMENT_ALIGNMENT + cols;
+               % matrix::MATRIX_ELEMENT_ALIGNMENT
+           + cols;
 }
 
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), row_width(calculate_padded_row_width(cols)) {
     const auto buffer_size = this->buffer_size();
-
-    this->data = std::unique_ptr<float[], aligned_deleter>((float*) std::aligned_alloc(MATRIX_ELEMENT_ALIGNMENT * sizeof(float),
-                                    buffer_size));
+    
+    this->data
+        = std::unique_ptr<float[], aligned_deleter>((float *)std::aligned_alloc(
+            matrix::MATRIX_ELEMENT_ALIGNMENT * sizeof(float), buffer_size));
     std::memset(this->data_ptr(), 0, buffer_size);
 }
 
-size_t matrix::buffer_size() const {
-    return row_width * rows * sizeof(float);
-}
+size_t matrix::buffer_size() const { return row_width * rows * sizeof(float); }
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
     MATRIX_ASSERT(row < rows && col < cols,
@@ -124,7 +124,7 @@ matrix &matrix::softmax() {
     for (size_t i = 0; i < rows; ++i) {
         const auto row_sum
             = this->row_sum(i)
-              + 1e-8f; // Adding a small value to avoid division by zero
+              + 1e-8f;  // Adding a small value to avoid division by zero
 
         for (size_t j = 0; j < cols; ++j) {
             set(i, j, get(i, j) / row_sum);
@@ -134,7 +134,7 @@ matrix &matrix::softmax() {
     return *this;
 }
 
-matrix& matrix::mask_upper_triangular(const float mask_value) {
+matrix &matrix::mask_upper_triangular(const float mask_value) {
     for (size_t i = 0; i < rows; ++i) {
         for (size_t j = i + 1; j < cols; ++j) {
             set(i, j, mask_value);
@@ -143,22 +143,21 @@ matrix& matrix::mask_upper_triangular(const float mask_value) {
     return *this;
 }
 
-using custom_matrix
-    = blaze::CustomMatrix<float, blaze::AlignmentFlag::aligned,
-                          blaze::PaddingFlag::padded>;
+using custom_matrix = blaze::CustomMatrix<float, blaze::AlignmentFlag::aligned,
+                                          blaze::PaddingFlag::padded>;
 
-void matrix::cross_multiply_into(const matrix &other, matrix &out) const {     
+void matrix::cross_multiply_into(const matrix &other, matrix &out) const {
     MATRIX_ASSERT(this->cols == other.rows,
                   "Matrix dimensions do not match for cross multiplication");
-    
-    // This const_cast *should* be safe because blaze is not going to modify the buffer
-    // and we can safely assume that no matrix is not going to be optimized away by the compiler
-    custom_matrix a(const_cast<float*>(this->data_ptr()), this->rows, this->cols,
-                    this->row_width);
-    custom_matrix b(const_cast<float*>(other.data_ptr()), other.rows, other.cols,
-                    other.row_width);
-    custom_matrix c(out.data_ptr(), out.rows, out.cols,
-                    out.row_width);
+
+    // This const_cast *should* be safe because blaze is not going to modify the
+    // buffer and we can safely assume that no matrix is not going to be
+    // optimized away by the compiler
+    custom_matrix a(const_cast<float *>(this->data_ptr()), this->rows,
+                    this->cols, this->row_width);
+    custom_matrix b(const_cast<float *>(other.data_ptr()), other.rows,
+                    other.cols, other.row_width);
+    custom_matrix c(out.data_ptr(), out.rows, out.cols, out.row_width);
 
     c = a * b;
 }
@@ -166,18 +165,18 @@ void matrix::cross_multiply_into(const matrix &other, matrix &out) const {
 matrix matrix::cross_multiplied(const matrix &other) const {
     MATRIX_ASSERT(this->cols == other.rows,
                   "Matrix dimensions do not match for cross multiplication");
-   
+
     matrix result{ this->rows, other.cols };
-    
-    custom_matrix a(const_cast<float*>(this->data_ptr()), this->rows, this->cols,
-                    this->row_width);
-    custom_matrix b(const_cast<float*>(other.data_ptr()), other.rows, other.cols,
-                    other.row_width);
+
+    custom_matrix a(const_cast<float *>(this->data_ptr()), this->rows,
+                    this->cols, this->row_width);
+    custom_matrix b(const_cast<float *>(other.data_ptr()), other.rows,
+                    other.cols, other.row_width);
     custom_matrix c(result.data_ptr(), result.rows, result.cols,
-                                result.row_width);
-    
+                    result.row_width);
+
     c = a * b;
-    
+
     return result;
 }
 
@@ -198,18 +197,19 @@ bool matrix::equals(const matrix &other, const float epsilon) const {
 }
 
 void matrix::save(std::ostream &out) const {
-    out.write(reinterpret_cast<const char*>(&rows), sizeof(size_t));
-    out.write(reinterpret_cast<const char*>(&cols), sizeof(size_t));
-    out.write(reinterpret_cast<const char*>(data_ptr()), buffer_size());
+    out.write(reinterpret_cast<const char *>(&rows), sizeof(size_t));
+    out.write(reinterpret_cast<const char *>(&cols), sizeof(size_t));
+    out.write(reinterpret_cast<const char *>(data_ptr()), buffer_size());
 }
 
 matrix matrix::load(std::istream &in) {
     size_t new_rows, new_cols;
-    in.read(reinterpret_cast<char*>(&new_rows), sizeof(size_t));
-    in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
-
-    matrix new_matrix(new_rows, new_cols);
-    in.read(reinterpret_cast<char*>(new_matrix.data_ptr()), new_matrix.buffer_size());
+    in.read(reinterpret_cast<char *>(&new_rows), sizeof(size_t));
+    in.read(reinterpret_cast<char *>(&new_cols), sizeof(size_t));
     
+    matrix new_matrix = matrix(new_rows, new_cols);
+    in.read(reinterpret_cast<char *>(new_matrix.data_ptr()),
+            new_matrix.buffer_size());
+
     return new_matrix;
 }
