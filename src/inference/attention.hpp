@@ -1,7 +1,7 @@
 #pragma once
 
 #include <util/matrix.hpp>
-#include <nodes/network_node.hpp>
+#include <inference/network_node.hpp>
 #include <vector>
 #include <istream>
 
@@ -19,12 +19,12 @@
 
 class AttentionLayer : public INode {
 public:
-    AttentionLayer(size_t dimensions, size_t head_size);
+    AttentionLayer(size_t dimensions, size_t head_size, size_t head_count);
 
     // INode interface implementation
     NodeType getType() const override;
     std::vector<matrix> forward(std::span<const matrix> inputs) override;
-    std::vector<matrix> backpropagate(
+    std::vector<matrix> backpropogate(
         std::span<const matrix> inputs,
         std::span<const matrix> outputs,
         std::span<const matrix> gradients,
@@ -37,5 +37,7 @@ public:
     static AttentionLayer load(std::istream& in);
 
 private:
+    size_t dimensions, head_size, head_count;
+
     matrix wq, wk, wv, wo;
 };

@@ -1,5 +1,5 @@
 #pragma once
 
-struct llm;
+// struct InferenceModel;
 
-void log_neuron_maxes(const llm& model);
+// void log_neuron_maxes(const InferenceModel& model);
