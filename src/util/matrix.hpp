@@ -98,6 +98,8 @@ struct matrix {
         return *this;
     }
 
+    float dot_product(const matrix &other) const;
+    
     void cross_multiply_into(const matrix& other, matrix& out) const;
     matrix cross_multiplied(const matrix &other) const;
     

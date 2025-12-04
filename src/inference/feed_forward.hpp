@@ -14,7 +14,7 @@
 // [1] -> activation_input (result of input * w1 + b1)
 // [2] -> activation_output (result of activate(activation_input))
 
-class FeedForwardLayer : public INode {
+class FeedForwardLayer final : public INode {
 public:
     FeedForwardLayer(size_t dimensions, size_t projection_size);
 

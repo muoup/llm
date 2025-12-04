@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <queue>
 
 static std::unique_ptr<INode> load_node(std::istream& in) {
@@ -162,10 +163,10 @@ void InferenceModel::generate_path() {
         }
     }
 
-    std::cout << "Execution order of nodes: ";
-    for (size_t idx : execution_order) {
-        std::cout << idx << " ";
-    }
+    // std::cout << "Execution order of nodes: ";
+    // for (size_t idx : execution_order) {
+    //     std::cout << idx << " ";
+    // }
 
     if (execution_order.size() != node_count) {
         throw std::runtime_error(

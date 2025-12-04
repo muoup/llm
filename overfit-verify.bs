@@ -10,7 +10,7 @@ prompt="Talking Heads"
 echo "Tokenizing"
 build/llm train-tokenizer \
     --corpus "$text" \
-    --output ".models/overfit-tokenizer.dat" \
+    --output ".models/overfit.tok" \
     --vocab-size 512 \
     --dataset-type overfit
 
@@ -22,8 +22,8 @@ fi
 echo "Training"
 build/llm train \
     --data "$text" \
-    --tokenizer ".models/overfit-tokenizer.dat" \
-    --output-model ".models/overfit-model.dat" \
+    --tokenizer ".models/overfit.tok" \
+    --output-model ".models/overfit.lm" \
     --dataset-type overfit \
     -n 300
     
@@ -34,8 +34,8 @@ fi
 
 echo "Prediction"
 build/llm predict \
-    --tokenizer ".models/overfit-tokenizer.dat" \
-    --model ".models/overfit-model.dat" \
+    --tokenizer ".models/overfit.tok" \
+    --model ".models/overfit.lm" \
     --prompt "$prompt" \
     --length 250
     

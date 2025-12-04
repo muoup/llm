@@ -17,7 +17,11 @@
 // [3] -> v (values)
 // [4] -> scores (attention scores after softmax)
 
-class AttentionLayer : public INode {
+struct AttentionHead {
+    matrix wq, wk, wv;
+};
+
+class AttentionLayer final : public INode {
 public:
     AttentionLayer(size_t dimensions, size_t head_size, size_t head_count);
 
@@ -37,7 +41,11 @@ public:
     static AttentionLayer load(std::istream& in);
 
 private:
+    AttentionLayer()
+        : dimensions(0), head_size(0), head_count(0), wo() {}
+
     size_t dimensions, head_size, head_count;
 
-    matrix wq, wk, wv, wo;
+    std::vector<AttentionHead> heads;
+    matrix wo;
 };

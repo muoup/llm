@@ -143,9 +143,24 @@ matrix &matrix::mask_upper_triangular(const float mask_value) {
     return *this;
 }
 
+float matrix::dot_product(const matrix &other) const {
+    MATRIX_ASSERT(this->rows == other.rows && this->cols == other.cols,
+                  "Matrix dimensions do not match for dot product");
+
+    float result = 0.0f;
+
+    for (size_t i = 0; i < this->rows; ++i) {
+        for (size_t j = 0; j < this->cols; ++j) {
+            result += this->get(i, j) * other.get(i, j);
+        }
+    }
+
+    return result;
+}
+
 using custom_matrix = blaze::CustomMatrix<float, blaze::AlignmentFlag::aligned,
                                           blaze::PaddingFlag::padded>;
-
+                                          
 void matrix::cross_multiply_into(const matrix &other, matrix &out) const {
     MATRIX_ASSERT(this->cols == other.rows,
                   "Matrix dimensions do not match for cross multiplication");
