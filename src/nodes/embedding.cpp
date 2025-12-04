@@ -1,31 +1,23 @@
 #include "embedding.hpp"
 
 #include <cmath>
-#include <training/backpropogation.hpp>
 
 void Embeddings::randomize(const float min, const float max) {
-    this->m_data.randomize();
+    m_data.randomize(min, max);
 }
 
-void EmbeddingLayer::save(std::ostream &out) const {
-    out << this->m_dimensions << '|' << this->m_embeddings.size() << '|';
-}
-
-static EmbeddingLayer load(std::istream &in) {
-    size_t dimensions, vocab_size;
-
-    in >> dimensions;
-    in.get();  // consume '|'
-    in >> vocab_size;
-    in.get();  // consume '|'
-
-    EmbeddingLayer layer{ vocab_size, dimensions };
-
+EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
+    : m_dimensions(dimensions) {
+    m_embeddings.reserve(vocab_size);
     for (size_t i = 0; i < vocab_size; ++i) {
-        layer.m_embeddings.emplace_back(matrix::load(in));
+        m_embeddings.emplace_back(dimensions);
     }
+}
 
-    return layer;
+void EmbeddingLayer::randomize(float min, float max) {
+    for (auto &embedding : m_embeddings) {
+        embedding.randomize(min, max);
+    }
 }
 
 static void positional_encoding(matrix &input) {
@@ -41,10 +33,8 @@ static void positional_encoding(matrix &input) {
     }
 }
 
-std::vector<matrix> EmbeddingLayer::forward(
-    const std::span<const token_id_t> tokens) const {
-        
-    matrix output { tokens.size(), m_dimensions };
+matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
+    matrix output{ tokens.size(), m_dimensions };
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const auto &embedding = m_embeddings[tokens[i]];
@@ -52,16 +42,12 @@ std::vector<matrix> EmbeddingLayer::forward(
     }
 
     positional_encoding(output);
-
-    return matrix::construct_vec(std::move(output));
+    return output;
 }
 
-void EmbeddingLayer::backpropagate(std::span<const token_id_t> tokens,
-                                   std::span<const matrix> gradients,
+void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
+                                   const matrix &x_gradient,
                                    float learning_rate) {
-    const auto &x_gradient = gradients[0];
-    const size_t token_count = tokens.size();
-
 #pragma omp parallel for
     for (size_t t = 0; t < tokens.size() - 1; t++) {
         const auto &token = tokens[t];
@@ -73,6 +59,31 @@ void EmbeddingLayer::backpropagate(std::span<const token_id_t> tokens,
         }
 
         regularize_weight_gradient(embedding_gradient_row, embedding.m_data);
-        adjust_matrix(embedding.m_data, embedding_gradient_row, learning_rate);
+        adjust_matrix(embedding.m_data, embedding_gradient_row);
     }
+}
+
+void EmbeddingLayer::save(std::ostream &out) const {
+    out << "EMBEDDINGLAYER|" << this->m_embeddings.size() << '|'
+        << this->m_dimensions << '|';
+
+    for (const auto &embedding : m_embeddings) {
+        embedding.m_data.save(out);
+    }
+}
+
+EmbeddingLayer EmbeddingLayer::load(std::istream &in) {
+    size_t embeddings, dimensions;
+    in >> embeddings;
+    in.get();  // consume '|'
+    in >> dimensions;
+    in.get();  // consume '|'
+
+    EmbeddingLayer layer(embeddings, dimensions);
+
+    for (size_t i = 0; i < embeddings; ++i) {
+        layer.m_embeddings[i].m_data = matrix::load(in);
+    }
+
+    return layer;
 }

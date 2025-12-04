@@ -2,15 +2,21 @@
 
 #include <util/matrix.hpp>
 #include <vector>
+#include <span>
+
+#include <nodes/node_type.hpp>
 
 struct INode {
     virtual ~INode() = default;
 
-    virtual std::vector<matrix> forward(const std::span<matrix>& inputs) = 0;
+    virtual NodeType getType() const = 0;
+
+    virtual std::vector<matrix> forward(std::span<const matrix> inputs) = 0;
     virtual std::vector<matrix> backpropagate(
-        const std::span<matrix>& inputs, const std::span<matrix>& gradients,
-        float learning_rate)
-        = 0;
+        std::span<const matrix> inputs, 
+        std::span<const matrix> outputs,
+        std::span<const matrix> gradients,
+        float learning_rate) = 0;
 
     virtual void randomize(float min, float max) = 0;
 

@@ -1,33 +1,41 @@
 #pragma once
 
 #include <util/matrix.hpp>
-
+#include <nodes/network_node.hpp>
+#include <vector>
 #include <istream>
 
-struct attention_forward_result {
-    matrix q, k, v;
-    matrix scores;
-    matrix output;
-};
 
-struct attention_apply_result {
-    matrix output;
-    attention_forward_result forward_result;
-};
+// Note: The INode forward pass is pure and does not modify layer state.
+// It returns a vector of matrices containing the actual output followed by
+// any intermediate values needed for backpropagation.
+//
+// For AttentionLayer, the forward output vector is:
+// [0] -> output matrix
+// [1] -> q (queries)
+// [2] -> k (keys)
+// [3] -> v (values)
+// [4] -> scores (attention scores after softmax)
 
-struct attention_layer {
+class AttentionLayer : public INode {
+public:
+    AttentionLayer(size_t dimensions, size_t head_size);
+
+    // INode interface implementation
+    NodeType getType() const override;
+    std::vector<matrix> forward(std::span<const matrix> inputs) override;
+    std::vector<matrix> backpropagate(
+        std::span<const matrix> inputs,
+        std::span<const matrix> outputs,
+        std::span<const matrix> gradients,
+        float learning_rate) override;
+
+    void randomize(float min, float max) override;
+    void save(std::ostream& out) const override;
+
+    // Static load function for deserialization via a factory
+    static AttentionLayer load(std::istream& in);
+
+private:
     matrix wq, wk, wv, wo;
-
-    attention_layer(size_t dimensions, size_t head_size)
-        : wq({ dimensions, head_size }), wk({ dimensions, head_size }),
-          wv({ dimensions, head_size }), wo({ head_size, dimensions }) {}
-
-    void randomize(float min, float max);
-    
-    attention_apply_result forward(const matrix &input) const;
-    void backpropogate(const attention_forward_result &forward_result,
-                       const matrix &grad_output, float learning_rate);
-    
-    void save(std::ostream& out) const;
-    static attention_layer load(std::istream& in);
 };

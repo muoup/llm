@@ -3,10 +3,12 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <memory>
 
 #include <tokenizer/token.hpp>
 #include <util/matrix.hpp>
 
+#include <nodes/network_node.hpp>
 #include <nodes/embedding.hpp>
 #include <nodes/feed_forward.hpp>
 #include <nodes/attention.hpp>
@@ -31,9 +33,10 @@ struct llm {
         : m_dimensions(dimensions), m_layer_count(layer_count),
           m_embedding_layer(vocab_size, dimensions),
           m_logit_layer(dimensions, vocab_size) {
+              m_layers.reserve(layer_count * 2);
               for (size_t i = 0; i < layer_count; ++i) {
-                  m_attention_layers.emplace_back(dimensions, dimensions / head_count);
-                  m_ff_layers.emplace_back(dimensions, dimensions * projection_scale);
+                  m_layers.emplace_back(std::make_unique<AttentionLayer>(dimensions, dimensions / head_count));
+                  m_layers.emplace_back(std::make_unique<FeedForwardLayer>(dimensions, dimensions * projection_scale));
               }
           }
 
@@ -42,10 +45,9 @@ struct llm {
     size_t m_dimensions;
     size_t m_layer_count;
     
-    bool equals(const llm &other, const float epsilon = 1e-6f) const;
+    // bool equals(const llm &other, const float epsilon = 1e-6f) const;
 
     embedding_layer m_embedding_layer;
-    std::vector<attention_layer> m_attention_layers;
-    std::vector<ff_layer> m_ff_layers;
+    std::vector<std::unique_ptr<INode>> m_layers;
     logit_layer m_logit_layer;
 };

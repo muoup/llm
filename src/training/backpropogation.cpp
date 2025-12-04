@@ -153,19 +153,7 @@ matrix backpropogate_ff_layer(ff_layer &layer, const forward_result &result,
 void backpropogate_embedding(llm &model,
                              const std::span<const token_id_t> tokens,
                              const matrix &x_gradient) {
-#pragma omp parallel for
-    for (size_t t = 0; t < tokens.size() - 1; t++) {
-        const auto &token = tokens[t];
-        auto &embedding = model.m_embedding_layer.m_embeddings[token];
 
-        matrix embedding_gradient_row{ 1, embedding.m_data.cols };
-        for (size_t i = 0; i < embedding.m_data.cols; i++) {
-            embedding_gradient_row.set(0, i, x_gradient.get(t, i));
-        }
-
-        regularize_weight_gradient(embedding_gradient_row, embedding.m_data);
-        adjust_matrix(embedding.m_data, embedding_gradient_row);
-    }
 }
 
 matrix backpropagate_attention_layer(attention_layer &layer,
