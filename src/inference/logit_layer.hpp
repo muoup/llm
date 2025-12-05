@@ -10,6 +10,8 @@
 class LogitLayer {
    public:
     explicit LogitLayer(const size_t dimensions, const size_t vocab_size);
+    
+    size_t parameterCount() const;
 
     void randomize(float min, float max);
     matrix forward(const matrix& input) const;

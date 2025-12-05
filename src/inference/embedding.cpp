@@ -17,6 +17,10 @@ EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
     }
 }
 
+size_t EmbeddingLayer::parameterCount() const {
+    return m_embeddings.size() * m_dimensions;
+}
+
 void EmbeddingLayer::randomize(float min, float max) {
     for (auto &embedding : m_embeddings) {
         embedding.randomize(min, max);

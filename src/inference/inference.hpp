@@ -25,7 +25,9 @@ struct InferenceModel {
     std::vector<std::vector<matrix>> forwarding_results(std::span<const token_id_t> tokens) const;
     
     token_id_t predict(std::span<const token_id_t> tokens) const;
-    void train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, float learning_rate);
+    float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, float learning_rate);
+    
+    size_t parameter_count() const;
     
     InferenceModel(size_t dimensions, size_t vocab_size)
         : m_dimensions(dimensions), m_embedding_layer(vocab_size, dimensions),

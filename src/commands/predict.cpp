@@ -49,7 +49,7 @@ int handle_predict(int argc, char* argv[]) {
     
     auto model = InferenceModel::load(fstream);
     
-    std::cout << "Model loaded. Vocabulary size: " << model.vocab_size() << std::endl;
+    std::cout << "Model loaded. Parameter count: " << model.parameter_count() << std::endl;
     
     if (model.vocab_size() != _tokenizer.token_map.size()) {
         std::cerr << "Model vocabulary size does not match tokenizer size." << std::endl;

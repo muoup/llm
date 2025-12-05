@@ -6,7 +6,6 @@
 #include <fstream>
 
 #include <inference/inference.hpp>
-#include <training/training.hpp>
 #include <commands/arg_parser.hpp>
 #include <tokenizer/tokenizer.hpp>
 
@@ -60,11 +59,15 @@ int handle_train(int argc, char* argv[]) {
             std::cout << "Loading existing model from: " << input_model_path << std::endl;
             std::ifstream file(input_model_path);
             
-            return InferenceModel::load(file);
+            auto model = InferenceModel::load(file);
+            std::cout << "Successfully loaded model. Parameter count: " << model.parameter_count() << '\n';
+            return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model = create_standard_model(dimensions, _tokenizer.vocab_size(), 2);
+            InferenceModel model = create_standard_model(dimensions, _tokenizer.vocab_size(), 8, 8);
+            model.randomize();
             
+            std::cout << "New model created. Parameter count: " << model.parameter_count() << '\n';
             return model;
         }
     }();
@@ -79,11 +82,16 @@ int handle_train(int argc, char* argv[]) {
     try {
         auto dataset = create_dataset(data_path, type);
         std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows..." << std::endl;
-
+ 
+        float learning_rate = 0;
+        
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(_tokenizer, row);
-            std::cout << "Training on row " << i + 1 << "/" << dataset->size() << " with " << tokens.size() << " tokens." << std::endl;
-            train(model, tokens);
+            const auto truncated_input = std::span { tokens.begin(), tokens.end() - 1 };
+            float loss = model.train_on(truncated_input, tokens, 0.0001f);
+            
+            std::cout << "Row " << i << "/" << dataset->size() << " processed. Loss: " << loss << std::endl;
+            learning_rate = 0.00005f * loss;
         }, n_rows);
     } catch (const std::out_of_range& e) {
         std::cerr << "Out of range error during training: " << e.what() << std::endl;

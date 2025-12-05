@@ -6,6 +6,10 @@
 LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
     : dimensions(dimensions), vocab_size(vocab_size), w(dimensions, vocab_size), b(1, vocab_size) {}
 
+size_t LogitLayer::parameterCount() const {
+    return (w.rows * w.cols) + (b.rows * b.cols);
+}
+    
 void LogitLayer::randomize(const float min, const float max) {
     w.randomize(min, max);
     b.randomize(min, max);
@@ -40,9 +44,9 @@ std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const ma
 
     adjust_matrix(b, logit_bias_gradient, learning_rate);
 
-    matrix h_final_gradient = logit_loss_gradient.cross_multiplied(w.transposed());
+    matrix h_final_gradient = logit_loss_gradient.cross_t_multiplied(w);
     norm_clip(h_final_gradient);
-    matrix logit_weight_gradient = input.transposed().cross_multiplied(logit_loss_gradient);
+    matrix logit_weight_gradient = input.t_cross_multiplied(logit_loss_gradient);
 
     regularize_weight_gradient(logit_weight_gradient, w);
     adjust_matrix(w, logit_weight_gradient, learning_rate);

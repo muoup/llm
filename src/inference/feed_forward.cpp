@@ -4,16 +4,12 @@
 
 #include "training/optimizer.hpp"
 
-// ---[ Activation Function ]---
-
 static matrix activate(const matrix& input) {
     constexpr static auto leaky_relu
         = [](const float f) { return f < 0 ? 0.01f * f : f; };
 
     return input.mapped(leaky_relu);
 }
-
-// ---[ Construction ]---
 
 NodeType FeedForwardLayer::getType() const { return NodeType::FeedForward; }
 
@@ -22,8 +18,11 @@ FeedForwardLayer::FeedForwardLayer(size_t dimensions, size_t projection_size)
       b1({ 1, projection_size }),
       w2({ projection_size, dimensions }),
       b2({ 1, dimensions }) {}
-
-// ---[ Layer Operations ]---
+      
+size_t FeedForwardLayer::parameterCount() const {
+    return (w1.rows * w1.cols) + (b1.rows * b1.cols)
+           + (w2.rows * w2.cols) + (b2.rows * b2.cols);
+}
 
 void FeedForwardLayer::randomize(const float min, const float max) {
     w1.randomize(min, max);
@@ -66,12 +65,12 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     adjust_matrix(b2, b2_gradient, learning_rate);
 
     matrix w2_gradient
-        = activation_output.transposed().cross_multiplied(post_layer_gradient);
+        = activation_output.t_cross_multiplied(post_layer_gradient);
     regularize_weight_gradient(w2_gradient, w2);
     adjust_matrix(w2, w2_gradient, learning_rate);
 
     const matrix a1_gradient
-        = post_layer_gradient.cross_multiplied(w2.transposed());
+        = post_layer_gradient.cross_t_multiplied(w2);
     matrix z1_gradient({ a1_gradient.rows, a1_gradient.cols });
 
     for (size_t i = 0; i < z1_gradient.rows; i++) {
@@ -88,12 +87,12 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     }
     adjust_matrix(b1, b1_gradient, learning_rate);
 
-    matrix w1_gradient = layer_input.transposed().cross_multiplied(z1_gradient);
+    matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
 
     regularize_weight_gradient(w1_gradient, w1, 0.01f);
     adjust_matrix(w1, w1_gradient, learning_rate);
 
-    auto result = z1_gradient.cross_multiplied(w1.transposed());
+    auto result = z1_gradient.cross_t_multiplied(w1);
     norm_clip(result);
     return matrix::construct_vec(result);
 }

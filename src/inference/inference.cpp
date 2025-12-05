@@ -62,6 +62,16 @@ void InferenceModel::save(std::ostream& out) const {
     this->m_logit_layer.save(out);
 }
 
+size_t InferenceModel::parameter_count() const {
+    size_t count = 0;
+    count += m_embedding_layer.parameterCount();
+    for (const auto& layer : m_layers) {
+        count += layer->parameterCount();
+    }
+    count += m_logit_layer.parameterCount();
+    return count;
+}
+
 InferenceModel InferenceModel::load(std::istream& in) {
     uint32_t magic, version, dimensions, vocab_size;
 
@@ -224,7 +234,7 @@ token_id_t InferenceModel::predict(
     return static_cast<token_id_t>(max_index);
 }
 
-void InferenceModel::train_on(const std::span<const token_id_t> tokens,
+float InferenceModel::train_on(const std::span<const token_id_t> tokens,
                               const std::span<const token_id_t> actual,
                               float learning_rate) {
     if (!finalized) {
@@ -238,8 +248,6 @@ void InferenceModel::train_on(const std::span<const token_id_t> tokens,
         = m_logit_layer.backpropogate(results[results.size() - 2][0],
                                       results.back()[0], actual, learning_rate);
 
-    std::cout << "Loss: " << loss << std::endl;
-
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
@@ -252,4 +260,5 @@ void InferenceModel::train_on(const std::span<const token_id_t> tokens,
 
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
                                           learning_rate);
+    return loss;
 }

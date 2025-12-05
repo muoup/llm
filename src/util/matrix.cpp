@@ -195,6 +195,46 @@ matrix matrix::cross_multiplied(const matrix &other) const {
     return result;
 }
 
+// Self @ Other^T
+// [M x N] @ [O x N]^T = [M x N] @ [N x O] = [M x O]
+matrix matrix::cross_t_multiplied(const matrix &other) const {
+    MATRIX_ASSERT(this->rows == other.rows,
+                  "Matrix dimensions do not match for cross transposed "
+                  "multiplication");
+
+    matrix result{ this->rows, other.rows };
+
+    custom_matrix a(const_cast<float *>(this->data_ptr()), this->rows,
+                    this->cols, this->row_width);
+    custom_matrix b(const_cast<float *>(other.data_ptr()), other.rows,
+                    other.cols, other.row_width);
+    custom_matrix c(result.data_ptr(), result.rows, result.cols,
+                    result.row_width);
+    
+    c = a * blaze::trans(b);
+    return result;
+}
+
+// Self^T @ Other
+// [M x N]^T @ [M x O] = [N x M] @ [M x O] = [N x O]
+matrix matrix::t_cross_multiplied(const matrix &other) const {
+    MATRIX_ASSERT(this->cols == other.cols,
+                  "Matrix dimensions do not match for transposed cross "
+                  "multiplication");
+    
+    matrix result{ this->cols, other.cols };
+    
+    custom_matrix a(const_cast<float *>(this->data_ptr()), this->rows,
+                    this->cols, this->row_width);
+    custom_matrix b(const_cast<float *>(other.data_ptr()), other.rows,
+                    other.cols, other.row_width);
+    custom_matrix c(result.data_ptr(), result.rows, result.cols,
+                    result.row_width);
+    
+    c = blaze::trans(a) * b;
+    return result;
+}
+
 bool matrix::equals(const matrix &other, const float epsilon) const {
     if (this->rows != other.rows || this->cols != other.cols) {
         return false;

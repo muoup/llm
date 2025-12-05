@@ -11,6 +11,8 @@ struct INode {
 
     virtual NodeType getType() const = 0;
 
+    virtual size_t parameterCount() const = 0;
+    
     virtual std::vector<matrix> forward(std::span<const matrix> inputs) = 0;
     virtual std::vector<matrix> backpropogate(
         std::span<const matrix> inputs, 

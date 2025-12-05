@@ -26,6 +26,8 @@ private:
 class EmbeddingLayer {
 public:
     EmbeddingLayer(size_t vocab_size, size_t dimensions);
+    
+    size_t parameterCount() const;
 
     matrix forward(const std::span<const token_id_t> inputs) const;
     void backpropogate(const std::span<const token_id_t> tokens, const matrix &x_gradient, float learning_rate);

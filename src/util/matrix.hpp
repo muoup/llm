@@ -131,6 +131,8 @@ struct matrix {
     
     void cross_multiply_into(const matrix& other, matrix& out) const;
     matrix cross_multiplied(const matrix &other) const;
+    matrix t_cross_multiplied(const matrix& other) const;
+    matrix cross_t_multiplied(const matrix& other) const;
     
     matrix clone() const {
         matrix copy{ this->rows, this->cols };
