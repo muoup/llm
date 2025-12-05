@@ -41,7 +41,7 @@ size_t AttentionLayer::parameterCount() const {
     return count;
 }
 
-std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) {
+std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
     std::vector<matrix> returns;

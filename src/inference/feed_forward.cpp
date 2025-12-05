@@ -31,7 +31,7 @@ void FeedForwardLayer::randomize(const float min, const float max) {
     b2.randomize(min, max);
 }
 
-std::vector<matrix> FeedForwardLayer::forward(std::span<const matrix> inputs) {
+std::vector<matrix> FeedForwardLayer::forward(std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
     matrix activation_input = input.cross_multiplied(w1);

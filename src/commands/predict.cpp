@@ -16,6 +16,8 @@ void print_tokens(const std::span<const token_id_t> tokens) {
 }
 
 int handle_predict(int argc, char* argv[]) {
+    constexpr float temperature = 1.0f;
+    
     std::string model_path = get_arg_value(argc, argv, "--model");
     std::string tokenizer_path = get_arg_value(argc, argv, "--tokenizer");
     std::string prompt = get_arg_value(argc, argv, "--prompt");
@@ -56,13 +58,9 @@ int handle_predict(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "\nPrompt: " << prompt << std::endl;
     std::vector<token_id_t> tokens = encode(_tokenizer, prompt);
-    std::cout << "Initial tokens (" << tokens.size() << "): ";
-    print_tokens(tokens);
+    std::cout << "Generating: " << prompt << std::flush;
     
-    std::cout << "Generating: " << std::flush;
-
     for (size_t i = 0; i < length; ++i) {
         token_id_t next_token = model.predict(tokens);
         tokens.push_back(next_token);

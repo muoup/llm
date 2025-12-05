@@ -8,6 +8,8 @@
 #include "commands/predict.hpp"
 
 int main(int argc, char* argv[]) {
+    srand(time(NULL));
+    
     if (argc < 2) {
         std::cerr << "Usage: ./llm <command> [options]" << std::endl;
         std::cerr << "Commands: train-tokenizer, train, predict" << std::endl;

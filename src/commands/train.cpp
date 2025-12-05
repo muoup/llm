@@ -88,7 +88,7 @@ int handle_train(int argc, char* argv[]) {
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(_tokenizer, row);
             const auto truncated_input = std::span { tokens.begin(), tokens.end() - 1 };
-            float loss = model.train_on(truncated_input, tokens, 0.0001f);
+            float loss = model.train_on(truncated_input, tokens, learning_rate);
             
             std::cout << "Row " << i << "/" << dataset->size() << " processed. Loss: " << loss << std::endl;
             learning_rate = 0.00005f * loss;

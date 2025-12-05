@@ -1,25 +1,32 @@
 #include "standard_model.hpp"
 
-InferenceModel create_standard_model(size_t dimensions, size_t vocab_size, size_t ff_layers, size_t attention_heads) {
-    constexpr size_t head_count = 8;
+#include <inference/attention.hpp>
+#include <inference/feed_forward.hpp>
+#include <inference/layer_normalize.hpp>
+
+InferenceModel create_standard_model(size_t dimensions, size_t vocab_size, size_t num_blocks, size_t attention_heads) {
     constexpr size_t ffn_multiplier = 4;
     
     InferenceModel model(dimensions, vocab_size);
 
-    size_t acc = 0;
+    size_t last_layer_idx = 0;
     
-    for (size_t i = 0; i < ff_layers; ++i) {
-        size_t attn_idx = model.add_layer(
-            std::make_unique<AttentionLayer>(dimensions, attention_heads));
-        size_t ff_idx = model.add_layer(
-            std::make_unique<FeedForwardLayer>(dimensions, dimensions * ffn_multiplier));
-
-        if (acc != 0) {
-            model.add_connection(acc, attn_idx);
+    for (size_t i = 0; i < num_blocks; ++i) {
+        auto attn_layer = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+        auto attn_block = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
+        size_t attn_block_idx = model.add_layer(std::move(attn_block));
+ 
+        if (last_layer_idx != 0) {
+            model.add_connection(last_layer_idx, attn_block_idx);
         }
         
-        model.add_connection(attn_idx, ff_idx);
-        acc = ff_idx;
+        auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions * ffn_multiplier);
+        auto ff_block = std::make_unique<LayerNorm>(std::move(ff_layer), dimensions);
+        size_t ff_block_idx = model.add_layer(std::move(ff_block));
+        
+        model.add_connection(attn_block_idx, ff_block_idx);
+        
+        last_layer_idx = ff_block_idx;
     }
  
     model.randomize();

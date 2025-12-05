@@ -5,7 +5,11 @@
 #include <memory>
 #include <queue>
 
-static std::unique_ptr<INode> load_node(std::istream& in) {
+#include <inference/attention.hpp>
+#include <inference/feed_forward.hpp>
+#include <inference/layer_normalize.hpp>
+
+std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
     in.read(reinterpret_cast<char*>(&type), sizeof(type));
 
@@ -15,6 +19,8 @@ static std::unique_ptr<INode> load_node(std::istream& in) {
         case NodeType::FeedForward:
             return std::make_unique<FeedForwardLayer>(
                 FeedForwardLayer::load(in));
+        case NodeType::LayerNorm:
+            return std::make_unique<LayerNorm>(LayerNorm::load(in));
         default:
             // Handle error: unknown node type
             std::cerr << "Error: Unknown node type during loading: "
@@ -86,29 +92,28 @@ InferenceModel InferenceModel::load(std::istream& in) {
 
     std::cout << "Instantiating model with vocab size " << vocab_size
               << " and dimensions " << dimensions << "." << std::endl;
-              
+
     InferenceModel model = InferenceModel();
     model.m_dimensions = dimensions;
-    
+
     model.m_embedding_layer = EmbeddingLayer::load(in);
 
-    
     size_t connection_count;
     in.read(reinterpret_cast<char*>(&connection_count),
             sizeof(connection_count));
     model.m_connections.reserve(connection_count);
-    
+
     for (size_t i = 0; i < connection_count; ++i) {
         NodeConnection conn;
         in.read(reinterpret_cast<char*>(&conn.from_idx), sizeof(conn.from_idx));
         in.read(reinterpret_cast<char*>(&conn.to_idx), sizeof(conn.to_idx));
         model.m_connections.push_back(conn);
     }
-    
+
     size_t layer_count;
     in.read(reinterpret_cast<char*>(&layer_count), sizeof(layer_count));
     model.m_layers.reserve(layer_count);
-    
+
     for (size_t i = 0; i < layer_count; ++i) {
         auto node = load_node(in);
         if (node) {
@@ -201,7 +206,8 @@ std::vector<std::vector<matrix>> InferenceModel::forwarding_results(
     results.emplace_back(matrix::construct_vec(embeddings));
 
     for (size_t node_idx : execution_order) {
-        auto forward_result = this->m_layers.at(node_idx)->forward(results.back());
+        auto forward_result
+            = this->m_layers.at(node_idx)->forward(results.back());
         results.emplace_back(std::move(forward_result));
     }
 
@@ -210,33 +216,32 @@ std::vector<std::vector<matrix>> InferenceModel::forwarding_results(
     return results;
 }
 
-token_id_t InferenceModel::predict(
-    const std::span<const token_id_t> tokens) const {
+token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
+                                   float temperature) const {
     auto results = this->forwarding_results(tokens);
     matrix logits = std::move(results.back()[0]);
-
+    
+    logits.scale(temperature);
     logits.softmax();
-
+    
     // Find the index of the maximum logit
     const size_t last_row = logits.rows - 1;
-    size_t max_index = 0;
-    float max_value = logits.get(last_row, 0);
-
+    float random = static_cast<float>(rand()) / RAND_MAX;
+    
     for (size_t i = 0; i < logits.cols; ++i) {
-        float value = logits.get(last_row, i);
-
-        if (value > max_value) {
-            max_index = i;
-            max_value = value;
+        random -= logits.get(last_row, i);
+        
+        if (random <= 0.0f) {
+            return i;
         }
     }
 
-    return static_cast<token_id_t>(max_index);
+    throw std::runtime_error("Failed to sample next token.");
 }
 
 float InferenceModel::train_on(const std::span<const token_id_t> tokens,
-                              const std::span<const token_id_t> actual,
-                              float learning_rate) {
+                               const std::span<const token_id_t> actual,
+                               float learning_rate) {
     if (!finalized) {
         throw std::runtime_error("Model must be finalized before training.");
     }

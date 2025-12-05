@@ -29,7 +29,7 @@ public:
     
     // INode interface implementation
     NodeType getType() const override;
-    std::vector<matrix> forward(std::span<const matrix> inputs) override;
+    std::vector<matrix> forward(std::span<const matrix> inputs) const override;
     std::vector<matrix> backpropogate(
         std::span<const matrix> inputs,
         std::span<const matrix> outputs,

@@ -8,8 +8,6 @@
 
 #include <inference/network_node.hpp>
 #include <inference/embedding.hpp>
-#include <inference/feed_forward.hpp>
-#include <inference/attention.hpp>
 #include <inference/logit_layer.hpp>
 
 struct InferenceModel;
@@ -19,12 +17,14 @@ struct NodeConnection {
     size_t to_idx;
 };
 
+std::unique_ptr<INode> load_node(std::istream& in);
+
 struct InferenceModel {
     void randomize();
 
     std::vector<std::vector<matrix>> forwarding_results(std::span<const token_id_t> tokens) const;
     
-    token_id_t predict(std::span<const token_id_t> tokens) const;
+    token_id_t predict(std::span<const token_id_t> tokens, float temperature = 1.0f) const;
     float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, float learning_rate);
     
     size_t parameter_count() const;
