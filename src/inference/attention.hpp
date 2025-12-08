@@ -27,7 +27,6 @@ public:
 
     size_t parameterCount() const override;
     
-    // INode interface implementation
     NodeType getType() const override;
     std::vector<matrix> forward(std::span<const matrix> inputs) const override;
     std::vector<matrix> backpropogate(

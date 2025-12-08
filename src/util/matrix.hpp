@@ -1,55 +1,53 @@
 #pragma once
 
-#include <iostream>
 #include <cstdlib>
 #include <cstring>
-#include <span>
+#include <iostream>
 #include <memory>
+#include <span>
 #include <vector>
 
 #ifdef MATRIX_CHECKS
-#include "../util/assert.hpp"
 #include <sstream>
+#include "../util/assert.hpp"
 #endif
 
 #ifdef MATRIX_CHECKS
-#define MATRIX_ASSERT(condition, message, ...)                                 \
-    if (!(condition)) {                                                        \
-        std::println("Matrix assertion failed: " message, ##__VA_ARGS__);      \
-        std::abort();                                                          \
+#define MATRIX_ASSERT(condition, message, ...)                            \
+    if (!(condition)) {                                                   \
+        std::println("Matrix assertion failed: " message, ##__VA_ARGS__); \
+        std::abort();                                                     \
     }
 #else
-#define MATRIX_ASSERT(condition, message, ...)                                 \
-    (void)(condition);                                                         \
-    (void)(message);                                                           
+#define MATRIX_ASSERT(condition, message, ...) \
+    (void)(condition);                         \
+    (void)(message);
 #endif
 
 struct aligned_deleter {
-    void operator()(float* ptr) const {
-        std::free(ptr);
-    }
+    void operator()(float* ptr) const { std::free(ptr); }
 };
 
 struct matrix {
     size_t rows, cols;
     size_t row_width;
-    
+
     std::unique_ptr<float[], aligned_deleter> data;
 
     constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 8;
 
     matrix() : rows(0), cols(0), row_width(0), data(nullptr) {}
     matrix(const size_t rows, const size_t cols);
-    
-    matrix(matrix &&) = default;
-    matrix(const matrix &other) = delete;
 
-    matrix &operator=(matrix &&) = default;
-    matrix &operator=(const matrix &other) = delete;
+    matrix(matrix&&) = default;
+    matrix(const matrix& other) = delete;
+
+    matrix& operator=(matrix&&) = default;
+    matrix& operator=(const matrix& other) = delete;
 
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
-    
+
     float* data_ptr() { return data.get(); }
     const float* data_ptr() const { return data.get(); }
 
@@ -69,7 +67,7 @@ struct matrix {
         data[col + row * row_width] += offset;
     }
 
-    void set_row_vector(const size_t row, const matrix &row_vector) {
+    void set_row_vector(const size_t row, const matrix& row_vector) {
         MATRIX_ASSERT(
             this->cols == row_vector.cols,
             "Row vector must have the same number of columns as the matrix");
@@ -78,8 +76,8 @@ struct matrix {
             set(row, j, row_vector.get(0, j));
         }
     }
-    
-    void add_row_vector(const size_t row, const matrix &other) {
+
+    void add_row_vector(const size_t row, const matrix& other) {
         MATRIX_ASSERT(
             this->cols == other.cols,
             "Row vector must have the same number of columns as the matrix");
@@ -88,14 +86,12 @@ struct matrix {
             set(row, i, get(row, i) + other.get(0, i));
         }
     }
-    
-    void set_horizontal_slice(const size_t col_start, const matrix &slice) {
-        MATRIX_ASSERT(
-            this->rows == slice.rows,
-            "Slice must have the same number of rows as the matrix");
-        MATRIX_ASSERT(
-            col_start + slice.cols <= this->cols,
-            "Slice exceeds matrix row bounds");
+
+    void set_horizontal_slice(const size_t col_start, const matrix& slice) {
+        MATRIX_ASSERT(this->rows == slice.rows,
+                      "Slice must have the same number of rows as the matrix");
+        MATRIX_ASSERT(col_start + slice.cols <= this->cols,
+                      "Slice exceeds matrix row bounds");
 
         for (size_t i = 0; i < slice.rows; ++i) {
             for (size_t j = 0; j < slice.cols; ++j) {
@@ -103,11 +99,11 @@ struct matrix {
             }
         }
     }
-    
-    matrix get_horizontal_slice(const size_t col_start, const size_t slice_cols) const {
-        MATRIX_ASSERT(
-            col_start + slice_cols <= this->cols,
-            "Slice exceeds matrix row bounds");
+
+    matrix get_horizontal_slice(const size_t col_start,
+                                const size_t slice_cols) const {
+        MATRIX_ASSERT(col_start + slice_cols <= this->cols,
+                      "Slice exceeds matrix row bounds");
 
         matrix slice{ this->rows, slice_cols };
         for (size_t i = 0; i < this->rows; ++i) {
@@ -118,29 +114,32 @@ struct matrix {
         return slice;
     }
 
-    matrix &softmax();
-    matrix &mask_upper_triangular(float mask_value = -std::numeric_limits<float>::infinity());
+    matrix& softmax();
+    matrix& mask_upper_triangular(float mask_value
+                                  = -std::numeric_limits<float>::infinity());
 
-    matrix &normalize() {
+    matrix& normalize() {
         this->scale(1.0f / this->absmax());
 
         return *this;
     }
 
-    float dot_product(const matrix &other) const;
-    
+    float dot_product(const matrix& other) const;
+
     void cross_multiply_into(const matrix& other, matrix& out) const;
-    matrix cross_multiplied(const matrix &other) const;
+    matrix cross_multiplied(const matrix& other) const;
     matrix t_cross_multiplied(const matrix& other) const;
     matrix cross_t_multiplied(const matrix& other) const;
     
+    matrix backprop_softmax(const matrix& gradient) const;
+
     matrix clone() const {
         matrix copy{ this->rows, this->cols };
         std::memcpy(copy.data_ptr(), this->data_ptr(), this->buffer_size());
         return copy;
     }
 
-    matrix &scale(const float factor) {
+    matrix& scale(const float factor) {
         this->map([factor](const float value) { return value * factor; });
 
         return *this;
@@ -152,7 +151,7 @@ struct matrix {
         return copy;
     }
 
-    matrix &add(const matrix &offset) {
+    matrix& add(const matrix& offset) {
 #ifdef MATRIX_CHECKS
         llm_assert(this->cols == offset.cols && this->rows == offset.rows,
                    "Matrix dimensions do not match for offset operation");
@@ -167,7 +166,23 @@ struct matrix {
         return *this;
     }
 
-    matrix &map(const auto mapping) {
+    matrix& add_scaled(const matrix& other, const float factor) {
+#ifdef MATRIX_CHECKS
+        llm_assert(
+            this->cols == other.cols && this->rows == other.rows,
+            "Matrix dimensions do not match for scaled addition operation");
+#endif
+
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                set(i, j, get(i, j) + other.get(i, j) * factor);
+            }
+        }
+
+        return *this;
+    }
+
+    matrix& map(const auto mapping) {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 const auto value = get(i, j);
@@ -184,7 +199,8 @@ struct matrix {
         return copy;
     }
 
-    template <typename ret> ret reduce(const auto reducer, ret acc = 0) const {
+    template <typename ret>
+    ret reduce(const auto reducer, ret acc = 0) const {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 acc = reducer(acc, get(i, j));
@@ -236,35 +252,36 @@ struct matrix {
 
     std::string header() const;
     std::string to_string(std::uint8_t precision = 4) const;
-    
-    template <typename ... Args>
-    static std::vector<matrix> construct_vec(Args& ... args) {
+
+    template <typename... Args>
+    static std::vector<matrix> construct_vec(Args&... args) {
         std::vector<matrix> vec;
-        
+
         (vec.emplace_back(std::move(args)), ...);
-        
+
         return vec;
     }
 
     std::span<float> to_span() {
         return std::span(this->data_ptr(), buffer_size() / sizeof(float));
     }
-    
+
     std::span<const float> to_span() const {
         return std::span(this->data_ptr(), buffer_size() / sizeof(float));
     }
-    
-    void save(std::ostream &out) const;
-    static matrix load(std::istream &in);
-    
-    bool equals(const matrix &other, const float epsilon = 1e-6f) const;
-    
+
+    void save(std::ostream& out) const;
+    static matrix load(std::istream& in);
+
+    bool equals(const matrix& other, const float epsilon = 1e-6f) const;
+
     void print_bounds() const {
-        std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols << "\n";
+        std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols
+                  << "\n";
     }
 
     [[nodiscard]] size_t size() const { return cols * rows; }
 
-  private:
+   private:
     void verify_bounds(const size_t row, const size_t col) const;
 };

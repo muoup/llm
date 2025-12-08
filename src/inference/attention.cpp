@@ -112,7 +112,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
         = post_layer_gradient.cross_t_multiplied(wo);
 
     regularize_weight_gradient(wo_gradient, wo, regularization_strength);
-    adjust_matrix(wo, wo_gradient, learning_rate);
+    adjust_parameter_matrix(wo, wo_gradient, learning_rate);
 
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
@@ -132,21 +132,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix scores_gradient_v = weighted_sum_gradient.cross_t_multiplied(v);
 
         // Backprop through softmax
-        matrix softmax_gradient(
-            { scores_gradient_v.rows, scores_gradient_v.cols });
-
-#pragma omp parallel for
-        for (size_t i = 0; i < scores.rows; ++i) {
-            float s_dot = 0.0f;
-            for (size_t l = 0; l < scores.cols; ++l) {
-                s_dot += scores_gradient_v.get(i, l) * scores.get(i, l);
-            }
-            for (size_t j = 0; j < scores.cols; ++j) {
-                const float s_j = scores.get(i, j);
-                const float g_j = scores_gradient_v.get(i, j);
-                softmax_gradient.set(i, j, s_j * (g_j - s_dot));
-            }
-        }
+        matrix softmax_gradient = scores.backprop_softmax(scores_gradient_v);
 
         // Backprop through scaling
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
@@ -163,13 +149,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
         AttentionHead& head = heads[h];
         regularize_weight_gradient(wq_gradient, head.wq,
                                    regularization_strength);
-        adjust_matrix(head.wq, wq_gradient, learning_rate);
+        adjust_parameter_matrix(head.wq, wq_gradient, learning_rate);
         regularize_weight_gradient(wk_gradient, head.wk,
                                    regularization_strength);
-        adjust_matrix(head.wk, wk_gradient, learning_rate);
+        adjust_parameter_matrix(head.wk, wk_gradient, learning_rate);
         regularize_weight_gradient(wv_gradient, head.wv,
                                    regularization_strength);
-        adjust_matrix(head.wv, wv_gradient, learning_rate);
+        adjust_parameter_matrix(head.wv, wv_gradient, learning_rate);
 
         // Gradient of the input: sum of contributions via each projection +
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);

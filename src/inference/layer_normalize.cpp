@@ -126,8 +126,8 @@ std::vector<matrix> LayerNorm::backpropogate(std::span<const matrix> inputs,
         }
     }
 
-    adjust_matrix(gamma, grad_gamma, learning_rate);
-    adjust_matrix(beta, grad_beta, learning_rate);
+    adjust_parameter_matrix(gamma, grad_gamma, learning_rate);
+    adjust_parameter_matrix(beta, grad_beta, learning_rate);
     
     // Add the gradient from the residual path
     grad_input.add(grad_residual);

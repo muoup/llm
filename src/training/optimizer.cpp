@@ -12,7 +12,7 @@ void norm_clip(matrix &gradient) {
     }
 }
 
-void adjust_matrix(matrix &adjust, const matrix &gradient, float learning_rate) {
+void adjust_parameter_matrix(matrix &adjust, const matrix &gradient, float learning_rate) {
     matrix clipped_gradient = gradient.clone();
     norm_clip(clipped_gradient);
 
