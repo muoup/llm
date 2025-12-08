@@ -33,7 +33,3 @@ void regularize_weight_gradient(matrix &gradient, const matrix &weights, float r
         }
     }
 }
-
-void layer_normalize(matrix &activations, const matrix &gamma, const matrix &beta) {
-    
-}

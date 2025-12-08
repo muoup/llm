@@ -25,16 +25,6 @@ int handle_train(int argc, char* argv[]) {
         return 1;
     }
 
-    size_t n_rows = 0;
-    if (!n_str.empty()) {
-        try {
-            n_rows = std::stoul(n_str);
-        } catch (const std::exception& e) {
-            std::cerr << "Error: Invalid value for -n: " << n_str << std::endl;
-            return 1;
-        }
-    }
-
     dataset_type type = detect_dataset_type(type_str);
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;
@@ -64,7 +54,7 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            // InferenceModel model = create_standard_model(dimensions, _tokenizer.vocab_size(), 8, 8);
+            // InferenceModel model = standard_attention_model(dimensions, _tokenizer.vocab_size(), 8, 8);
             InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), 4, 4);
             model.randomize();
             
@@ -83,6 +73,17 @@ int handle_train(int argc, char* argv[]) {
     try {
         auto dataset = create_dataset(data_path, type);
         std::cout << "Dataset loaded. Type: " << (type == dataset_type::RAW ? "raw" : "row-based") << ". Iterating over rows..." << std::endl;
+        
+        size_t n_rows = dataset->size();
+            
+        if (!n_str.empty()) {
+            try {
+                n_rows = std::stoul(n_str);
+            } catch (const std::exception& e) {
+                std::cerr << "Error: Invalid value for -n: " << n_str << std::endl;
+                return 1;
+            }
+        }
  
         float learning_rate = 0;
         
@@ -91,7 +92,7 @@ int handle_train(int argc, char* argv[]) {
             const auto truncated_input = std::span { tokens.begin(), tokens.end() - 1 };
             float loss = model.train_on(truncated_input, tokens, learning_rate);
             
-            std::cout << "Row " << i << "/" << dataset->size() << " processed. Loss: " << loss << std::endl;
+            std::cout << "Row " << i << "/" << n_rows << " processed. Loss: " << loss << std::endl;
             learning_rate = 0.00005f * loss;
         }, n_rows);
     } catch (const std::out_of_range& e) {

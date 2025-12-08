@@ -97,8 +97,6 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     return matrix::construct_vec(result);
 }
 
-// ---[ Serialization ]---
-
 void FeedForwardLayer::save(std::ostream& out) const {
     w1.save(out);
     b1.save(out);

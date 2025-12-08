@@ -5,10 +5,10 @@
 #include <inference/layer_normalize.hpp>
 #include "inference/linearized_attention.hpp"
 
-InferenceModel create_standard_model(size_t dimensions,
-                                     size_t vocab_size,
-                                     size_t num_blocks,
-                                     size_t attention_heads) {
+InferenceModel standard_attention_model(size_t dimensions,
+                                        size_t vocab_size,
+                                        size_t num_blocks,
+                                        size_t attention_heads) {
     constexpr size_t ffn_multiplier = 4;
 
     InferenceModel model(dimensions, vocab_size);

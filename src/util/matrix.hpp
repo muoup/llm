@@ -198,6 +198,22 @@ struct matrix {
         copy.map(mapping);
         return copy;
     }
+    
+    matrix& element_wise_multiply(const matrix& other) {
+#ifdef MATRIX_CHECKS
+        llm_assert(
+            this->cols == other.cols && this->rows == other.rows,
+            "Matrix dimensions do not match for element-wise multiplication");
+        );
+#endif
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                set(i, j, get(i, j) * other.get(i, j));
+            }
+        }
+
+        return *this;
+    }
 
     template <typename ret>
     ret reduce(const auto reducer, ret acc = 0) const {

@@ -8,6 +8,7 @@
 #include <inference/attention.hpp>
 #include <inference/feed_forward.hpp>
 #include <inference/layer_normalize.hpp>
+#include <inference/linearized_attention.hpp>
 
 std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
@@ -21,6 +22,9 @@ std::unique_ptr<INode> load_node(std::istream& in) {
                 FeedForwardLayer::load(in));
         case NodeType::LayerNorm:
             return std::make_unique<LayerNorm>(LayerNorm::load(in));
+        case NodeType::LinearizedAttention:
+            return std::make_unique<LinearizedAttention>(
+                LinearizedAttention::load(in));
         default:
             // Handle error: unknown node type
             std::cerr << "Error: Unknown node type during loading: "

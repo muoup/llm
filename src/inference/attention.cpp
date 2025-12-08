@@ -105,10 +105,12 @@ std::vector<matrix> AttentionLayer::backpropogate(
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
+    const matrix& concat_heads = outputs[0];
+    const matrix& layer_output = outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
-    matrix wo_gradient = outputs[1].t_cross_multiplied(post_layer_gradient);
-    matrix weighted_sum_gradient_full
+    matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
+    matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
 
     regularize_weight_gradient(wo_gradient, wo, regularization_strength);
@@ -123,23 +125,23 @@ std::vector<matrix> AttentionLayer::backpropogate(
         const matrix& scores = outputs[2 + h * 4 + 3];
 
         // Slice the gradient for the current head's output
-        matrix weighted_sum_gradient
-            = weighted_sum_gradient_full.get_horizontal_slice(h * head_size,
+        matrix attention_gradient
+            = attention_concat_gradient.get_horizontal_slice(h * head_size,
                                                               head_size);
 
         // Backprop through weighted sum: weighted_sum = scores * v
-        matrix v_gradient = scores.t_cross_multiplied(weighted_sum_gradient);
-        matrix scores_gradient_v = weighted_sum_gradient.cross_t_multiplied(v);
+        matrix v_gradient = scores.t_cross_multiplied(attention_gradient);
+        matrix scores_gradient = attention_gradient.cross_t_multiplied(v);
 
         // Backprop through softmax
-        matrix softmax_gradient = scores.backprop_softmax(scores_gradient_v);
+        matrix pre_softmax_gradient = scores.backprop_softmax(scores_gradient);
 
         // Backprop through scaling
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
-        softmax_gradient.scale(scale);
+        pre_softmax_gradient.scale(scale);
 
-        matrix q_gradient = softmax_gradient.cross_multiplied(k);
-        matrix k_gradient = softmax_gradient.t_cross_multiplied(q);
+        matrix q_gradient = pre_softmax_gradient.cross_multiplied(k);
+        matrix k_gradient = pre_softmax_gradient.t_cross_multiplied(q);
 
         // Backprop through Q, K, V projections to their weight matrices
         matrix wq_gradient = layer_input.t_cross_multiplied(q_gradient);
@@ -161,15 +163,11 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);
         head_input_gradient.add(k_gradient.cross_t_multiplied(head.wk));
         head_input_gradient.add(v_gradient.cross_t_multiplied(head.wv));
-
-        for (size_t r = 0; r < input_gradient.rows; ++r) {
-            for (size_t c = 0; c < input_gradient.cols; ++c) {
-                float addition = head_input_gradient.get(r, c);
-                input_gradient.offset(r, c, addition);
-            }
-        }
+        
+        input_gradient.add(head_input_gradient);
     }
 
+    // Residual connection gradient
     input_gradient.add(post_layer_gradient);
     return matrix::construct_vec(input_gradient);
 }
