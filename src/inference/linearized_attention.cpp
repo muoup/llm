@@ -1,5 +1,4 @@
 #include "linearized_attention.hpp"
-#include "training/optimizer.hpp"
 
 LinearizedAttention::LinearizedAttention()
     : dimensions(0), head_size(0), head_count(0), heads(), wo() {}
@@ -96,18 +95,21 @@ std::vector<matrix> LinearizedAttention::backpropogate(
     std::span<const matrix> gradients,
     float learning_rate) {
     // These functions are assumed to be in "training/optimizer.hpp"
+    auto adjust_parameter_matrix = [](matrix& param, const matrix& grad, float lr) {
+        param.add_scaled(grad, -lr);
+    };
+    auto regularize_weight_gradient = [](matrix& grad, const matrix& weight, float strength) {
+        grad.add_scaled(weight, strength);
+    };
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
     const matrix& post_layer_gradient = gradients[0];
 
     // Backpropagate through the residual connection.
-    // The gradient from the output flows back to both the layer's input and the
-    // pre-residual output.
     matrix input_gradient = post_layer_gradient.clone();
 
-    // Backpropagate through the final projection: final_output =
-    // concatenated_heads * wo.T
+    // Backpropagate through the final projection.
     matrix wo_gradient = post_layer_gradient.t_cross_multiplied(outputs[1]);
     matrix weighted_sum_gradient_full
         = post_layer_gradient.cross_t_multiplied(wo);
@@ -125,11 +127,12 @@ std::vector<matrix> LinearizedAttention::backpropogate(
             = weighted_sum_gradient_full.get_horizontal_slice(h * head_size,
                                                               head_size);
 
-        // Backprop through weighted sum: weighted_sum = q * scores.T
-        // Your version had this part mixed up with standard attention.
-        matrix q_gradient = weighted_sum_gradient.cross_t_multiplied(scores);
+        // Backprop through weighted_sum = q * scores
+        // d_q = d_weighted_sum * scores.T
+        matrix q_gradient = weighted_sum_gradient.cross_multiplied(scores);
+        // d_scores = q.T * d_weighted_sum
         matrix scores_gradient_after_softmax
-            = weighted_sum_gradient.t_cross_multiplied(q).transposed();
+            = q.t_cross_multiplied(weighted_sum_gradient);
 
         // Backprop through softmax and mask
         matrix scores_gradient
@@ -141,14 +144,14 @@ std::vector<matrix> LinearizedAttention::backpropogate(
         scores_gradient.scale(scale);
 
         // Backprop through scores = k.T * v
-        // This is the other key part that was incorrect in your attempt.
         matrix k_gradient = v.cross_multiplied(scores_gradient);
-        matrix v_gradient = k.t_cross_multiplied(scores_gradient);
+        matrix v_gradient = k.cross_t_multiplied(scores_gradient);
 
-        // Backprop through Q, K, V projections to their weight matrices
-        matrix wq_gradient = q_gradient.t_cross_multiplied(layer_input);
-        matrix wk_gradient = k_gradient.t_cross_multiplied(layer_input);
-        matrix wv_gradient = v_gradient.t_cross_multiplied(layer_input);
+        // Backprop through projections: q = input * wq
+        // d_wq = input.T * d_q
+        matrix wq_gradient = layer_input.t_cross_multiplied(q_gradient);
+        matrix wk_gradient = layer_input.t_cross_multiplied(k_gradient);
+        matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
 
         LinearAttentionHead& head = heads[h];
         regularize_weight_gradient(wq_gradient, head.wq,
@@ -161,7 +164,7 @@ std::vector<matrix> LinearizedAttention::backpropogate(
                                    regularization_strength);
         adjust_parameter_matrix(head.wv, wv_gradient, learning_rate);
 
-        // Gradient of the input: sum of contributions via each projection
+        // Gradient of the input: d_input += d_q * wq.T
         input_gradient.add(q_gradient.cross_t_multiplied(head.wq));
         input_gradient.add(k_gradient.cross_t_multiplied(head.wk));
         input_gradient.add(v_gradient.cross_t_multiplied(head.wv));

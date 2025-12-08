@@ -174,8 +174,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
     return matrix::construct_vec(input_gradient);
 }
 
-// ---[ Serialization ]---
-
 void AttentionLayer::save(std::ostream& out) const {
     out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
     out.write(reinterpret_cast<const char*>(&head_size), sizeof(head_size));

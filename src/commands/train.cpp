@@ -65,7 +65,7 @@ int handle_train(int argc, char* argv[]) {
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
             // InferenceModel model = create_standard_model(dimensions, _tokenizer.vocab_size(), 8, 8);
-            InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), 8, 8);
+            InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), 4, 4);
             model.randomize();
             
             std::cout << "New model created. Parameter count: " << model.parameter_count() << '\n';
