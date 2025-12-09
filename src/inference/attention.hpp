@@ -26,12 +26,11 @@ public:
     AttentionLayer(size_t dimensions, size_t head_count);
 
     size_t parameterCount() const override;
-    
     NodeType getType() const override;
-    std::vector<matrix> forward(std::span<const matrix> inputs) const override;
+    ForwardingResult forward(std::span<const matrix> inputs) const override;
     std::vector<matrix> backpropogate(
+        const ForwardingResult& result,
         std::span<const matrix> inputs,
-        std::span<const matrix> outputs,
         std::span<const matrix> gradients,
         float learning_rate) override;
 

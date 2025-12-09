@@ -13,8 +13,8 @@ public:
     
     void randomize(float min, float max) override;
 
-    std::vector<matrix> forward(std::span<const matrix> inputs) const override;
-    std::vector<matrix> backpropogate(std::span<const matrix> inputs,
+    ForwardingResult forward(std::span<const matrix> inputs) const override;
+    std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> outputs,
                                       std::span<const matrix> gradients,
                                       float learning_rate) override;

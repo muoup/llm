@@ -9,6 +9,7 @@
 #include <inference/feed_forward.hpp>
 #include <inference/layer_normalize.hpp>
 #include <inference/linearized_attention.hpp>
+#include "inference/network_node.hpp"
 
 std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
@@ -198,43 +199,43 @@ void InferenceModel::finalize() {
     this->generate_path();
 }
 
-std::vector<std::vector<matrix>> InferenceModel::forwarding_results(
+std::vector<ForwardingResult> InferenceModel::forwarding_results(
     const std::span<const token_id_t> tokens) const {
     if (!finalized) {
         throw std::runtime_error("Model must be finalized before prediction.");
     }
 
-    std::vector<std::vector<matrix>> results;
+    std::vector<ForwardingResult> results;
 
     matrix embeddings = m_embedding_layer.forward(tokens);
-    results.emplace_back(matrix::construct_vec(embeddings));
+    results.emplace_back(INode::standardResult(matrix::construct_vec(embeddings)));
 
     for (size_t node_idx : execution_order) {
         auto forward_result
-            = this->m_layers.at(node_idx)->forward(results.back());
+            = this->m_layers.at(node_idx)->forward(results.back().outputs);
         results.emplace_back(std::move(forward_result));
     }
 
-    auto logits = m_logit_layer.forward(results.back()[0]);
-    results.emplace_back(matrix::construct_vec(logits));
+    auto logits = m_logit_layer.forward(results.back().outputs[0]);
+    results.emplace_back(INode::standardResult(matrix::construct_vec(logits)));
     return results;
 }
 
 token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
                                    float temperature) const {
     auto results = this->forwarding_results(tokens);
-    matrix logits = std::move(results.back()[0]);
-    
+    matrix logits = std::move(results.back().outputs[0]);
+
     logits.scale(temperature);
     logits.softmax();
-    
+
     // Find the index of the maximum logit
     const size_t last_row = logits.rows - 1;
     float random = static_cast<float>(rand()) / RAND_MAX;
-    
+
     for (size_t i = 0; i < logits.cols; ++i) {
         random -= logits.get(last_row, i);
-        
+
         if (random <= 0.0f) {
             return i;
         }
@@ -254,8 +255,8 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
 
     // Backprop through logit layer
     auto [logit_gradients, loss]
-        = m_logit_layer.backpropogate(results[results.size() - 2][0],
-                                      results.back()[0], actual, learning_rate);
+        = m_logit_layer.backpropogate(results[results.size() - 2].outputs[0],
+                                      results.back().outputs[0], actual, learning_rate);
 
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
@@ -264,7 +265,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     for (size_t i = execution_order.size(); i-- > 0;) {
         size_t node_idx = execution_order[i];
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
-            results[i], results[i + 1], gradients.back(), learning_rate));
+            results[i], results[i + 1].outputs, gradients.back(), learning_rate));
     }
 
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],

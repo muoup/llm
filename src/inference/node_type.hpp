@@ -7,4 +7,5 @@ enum class NodeType : uint32_t {
     LinearizedAttention,
     FeedForward,
     LayerNorm,
+    Recursion
 };

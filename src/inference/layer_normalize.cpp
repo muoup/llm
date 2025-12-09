@@ -1,7 +1,8 @@
 #include "layer_normalize.hpp"
 
 #include <training/optimizer.hpp>
-#include "inference/inference.hpp"
+#include <inference/inference.hpp>
+#include <inference/network_node.hpp>
 
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node, size_t dimensions, float epsilon)
     : dimensions(dimensions),
@@ -23,7 +24,7 @@ NodeType LayerNorm::getType() const {
     return NodeType::LayerNorm;
 }
 
-std::vector<matrix> LayerNorm::forward(std::span<const matrix> inputs) const {
+ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
     matrix normalized_input(input.rows, input.cols);
     matrix mean(input.rows, 1);
@@ -53,31 +54,31 @@ std::vector<matrix> LayerNorm::forward(std::span<const matrix> inputs) const {
     }
 
     auto inner_node_outputs = inner_node->forward(std::span<const matrix>{ &normalized_input, 1 });
-    matrix final_output = inner_node_outputs[0].clone();
+    matrix final_output = inner_node_outputs.outputs[0].clone();
     final_output.add(input); // Residual connection
     
     std::vector<matrix> return_vec;
-    return_vec.reserve(4 + inner_node_outputs.size());
+    return_vec.reserve(4 + inner_node_outputs.outputs.size());
     return_vec.emplace_back(std::move(final_output));
     return_vec.emplace_back(std::move(normalized_input));
     return_vec.emplace_back(std::move(mean));
     return_vec.emplace_back(std::move(inv_variance));
-    for (auto& m : inner_node_outputs) {
+    
+    for (auto& m : inner_node_outputs.outputs) {
         return_vec.emplace_back(std::move(m));
     }
-    return return_vec;
+    
+    return standardResult(std::move(return_vec));
 }
 
-std::vector<matrix> LayerNorm::backpropogate(std::span<const matrix> inputs,
-                                             std::span<const matrix> outputs,
+std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
+                                             std::span<const matrix> inputs,
                                              std::span<const matrix> gradients,
                                              float learning_rate) {
     const matrix& layer_input = inputs[0];
-    const matrix& normalized_input = outputs[1];
-    const matrix& mean = outputs[2];
-    const matrix& inv_variance = outputs[3];
-    std::span<const matrix> inner_node_full_outputs = outputs.subspan(4);
-
+    const matrix& normalized_input = result.outputs[1];
+    const matrix& mean = result.outputs[2];
+    const matrix& inv_variance = result.outputs[3];
     const matrix& grad_output = gradients[0];
 
     // The gradient dL/dy splits at the residual connection y = x + z
@@ -86,8 +87,8 @@ std::vector<matrix> LayerNorm::backpropogate(std::span<const matrix> inputs,
     matrix grad_residual = grad_output.clone();
 
     auto inner_backprop_outputs = inner_node->backpropogate(
+        result,
         std::span<const matrix>{ &normalized_input, 1 },
-        inner_node_full_outputs,
         std::span<const matrix>{ &grad_output, 1 },
         learning_rate);
     matrix& grad_normalized = inner_backprop_outputs[0];
@@ -131,7 +132,6 @@ std::vector<matrix> LayerNorm::backpropogate(std::span<const matrix> inputs,
     
     // Add the gradient from the residual path
     grad_input.add(grad_residual);
-
     return matrix::construct_vec(grad_input);
 }
 

@@ -4,6 +4,7 @@
 #include <span>
 #include <training/optimizer.hpp>
 #include <vector>
+#include "inference/network_node.hpp"
 
 NodeType AttentionLayer::getType() const { return NodeType::Attention; }
 
@@ -41,7 +42,7 @@ size_t AttentionLayer::parameterCount() const {
     return count;
 }
 
-std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) const {
+ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
     std::vector<matrix> returns;
@@ -83,7 +84,6 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) cons
     matrix& concatenated_heads = returns[1];
 
     final_output = concatenated_heads.cross_multiplied(wo);
-    final_output.add(input);  // Residual connection
 
     // Expected returns layout:
     // [0] -> concatenated heads
@@ -96,17 +96,18 @@ std::vector<matrix> AttentionLayer::forward(std::span<const matrix> inputs) cons
     // [7] -> k2 (keys head 2)
     // ...
 
-    return returns;
+    return standardResult(std::move(returns));
 }
 
 std::vector<matrix> AttentionLayer::backpropogate(
-    std::span<const matrix> inputs, std::span<const matrix> outputs,
+    const ForwardingResult& result,
+    std::span<const matrix> inputs,
     std::span<const matrix> gradients, float learning_rate) {
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
-    const matrix& concat_heads = outputs[0];
-    const matrix& layer_output = outputs[1];
+    const matrix& concat_heads = result.outputs[0];
+    const matrix& layer_output = result.outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
     matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
@@ -119,10 +120,10 @@ std::vector<matrix> AttentionLayer::backpropogate(
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
     for (size_t h = 0; h < head_count; ++h) {
-        const matrix& q = outputs[2 + h * 4 + 0];
-        const matrix& k = outputs[2 + h * 4 + 1];
-        const matrix& v = outputs[2 + h * 4 + 2];
-        const matrix& scores = outputs[2 + h * 4 + 3];
+        const matrix& q = result.outputs[2 + h * 4 + 0];
+        const matrix& k = result.outputs[2 + h * 4 + 1];
+        const matrix& v = result.outputs[2 + h * 4 + 2];
+        const matrix& scores = result.outputs[2 + h * 4 + 3];
 
         // Slice the gradient for the current head's output
         matrix attention_gradient
@@ -167,8 +168,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         input_gradient.add(head_input_gradient);
     }
 
-    // Residual connection gradient
-    input_gradient.add(post_layer_gradient);
     return matrix::construct_vec(input_gradient);
 }
 

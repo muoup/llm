@@ -29,7 +29,7 @@ size_t LinearizedAttention::parameterCount() const {
     return count;
 }
 
-std::vector<matrix> LinearizedAttention::forward(
+ForwardingResult LinearizedAttention::forward(
     std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
@@ -87,17 +87,19 @@ std::vector<matrix> LinearizedAttention::forward(
     // [7] -> k2 (keys head 2)
     // ...
 
-    return returns;
+    return standardResult(std::move(returns));
 }
 
 std::vector<matrix> LinearizedAttention::backpropogate(
-    std::span<const matrix> inputs, std::span<const matrix> outputs,
-    std::span<const matrix> gradients, float learning_rate) {
+    const ForwardingResult& result,
+    std::span<const matrix> inputs,
+    std::span<const matrix> gradients,
+    float learning_rate) {
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
-    const matrix& concat_heads = outputs[0];
-    const matrix& layer_output = outputs[1];
+    const matrix& concat_heads = result.outputs[0];
+    const matrix& layer_output = result.outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
     matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
@@ -110,18 +112,19 @@ std::vector<matrix> LinearizedAttention::backpropogate(
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
     for (size_t h = 0; h < head_count; ++h) {
-        const matrix& q = outputs[2 + h * 4 + 0];
-        const matrix& k = outputs[2 + h * 4 + 1];
-        const matrix& v = outputs[2 + h * 4 + 2];
-        const matrix& scores = outputs[2 + h * 4 + 3];
+        const matrix& q = result.outputs[2 + h * 4 + 0];
+        const matrix& k = result.outputs[2 + h * 4 + 1];
+        const matrix& v = result.outputs[2 + h * 4 + 2];
+        const matrix& scores = result.outputs[2 + h * 4 + 3];
 
         // Slice the gradient for the current head's output
         matrix attention_gradient
             = attention_concat_gradient.get_horizontal_slice(h * head_size,
-                                                              head_size);
+                                                             head_size);
 
         matrix q_gradient = attention_gradient.cross_t_multiplied(scores);
-        matrix weights_gradient = q_gradient.t_cross_multiplied(attention_gradient);
+        matrix weights_gradient
+            = q_gradient.t_cross_multiplied(attention_gradient);
 
         // Backprop through softmax
         matrix pre_softmax_gradient = scores.backprop_softmax(weights_gradient);
@@ -153,7 +156,7 @@ std::vector<matrix> LinearizedAttention::backpropogate(
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);
         head_input_gradient.add(k_gradient.cross_t_multiplied(head.wk));
         head_input_gradient.add(v_gradient.cross_t_multiplied(head.wv));
-        
+
         input_gradient.add(head_input_gradient);
     }
 
@@ -195,11 +198,9 @@ LinearizedAttention LinearizedAttention::load(std::istream& in) {
     layer.head_count = head_count;
 
     for (size_t i = 0; i < head_count; ++i) {
-        layer.heads.emplace_back(LinearAttentionHead {
-            .wq = matrix::load(in),
-            .wk = matrix::load(in),
-            .wv = matrix::load(in)
-        });
+        layer.heads.emplace_back(LinearAttentionHead{ .wq = matrix::load(in),
+                                                      .wk = matrix::load(in),
+                                                      .wv = matrix::load(in) });
     }
 
     layer.wo = matrix::load(in);

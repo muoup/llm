@@ -22,9 +22,9 @@ class LinearizedAttention : public INode {
     size_t parameterCount() const override;
     NodeType getType() const override { return NodeType::LinearizedAttention; }
 
-    std::vector<matrix> forward(std::span<const matrix> inputs) const override;
-    std::vector<matrix> backpropogate(std::span<const matrix> inputs,
-                                      std::span<const matrix> outputs,
+    ForwardingResult forward(std::span<const matrix> inputs) const override;
+    std::vector<matrix> backpropogate(const ForwardingResult& result,
+                                      std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
                                       float learning_rate) override;
 

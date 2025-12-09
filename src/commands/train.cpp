@@ -55,7 +55,8 @@ int handle_train(int argc, char* argv[]) {
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
             // InferenceModel model = standard_attention_model(dimensions, _tokenizer.vocab_size(), 8, 8);
-            InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), 4, 4);
+            // InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), 8, 8);
+            InferenceModel model = standard_recursive_model(dimensions, _tokenizer.vocab_size(), 12, 8, 10);
             model.randomize();
             
             std::cout << "New model created. Parameter count: " << model.parameter_count() << '\n';
@@ -90,10 +91,10 @@ int handle_train(int argc, char* argv[]) {
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(_tokenizer, row);
             const auto truncated_input = std::span { tokens.begin(), tokens.end() - 1 };
-            float loss = model.train_on(truncated_input, tokens, learning_rate);
+            float loss = model.train_on(truncated_input, tokens, 0.0001f);
             
             std::cout << "Row " << i << "/" << n_rows << " processed. Loss: " << loss << std::endl;
-            learning_rate = 0.00005f * loss;
+            // learning_rate = 0.00005f * loss;
         }, n_rows);
     } catch (const std::out_of_range& e) {
         std::cerr << "Out of range error during training: " << e.what() << std::endl;

@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include "inference/network_node.hpp"
 #include "training/optimizer.hpp"
 
 static matrix activate(const matrix& input) {
@@ -11,17 +12,19 @@ static matrix activate(const matrix& input) {
     return input.mapped(leaky_relu);
 }
 
-NodeType FeedForwardLayer::getType() const { return NodeType::FeedForward; }
+NodeType FeedForwardLayer::getType() const {
+    return NodeType::FeedForward;
+}
 
 FeedForwardLayer::FeedForwardLayer(size_t dimensions, size_t projection_size)
     : w1({ dimensions, projection_size }),
       b1({ 1, projection_size }),
       w2({ projection_size, dimensions }),
       b2({ 1, dimensions }) {}
-      
+
 size_t FeedForwardLayer::parameterCount() const {
-    return (w1.rows * w1.cols) + (b1.rows * b1.cols)
-           + (w2.rows * w2.cols) + (b2.rows * b2.cols);
+    return (w1.rows * w1.cols) + (b1.rows * b1.cols) + (w2.rows * w2.cols)
+           + (b2.rows * b2.cols);
 }
 
 void FeedForwardLayer::randomize(const float min, const float max) {
@@ -31,7 +34,8 @@ void FeedForwardLayer::randomize(const float min, const float max) {
     b2.randomize(min, max);
 }
 
-std::vector<matrix> FeedForwardLayer::forward(std::span<const matrix> inputs) const {
+ForwardingResult FeedForwardLayer::forward(
+    std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
     matrix activation_input = input.cross_multiplied(w1);
@@ -46,16 +50,18 @@ std::vector<matrix> FeedForwardLayer::forward(std::span<const matrix> inputs) co
         final_output.add_row_vector(i, b2);
     }
 
-    return matrix::construct_vec(final_output, activation_input,
-                                 activation_output);
+    return standardResult(matrix::construct_vec(final_output, activation_input,
+                                                 activation_output));
 }
 
 std::vector<matrix> FeedForwardLayer::backpropogate(
-    std::span<const matrix> inputs, std::span<const matrix> outputs,
-    std::span<const matrix> gradients, float learning_rate) {
+    const ForwardingResult& result,
+    std::span<const matrix> inputs,
+    std::span<const matrix> gradients,
+    float learning_rate) {
     const matrix& layer_input = inputs[0];
-    const matrix& activation_input = outputs[1];
-    const matrix& activation_output = outputs[2];
+    const matrix& activation_input = result.outputs[1];
+    const matrix& activation_output = result.outputs[2];
     const matrix& post_layer_gradient = gradients[0];
 
     matrix b2_gradient({ 1, post_layer_gradient.cols });
@@ -69,8 +75,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     regularize_weight_gradient(w2_gradient, w2);
     adjust_parameter_matrix(w2, w2_gradient, learning_rate);
 
-    const matrix a1_gradient
-        = post_layer_gradient.cross_t_multiplied(w2);
+    const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
     matrix z1_gradient({ a1_gradient.rows, a1_gradient.cols });
 
     for (size_t i = 0; i < z1_gradient.rows; i++) {
@@ -92,9 +97,8 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     regularize_weight_gradient(w1_gradient, w1, 0.01f);
     adjust_parameter_matrix(w1, w1_gradient, learning_rate);
 
-    auto result = z1_gradient.cross_t_multiplied(w1);
-    norm_clip(result);
-    return matrix::construct_vec(result);
+    auto input_gradient = z1_gradient.cross_t_multiplied(w1);
+    return matrix::construct_vec(input_gradient);
 }
 
 void FeedForwardLayer::save(std::ostream& out) const {
@@ -110,7 +114,7 @@ FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
     auto w2 = matrix::load(in);
     auto b2 = matrix::load(in);
 
-    FeedForwardLayer layer(0, 0); // 0, 0 to avoid unnecessary allocation
+    FeedForwardLayer layer(0, 0);  // 0, 0 to avoid unnecessary allocation
     layer.w1 = std::move(w1);
     layer.b1 = std::move(b1);
     layer.w2 = std::move(w2);

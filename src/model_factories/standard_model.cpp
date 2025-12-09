@@ -3,7 +3,8 @@
 #include <inference/attention.hpp>
 #include <inference/feed_forward.hpp>
 #include <inference/layer_normalize.hpp>
-#include "inference/linearized_attention.hpp"
+#include <inference/linearized_attention.hpp>
+#include <inference/recursion_node.hpp>
 
 InferenceModel standard_attention_model(size_t dimensions,
                                         size_t vocab_size,
@@ -73,6 +74,40 @@ InferenceModel linearized_attention_model(size_t dimensions,
 
         last_layer_idx = ff_block_idx;
     }
+
+    model.randomize();
+    model.finalize();
+    return model;
+}
+
+
+InferenceModel standard_recursive_model(size_t dimensions,
+                                        size_t vocab_size,
+                                        size_t num_blocks,
+                                        size_t attention_heads,
+                                        size_t max_recursions) {
+    constexpr size_t ffn_multiplier = 4;
+
+    InferenceModel model(dimensions, vocab_size);
+
+    auto attn_layer
+        = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+    auto attn_block
+        = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
+
+    auto ff_layer = std::make_unique<FeedForwardLayer>(
+        dimensions, dimensions * ffn_multiplier);
+    auto ff_block
+        = std::make_unique<LayerNorm>(std::move(ff_layer), dimensions);
+
+    std::vector<std::unique_ptr<INode>> loop;
+    loop.push_back(std::move(attn_block));
+    loop.push_back(std::move(ff_block));
+
+    auto recursion_node
+        = std::make_unique<RecursionNode>(dimensions, max_recursions, std::move(loop));
+
+    size_t recursion_node_idx = model.add_layer(std::move(recursion_node));
 
     model.randomize();
     model.finalize();

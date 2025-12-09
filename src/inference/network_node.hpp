@@ -5,21 +5,35 @@
 #include <util/matrix.hpp>
 #include <vector>
 
+struct INodeData {
+    virtual ~INodeData() = default;
+};
+
+struct ForwardingResult {
+    std::unique_ptr<INodeData> data;
+    std::vector<matrix> outputs;
+};
+
 struct INode {
     virtual ~INode() = default;
 
     virtual NodeType getType() const = 0;
-
     virtual size_t parameterCount() const = 0;
 
-    virtual std::vector<matrix> forward(std::span<const matrix> inputs) const
-        = 0;
-    virtual std::vector<matrix> backpropogate(std::span<const matrix> inputs,
-                                              std::span<const matrix> outputs,
+    virtual ForwardingResult forward(std::span<const matrix> inputs) const = 0;
+    virtual std::vector<matrix> backpropogate(const ForwardingResult& result,
+                                              std::span<const matrix> inputs,
                                               std::span<const matrix> gradients,
                                               float learning_rate)
         = 0;
 
     virtual void randomize(float min, float max) = 0;
     virtual void save(std::ostream& out) const = 0;
+
+    static ForwardingResult standardResult(std::vector<matrix>&& outputs) {
+        return ForwardingResult{
+            .data = nullptr,
+            .outputs = std::move(outputs),
+        };
+    }
 };

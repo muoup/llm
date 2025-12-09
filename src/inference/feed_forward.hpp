@@ -22,10 +22,10 @@ public:
     
     size_t parameterCount() const override;
     
-    std::vector<matrix> forward(std::span<const matrix> inputs) const override;
+    ForwardingResult forward(std::span<const matrix> inputs) const override;
     std::vector<matrix> backpropogate(
+        const ForwardingResult& result,
         std::span<const matrix> inputs,
-        std::span<const matrix> outputs,
         std::span<const matrix> gradients,
         float learning_rate) override;
 
