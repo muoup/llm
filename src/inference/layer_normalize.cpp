@@ -57,17 +57,11 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
     matrix final_output = inner_node_outputs.outputs[0].clone();
     final_output.add(input); // Residual connection
     
-    std::vector<matrix> return_vec;
-    return_vec.reserve(4 + inner_node_outputs.outputs.size());
+    std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
     return_vec.emplace_back(std::move(final_output));
     return_vec.emplace_back(std::move(normalized_input));
     return_vec.emplace_back(std::move(mean));
     return_vec.emplace_back(std::move(inv_variance));
-    
-    for (auto& m : inner_node_outputs.outputs) {
-        return_vec.emplace_back(std::move(m));
-    }
-    
     return standardResult(std::move(return_vec));
 }
 
@@ -76,9 +70,9 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                                              std::span<const matrix> gradients,
                                              float learning_rate) {
     const matrix& layer_input = inputs[0];
-    const matrix& normalized_input = result.outputs[1];
-    const matrix& mean = result.outputs[2];
-    const matrix& inv_variance = result.outputs[3];
+    const matrix& normalized_input = result.outputs[result.outputs.size() - 3];
+    const matrix& mean = result.outputs[result.outputs.size() - 2];
+    const matrix& inv_variance = result.outputs[result.outputs.size() - 1];
     const matrix& grad_output = gradients[0];
 
     // The gradient dL/dy splits at the residual connection y = x + z

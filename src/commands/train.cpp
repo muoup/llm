@@ -94,7 +94,7 @@ int handle_train(int argc, char* argv[]) {
             float loss = model.train_on(truncated_input, tokens, 0.0001f);
             
             std::cout << "Row " << i << "/" << n_rows << " processed. Loss: " << loss << std::endl;
-            // learning_rate = 0.00005f * loss;
+            learning_rate = 0.00005f * loss;
         }, n_rows);
     } catch (const std::out_of_range& e) {
         std::cerr << "Out of range error during training: " << e.what() << std::endl;

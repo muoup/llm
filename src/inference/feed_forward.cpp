@@ -63,7 +63,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const matrix& activation_input = result.outputs[1];
     const matrix& activation_output = result.outputs[2];
     const matrix& post_layer_gradient = gradients[0];
-
+    
     matrix b2_gradient({ 1, post_layer_gradient.cols });
     for (size_t i = 0; i < b2_gradient.cols; ++i) {
         b2_gradient.set(0, i, post_layer_gradient.col_sum(i));
@@ -72,7 +72,6 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
 
     matrix w2_gradient
         = activation_output.t_cross_multiplied(post_layer_gradient);
-    regularize_weight_gradient(w2_gradient, w2);
     adjust_parameter_matrix(w2, w2_gradient, learning_rate);
 
     const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
@@ -94,7 +93,6 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
 
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
 
-    regularize_weight_gradient(w1_gradient, w1, 0.01f);
     adjust_parameter_matrix(w1, w1_gradient, learning_rate);
 
     auto input_gradient = z1_gradient.cross_t_multiplied(w1);

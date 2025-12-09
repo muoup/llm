@@ -12,11 +12,12 @@
 struct RecursionData : INodeData {
     size_t recursionCount;
     std::vector<float> loopProbabilities;
+    std::vector<matrix> presigmoidValues;
     std::vector<std::vector<ForwardingResult>> loopNodeOutputs;
 
     RecursionData() : recursionCount(0) {}
     RecursionData(RecursionData&&) = default;
-    ~RecursionData() = default;
+    ~RecursionData() override = default;
 };
 
 class RecursionNode final : public INode {

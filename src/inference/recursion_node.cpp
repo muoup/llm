@@ -17,14 +17,16 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
         recursion_data.loopNodeOutputs.emplace_back();
 
         std::span<const matrix> loop_input = inputs;
-        
+
         for (size_t j = 0; j < loop.size(); j++) {
             auto loop_node = loop[j].get();
             auto loop_forward = loop_node->forward(loop_input);
-            
+
             recursion_data.loopNodeOutputs[recursion_count].emplace_back(
                 std::move(loop_forward));
-            loop_input = recursion_data.loopNodeOutputs[recursion_count].back().outputs;
+            loop_input = recursion_data.loopNodeOutputs[recursion_count]
+                             .back()
+                             .outputs;
         }
 
         // We don't for sure know the size of the final output of the loop, so
@@ -37,6 +39,7 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
         for (size_t r = 0; r < p_n.rows; r++) {
             p_n.add_row_vector(r, b);
         }
+        recursion_data.presigmoidValues.emplace_back(p_n.clone());
 
         // Sigmoid activation
         p_n = p_n.mapped([](float x) { return 1.0f / (1.0f + std::exp(-x)); });
@@ -46,15 +49,33 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
         recursion_data.loopProbabilities.emplace_back(probability);
 
         final_output.add_scaled(loop_input[0], probability);
-        
+
         if (budget > 1.0f) {
             break;
         }
     }
-    
+
     return ForwardingResult{ .data = std::make_unique<RecursionData>(
                                  std::move(recursion_data)),
                              .outputs = matrix::construct_vec(final_output) };
+}
+
+std::span<const matrix> determine_node_inputs(
+    size_t node_index,
+    size_t loop_index,
+    const std::span<const matrix>& initial_inputs,
+    const RecursionData& recursion_data) {
+    if (node_index == 0) {
+        if (loop_index == 0) {
+            return initial_inputs;
+        } else {
+            return std::span(
+                recursion_data.loopNodeOutputs[loop_index - 1].back().outputs);
+        }
+    } else {
+        return std::span(
+            recursion_data.loopNodeOutputs[loop_index][node_index - 1].outputs);
+    }
 }
 
 std::vector<matrix> RecursionNode::backpropogate(
@@ -62,9 +83,7 @@ std::vector<matrix> RecursionNode::backpropogate(
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
     float learning_rate) {
-        
-    std::cout << "RecursionNode::backpropogate called" << std::endl;
-        
+
     constexpr auto TIME_PENALTY = 0.01f;
 
     auto* rec_data = dynamic_cast<RecursionData*>(results.data.get());
@@ -75,74 +94,59 @@ std::vector<matrix> RecursionNode::backpropogate(
     RecursionData& recursion_data = *rec_data;
 
     std::vector<matrix> output_gradient_storage;
-    std::span<const matrix> output_gradient_span = std::span(gradients);
-
     float chance_acc = 1.0f;
 
     for (int loop_index = recursion_data.recursionCount; loop_index >= 0;
          loop_index--) {
-        chance_acc -= recursion_data.loopProbabilities[loop_index];
+        std::span<const matrix> output_gradient_span = std::span(gradients);
+        chance_acc -= recursion_data.loopProbabilities.at(loop_index);
 
-        // Before we backpropogate through our contained nodes, we have to
+        const auto& y_gradient = gradients[0];
         const auto& y_n
-            = recursion_data.loopNodeOutputs[loop_index].back().outputs[0];
-        const auto& y_n_gradient = output_gradient_span[0];
+            = recursion_data.loopNodeOutputs.at(loop_index).back().outputs[0];
+        const auto& p_n = recursion_data.loopProbabilities[loop_index];
 
-        auto gradient_p_n = y_n_gradient.cross_t_multiplied(y_n);
+        const auto dp_n_ponder = (loop_index * TIME_PENALTY) * (1 - p_n);
+        const auto dp_n
+            = y_gradient.t_cross_multiplied(y_n).sum() + dp_n_ponder;
 
-        auto d_w = y_n.t_cross_multiplied(gradient_p_n);
-        regularize_weight_gradient(d_w, w);
-        adjust_parameter_matrix(w, d_w, learning_rate);
+        matrix dP_n = matrix(y_n.rows, 1);
+        dP_n.map([&](size_t val) { return dp_n; });
 
-        auto d_b = matrix(1, 1);
-        for (size_t r = 0; r < d_b.rows; r++) {
-            float row_sum = gradient_p_n.col_sum(r);
-            d_b.set(0, 0, d_b.get(0, 0) + row_sum);
+        auto dw = y_n.t_cross_multiplied(dP_n);
+        adjust_parameter_matrix(w, dw, learning_rate);
+
+        auto db = matrix(1, 1);
+        for (size_t r = 0; r < dP_n.cols; r++) {
+            float col_sum = dP_n.col_sum(r);
+            db.set(0, 0, db.get(0, 0) + col_sum);
         }
 
-        regularize_weight_gradient(d_b, b);
-        adjust_parameter_matrix(b, d_b, learning_rate);
+        adjust_parameter_matrix(b, db, learning_rate);
 
-        for (int node_index = loop.size(); node_index >= 0; node_index--) {
-            auto [loop_output, loop_output_gradient] = [&]()
-                -> std::pair<const ForwardingResult*, std::span<const matrix>> {
-                if (loop_index == recursion_data.recursionCount) {
-                    return std::make_pair(&results, gradients);
-                } else {
-                    const auto& results
-                        = recursion_data
-                              .loopNodeOutputs[loop_index + 1][node_index];
+        // Determine the output gradient of y_n
+        auto dy_n = y_gradient.scaled(p_n);
+        output_gradient_span = std::span(&dy_n, 1);
 
-                    return std::make_pair(&results, output_gradient_span);
-                }
-            }();
-
-            auto loop_inputs = [&]() -> std::span<const matrix> {
-                if (node_index == 0) {
-                    if (loop_index == 0) {
-                        return std::span(inputs);
-                    } else {
-                        return std::span(
-                            recursion_data.loopNodeOutputs[loop_index - 1]
-                                .back()
-                                .outputs);
-                    }
-                } else {
-                    return std::span(
-                        recursion_data
-                            .loopNodeOutputs[loop_index][node_index - 1]
-                            .outputs);
-                }
-            }();
-
+        for (int node_index = loop.size() - 1; node_index >= 0; node_index--) {
+            auto node_inputs = determine_node_inputs(node_index, loop_index,
+                                                     inputs, recursion_data);
+            auto& node_forwarding_result
+                = recursion_data.loopNodeOutputs.at(loop_index).at(node_index);
             auto& node = loop[node_index];
 
-            output_gradient_storage = node->backpropogate(
-                *loop_output, loop_inputs, loop_output_gradient, learning_rate);
+            if (node == nullptr) {
+                throw std::runtime_error(
+                    "RecursionNode::backpropogate: Null node in loop");
+            }
+
+            output_gradient_storage
+                = node->backpropogate(node_forwarding_result, node_inputs,
+                                      output_gradient_span, learning_rate);
             output_gradient_span = std::span(output_gradient_storage);
         }
     }
-    
+
     return std::move(output_gradient_storage);
 }
 
@@ -189,7 +193,8 @@ RecursionNode RecursionNode::load(std::istream& in) {
         loop.emplace_back(load_node(in));
     }
 
-    RecursionNode recursion_node(dimensions, max_recursion_depth, std::move(loop));
+    RecursionNode recursion_node(dimensions, max_recursion_depth,
+                                 std::move(loop));
     recursion_node.w = std::move(w);
     recursion_node.b = std::move(b);
 

@@ -1,4 +1,5 @@
 #include "optimizer.hpp"
+#include "util/matrix.hpp"
 
 void norm_clip(matrix &gradient) {
     constexpr auto max_magnitude = 5.0f;
@@ -13,6 +14,9 @@ void norm_clip(matrix &gradient) {
 }
 
 void adjust_parameter_matrix(matrix &adjust, const matrix &gradient, float learning_rate) {
+    MATRIX_ASSERT(adjust.rows == gradient.rows && adjust.cols == gradient.cols,
+                  "Dimension mismatch in adjust_parameter_matrix");
+    
     matrix clipped_gradient = gradient.clone();
     norm_clip(clipped_gradient);
 
@@ -25,6 +29,11 @@ void adjust_parameter_matrix(matrix &adjust, const matrix &gradient, float learn
 }
 
 void regularize_weight_gradient(matrix &gradient, const matrix &weights, float regularization_strength) {
+    MATRIX_ASSERT(gradient.rows == weights.rows && gradient.cols == weights.cols,
+                  "Dimension mismatch in regularize_weight_gradient\n"
+                  "[%d, %d] != [%d, %d]",
+                  gradient.rows, gradient.cols, weights.rows, weights.cols);
+    
     for (size_t i = 0; i < gradient.rows; ++i) {
         for (size_t j = 0; j < gradient.cols; ++j) {
             const auto weight_value = weights.get(i, j);

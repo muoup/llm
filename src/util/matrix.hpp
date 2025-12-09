@@ -16,6 +16,7 @@
 #define MATRIX_ASSERT(condition, message, ...)                            \
     if (!(condition)) {                                                   \
         std::printf("Matrix assertion failed: " message, ##__VA_ARGS__);  \
+        std::printf("\nAt: %s:%d\n", __FILE__, __LINE__);              \
         std::fflush(stdout);                                              \
         std::abort();                                                     \
     }
@@ -59,7 +60,6 @@ struct matrix {
 
     void set(const size_t row, const size_t col, const float value) {
         verify_bounds(row, col);
-
         data[col + row * row_width] = value;
     }
 
@@ -164,6 +164,16 @@ struct matrix {
 
         return *this;
     }
+    
+    matrix& add(float f) {
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                set(i, j, get(i, j) + f);
+            }
+        }
+
+        return *this;
+    }
 
     matrix& add_scaled(const matrix& other, const float factor) {
         MATRIX_ASSERT(
@@ -242,6 +252,10 @@ struct matrix {
             sum += get(i, col);
         }
         return sum;
+    }
+    
+    float sum() const {
+        return reduce<float>([](float acc, float val) { return acc + val; }, 0.0f);
     }
 
     float min() const;

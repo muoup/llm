@@ -65,7 +65,6 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
             embedding_gradient_row.set(0, i, x_gradient.get(t, i));
         }
 
-        regularize_weight_gradient(embedding_gradient_row, embedding.m_data, 0.01f);
         adjust_parameter_matrix(embedding.m_data, embedding_gradient_row, learning_rate);
     }
 }

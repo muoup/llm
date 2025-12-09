@@ -252,14 +252,11 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     }
 
     auto results = this->forwarding_results(tokens);
-    std::cout << "Backpropogation started." << std::endl;
     
     // Backprop through logit layer
     auto [logit_gradients, loss]
         = m_logit_layer.backpropogate(results[results.size() - 2].outputs[0],
                                       results.back().outputs[0], actual, learning_rate);
-    std::cout << "Backpropogated through logit layer with loss: " << loss << std::endl;
-        
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
@@ -268,11 +265,9 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         size_t node_idx = execution_order[i];
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients[i], learning_rate));
-        std::cout << "Backpropogated through layer " << node_idx << std::endl;
     }
 
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
                                           learning_rate);
-    std::cout << "Backpropogated through embedding layer." << std::endl;
     return loss;
 }
