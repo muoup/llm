@@ -36,7 +36,7 @@ size_t matrix::buffer_size() const {
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
     MATRIX_ASSERT(row < rows && col < cols,
-                  "Index out of bounds: ({}, {}) for matrix of size ({}x{})",
+                  "Index out of bounds: (%d, %d) for matrix of size (%d x %d)",
                   row, col, rows, cols);
 }
 
@@ -203,9 +203,11 @@ matrix matrix::cross_multiplied(const matrix& other) const {
 // Self @ Other^T
 // [M x N] @ [O x N]^T = [M x N] @ [N x O] = [M x O]
 matrix matrix::cross_t_multiplied(const matrix& other) const {
-    MATRIX_ASSERT(this->rows == other.rows,
-                  "Matrix dimensions do not match for cross transposed "
-                  "multiplication");
+    MATRIX_ASSERT(this->cols == other.cols,
+                  "Matrix dimensions do not match for cross post-transposed "
+                  "multiplication\n"
+                  "[%zu x %zu] @ [%zu x %zu]^T", this->rows, this->cols, other.rows,
+                  other.cols);
 
     matrix result{ this->rows, other.rows };
 
@@ -223,9 +225,11 @@ matrix matrix::cross_t_multiplied(const matrix& other) const {
 // Self^T @ Other
 // [M x N]^T @ [M x O] = [N x M] @ [M x O] = [N x O]
 matrix matrix::t_cross_multiplied(const matrix& other) const {
-    MATRIX_ASSERT(this->cols == other.cols,
-                  "Matrix dimensions do not match for transposed cross "
-                  "multiplication");
+    MATRIX_ASSERT(this->rows == other.rows,
+                  "Matrix dimensions do not match for pre-transposed cross "
+                  "multiplication\n"
+                  "[%zu x %zu]^T @ [%zu x %zu]", this->rows, this->cols, other.rows,
+                  other.cols);
 
     matrix result{ this->cols, other.cols };
 

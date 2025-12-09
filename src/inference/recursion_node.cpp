@@ -5,7 +5,6 @@
 #include <training/optimizer.hpp>
 
 ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
-    matrix input = inputs[0].clone();
     RecursionData recursion_data;
 
     float budget = 0.0f;
@@ -17,23 +16,24 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
          recursion_count++) {
         recursion_data.loopNodeOutputs.emplace_back();
 
+        std::span<const matrix> loop_input = inputs;
+        
         for (size_t j = 0; j < loop.size(); j++) {
             auto loop_node = loop[j].get();
-            auto loop_input = std::span<const matrix>{ &input, 1 };
             auto loop_forward = loop_node->forward(loop_input);
-
-            input = loop_forward.outputs[0].clone();
+            
             recursion_data.loopNodeOutputs[recursion_count].emplace_back(
                 std::move(loop_forward));
+            loop_input = recursion_data.loopNodeOutputs[recursion_count].back().outputs;
         }
 
         // We don't for sure know the size of the final output of the loop, so
         // we need to lazy initialize it here.
         if (final_output.rows == 0) {
-            final_output = matrix(input.rows, input.cols);
+            final_output = matrix(loop_input[0].rows, loop_input[0].cols);
         }
 
-        auto p_n = input.cross_multiplied(w);
+        auto p_n = loop_input[0].cross_multiplied(w);
         for (size_t r = 0; r < p_n.rows; r++) {
             p_n.add_row_vector(r, b);
         }
@@ -45,16 +45,16 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
         budget += probability;
         recursion_data.loopProbabilities.emplace_back(probability);
 
-        final_output.add_scaled(input, probability);
-
+        final_output.add_scaled(loop_input[0], probability);
+        
         if (budget > 1.0f) {
             break;
         }
     }
-
+    
     return ForwardingResult{ .data = std::make_unique<RecursionData>(
                                  std::move(recursion_data)),
-                             .outputs = matrix::construct_vec(input) };
+                             .outputs = matrix::construct_vec(final_output) };
 }
 
 std::vector<matrix> RecursionNode::backpropogate(
@@ -62,6 +62,9 @@ std::vector<matrix> RecursionNode::backpropogate(
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
     float learning_rate) {
+        
+    std::cout << "RecursionNode::backpropogate called" << std::endl;
+        
     constexpr auto TIME_PENALTY = 0.01f;
 
     auto* rec_data = dynamic_cast<RecursionData*>(results.data.get());

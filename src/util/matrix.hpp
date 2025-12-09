@@ -15,7 +15,8 @@
 #ifdef MATRIX_CHECKS
 #define MATRIX_ASSERT(condition, message, ...)                            \
     if (!(condition)) {                                                   \
-        std::println("Matrix assertion failed: " message, ##__VA_ARGS__); \
+        std::printf("Matrix assertion failed: " message, ##__VA_ARGS__);  \
+        std::fflush(stdout);                                              \
         std::abort();                                                     \
     }
 #else
@@ -130,7 +131,7 @@ struct matrix {
     matrix cross_multiplied(const matrix& other) const;
     matrix t_cross_multiplied(const matrix& other) const;
     matrix cross_t_multiplied(const matrix& other) const;
-    
+
     matrix backprop_softmax(const matrix& gradient) const;
 
     matrix clone() const {
@@ -152,10 +153,8 @@ struct matrix {
     }
 
     matrix& add(const matrix& offset) {
-#ifdef MATRIX_CHECKS
-        llm_assert(this->cols == offset.cols && this->rows == offset.rows,
+        MATRIX_ASSERT(this->cols == offset.cols && this->rows == offset.rows,
                    "Matrix dimensions do not match for offset operation");
-#endif
 
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
@@ -167,11 +166,9 @@ struct matrix {
     }
 
     matrix& add_scaled(const matrix& other, const float factor) {
-#ifdef MATRIX_CHECKS
-        llm_assert(
+        MATRIX_ASSERT(
             this->cols == other.cols && this->rows == other.rows,
             "Matrix dimensions do not match for scaled addition operation");
-#endif
 
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
@@ -198,14 +195,11 @@ struct matrix {
         copy.map(mapping);
         return copy;
     }
-    
+
     matrix& element_wise_multiply(const matrix& other) {
-#ifdef MATRIX_CHECKS
-        llm_assert(
+        MATRIX_ASSERT(
             this->cols == other.cols && this->rows == other.rows,
             "Matrix dimensions do not match for element-wise multiplication");
-        );
-#endif
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 set(i, j, get(i, j) * other.get(i, j));

@@ -27,8 +27,8 @@ matrix LogitLayer::forward(const matrix& input) const {
 }
 
 std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const matrix& predictions, const std::span<const token_id_t> actual, float learning_rate) {
-    matrix logit_loss_gradient({ predictions.rows, vocab_size });
-    matrix logit_bias_gradient({ 1, vocab_size });
+    matrix logit_loss_gradient(predictions.rows, vocab_size);
+    matrix logit_bias_gradient(1, vocab_size);
     
     float average_loss = 0.0f;
     
@@ -38,7 +38,6 @@ std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const ma
             logit_loss_gradient.set(i, j, delta_loss);
             logit_bias_gradient.offset(0, j, delta_loss);
             if (j == actual[i + 1]) {
-                // average_loss -= predictions.get(i, j);
                 average_loss -= (std::log(predictions.get(i, j) + 1e-10f)) / predictions.rows;
             }
         }
