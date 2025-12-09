@@ -80,7 +80,6 @@ InferenceModel linearized_attention_model(size_t dimensions,
     return model;
 }
 
-
 InferenceModel standard_recursive_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t num_blocks,
@@ -89,25 +88,34 @@ InferenceModel standard_recursive_model(size_t dimensions,
     constexpr size_t ffn_multiplier = 4;
 
     InferenceModel model(dimensions, vocab_size);
-
     auto attn_layer
         = std::make_unique<AttentionLayer>(dimensions, attention_heads);
-    auto attn_block
-        = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
+    size_t attn = model.add_layer(
+        std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
 
     auto ff_layer = std::make_unique<FeedForwardLayer>(
         dimensions, dimensions * ffn_multiplier);
-    auto ff_block
-        = std::make_unique<LayerNorm>(std::move(ff_layer), dimensions);
+    size_t ff = model.add_layer(
+        std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
 
+    model.add_connection(attn, ff);
+    
     std::vector<std::unique_ptr<INode>> loop;
-    loop.push_back(std::move(attn_block));
-    loop.push_back(std::move(ff_block));
+    for (size_t i = 0; i < num_blocks; ++i) {
+        auto attn_layer
+            = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+        loop.emplace_back(
+            std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
 
-    auto recursion_node
-        = std::make_unique<RecursionNode>(dimensions, max_recursions, std::move(loop));
+        auto ff_layer = std::make_unique<FeedForwardLayer>(
+            dimensions, dimensions * ffn_multiplier);
+        loop.emplace_back(
+            std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
+    }
 
-    size_t recursion_node_idx = model.add_layer(std::move(recursion_node));
+    size_t recursion_node_idx = model.add_layer(std::make_unique<RecursionNode>(
+        dimensions, max_recursions, std::move(loop)));
+    model.add_connection(ff, recursion_node_idx);
 
     model.randomize();
     model.finalize();

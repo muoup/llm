@@ -34,7 +34,13 @@ class RecursionNode final : public INode {
     NodeType getType() const override { return NodeType::Recursion; }
 
     size_t parameterCount() const override {
-        return (w.rows * w.cols) + (b.rows * b.cols);
+        size_t acc = (w.rows * w.cols) + (b.rows * b.cols); 
+        
+        for (const auto& node : loop) {
+            acc += node->parameterCount();
+        }
+        
+        return acc; 
     }
 
     ForwardingResult forward(std::span<const matrix> inputs) const override;

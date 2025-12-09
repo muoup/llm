@@ -11,7 +11,7 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
 
     matrix final_output;
     size_t recursion_count = 0;
-
+    
     for (recursion_count = 0; recursion_count < max_recursion_depth;
          recursion_count++) {
         recursion_data.loopNodeOutputs.emplace_back();
@@ -124,7 +124,6 @@ std::vector<matrix> RecursionNode::backpropogate(
 
         adjust_parameter_matrix(b, db, learning_rate);
 
-        // Determine the output gradient of y_n
         auto dy_n = y_gradient.scaled(p_n);
         output_gradient_span = std::span(&dy_n, 1);
 
