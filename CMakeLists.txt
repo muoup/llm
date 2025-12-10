@@ -1,16 +1,25 @@
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES native)
+endif()
+
 cmake_minimum_required(VERSION 3.25)
-project(llm LANGUAGES CXX)
+project(llm LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(BLA_VENDOR "OpenBLAS")
-find_package(BLAS REQUIRED)
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+find_package(CUDAToolkit REQUIRED)
 
 add_compile_options(-fopenmp)
 add_link_options(-fopenmp)
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
+add_link_options("-lcurand")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build")
@@ -23,15 +32,7 @@ else()
     add_compile_options(-O3 -march=native)
 endif()
 
-include(FetchContent)
-FetchContent_Declare(
-    blaze
-    GIT_REPOSITORY https://bitbucket.org/blaze-lib/blaze.git
-    GIT_TAG        v3.8
-)
-FetchContent_MakeAvailable(blaze)
-
-file(GLOB_RECURSE SOURCE "src/*.cpp")
+file(GLOB_RECURSE SOURCE "src/*.cpp" "src/*.cu")
 
 add_executable(llm ${SOURCE})
 
@@ -40,4 +41,4 @@ target_compile_definitions(llm PRIVATE
 )
 
 target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(llm PRIVATE blaze)
+target_link_libraries(llm PRIVATE CUDA::cudart CUDA::cublas)

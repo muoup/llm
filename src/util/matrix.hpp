@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdlib>
+#include <limits>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <memory>
-#include <span>
 #include <vector>
 
 #ifdef MATRIX_CHECKS
@@ -26,20 +25,18 @@
     (void)(message);
 #endif
 
-struct aligned_deleter {
-    void operator()(float* ptr) const { std::free(ptr); }
-};
-
 struct matrix {
     size_t rows, cols;
-    size_t row_width;
+    size_t stride;
 
-    std::unique_ptr<float[], aligned_deleter> data;
+    float* data;
 
-    constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 8;
+    constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 256;
 
-    matrix() : rows(0), cols(0), row_width(0), data(nullptr) {}
+    matrix() : rows(0), cols(0), stride(0), data(nullptr) {}
     matrix(const size_t rows, const size_t cols);
+
+    ~matrix();
 
     matrix(matrix&&) = default;
     matrix(const matrix& other) = delete;
@@ -50,22 +47,16 @@ struct matrix {
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
 
-    float* data_ptr() { return data.get(); }
-    const float* data_ptr() const { return data.get(); }
+    float* data_ptr() { return data; }
+    const float* data_ptr() const { return data; }
 
-    [[nodiscard]] float get(const size_t row, const size_t col) const {
-        verify_bounds(row, col);
-        return data[col + row * row_width];
-    }
-
-    void set(const size_t row, const size_t col, const float value) {
-        verify_bounds(row, col);
-        data[col + row * row_width] = value;
-    }
+    [[nodiscard]] float get(const size_t row, const size_t col) const;
+    void set(const size_t row, const size_t col, const float value);
 
     void offset(const size_t row, const size_t col, const float offset) {
         verify_bounds(row, col);
-        data[col + row * row_width] += offset;
+        const auto current_value = get(row, col);
+        set(row, col, current_value + offset);
     }
 
     void set_row_vector(const size_t row, const matrix& row_vector) {
@@ -127,18 +118,13 @@ struct matrix {
 
     float dot_product(const matrix& other) const;
 
-    void cross_multiply_into(const matrix& other, matrix& out) const;
     matrix cross_multiplied(const matrix& other) const;
     matrix t_cross_multiplied(const matrix& other) const;
     matrix cross_t_multiplied(const matrix& other) const;
 
     matrix backprop_softmax(const matrix& gradient) const;
 
-    matrix clone() const {
-        matrix copy{ this->rows, this->cols };
-        std::memcpy(copy.data_ptr(), this->data_ptr(), this->buffer_size());
-        return copy;
-    }
+    matrix clone() const;
 
     matrix& scale(const float factor) {
         this->map([factor](const float value) { return value * factor; });
@@ -164,7 +150,7 @@ struct matrix {
 
         return *this;
     }
-    
+
     matrix& add(float f) {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
@@ -189,7 +175,8 @@ struct matrix {
         return *this;
     }
 
-    matrix& map(const auto mapping) {
+    template <typename Func>
+    matrix& map(const Func mapping) {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 const auto value = get(i, j);
@@ -200,7 +187,8 @@ struct matrix {
         return *this;
     }
 
-    matrix mapped(const auto mapping) const {
+    template <typename Func>
+    matrix mapped(const Func mapping) const {
         auto copy = this->clone();
         copy.map(mapping);
         return copy;
@@ -218,9 +206,8 @@ struct matrix {
 
         return *this;
     }
-
-    template <typename ret>
-    ret reduce(const auto reducer, ret acc = 0) const {
+    
+    float reduce(float acc, const auto reducer) const {
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 acc = reducer(acc, get(i, j));
@@ -253,11 +240,8 @@ struct matrix {
         }
         return sum;
     }
-    
-    float sum() const {
-        return reduce<float>([](float acc, float val) { return acc + val; }, 0.0f);
-    }
 
+    float sum() const;
     float min() const;
     float max() const;
     float absmax() const;
@@ -286,14 +270,6 @@ struct matrix {
         return vec;
     }
 
-    std::span<float> to_span() {
-        return std::span(this->data_ptr(), buffer_size() / sizeof(float));
-    }
-
-    std::span<const float> to_span() const {
-        return std::span(this->data_ptr(), buffer_size() / sizeof(float));
-    }
-
     void save(std::ostream& out) const;
     static matrix load(std::istream& in);
 
@@ -301,7 +277,7 @@ struct matrix {
 
     void print_bounds() const {
         std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols
-                  << "\n";
+                  << ", stride=" << this->stride << "\n";
     }
 
     [[nodiscard]] size_t size() const { return cols * rows; }

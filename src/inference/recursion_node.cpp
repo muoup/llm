@@ -4,6 +4,8 @@
 #include <inference/network_node.hpp>
 #include <training/optimizer.hpp>
 
+#include <cmath>
+
 ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
     RecursionData recursion_data;
 

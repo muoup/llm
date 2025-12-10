@@ -4,6 +4,7 @@
 #include <tokenizer/token.hpp>
 
 #include <iostream>
+#include <span>
 
 // logit_layer is not an INode. It is a special exit layer mapping from
 // the final matrix back to logits over the vocabulary.

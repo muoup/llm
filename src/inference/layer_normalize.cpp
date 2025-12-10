@@ -4,6 +4,8 @@
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
 
+#include <cmath>
+
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node, size_t dimensions, float epsilon)
     : dimensions(dimensions),
       epsilon(epsilon),

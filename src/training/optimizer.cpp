@@ -1,6 +1,8 @@
 #include "optimizer.hpp"
 #include "util/matrix.hpp"
 
+#include <cmath>
+
 void norm_clip(matrix &gradient) {
     constexpr auto max_magnitude = 5.0f;
     const auto max = gradient.absmax();

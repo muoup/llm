@@ -1,8 +1,10 @@
 #pragma once
 
-#include <memory>
-
 #include <dataset/dataset.hpp>
+
+#include <memory>
+#include <string_view>
+#include <string>
 
 // Factory function to create the appropriate dataset based on file type.
 enum class dataset_type {

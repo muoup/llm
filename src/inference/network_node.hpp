@@ -5,6 +5,8 @@
 #include <util/matrix.hpp>
 #include <vector>
 
+#include <memory>
+
 struct INodeData {
     virtual ~INodeData() = default;
 };

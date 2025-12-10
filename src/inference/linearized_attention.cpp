@@ -1,5 +1,8 @@
 #include "linearized_attention.hpp"
-#include "training/optimizer.hpp"
+
+#include <training/optimizer.hpp>
+
+#include <cmath>
 
 LinearizedAttention::LinearizedAttention()
     : dimensions(0), head_size(0), head_count(0), heads(), wo() {}

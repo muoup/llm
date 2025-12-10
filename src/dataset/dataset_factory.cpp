@@ -1,16 +1,16 @@
 #include "dataset_factory.hpp"
 
-#include "omp.h"
-
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <memory>
+#include <string_view>
 
 // Implementation of the factory function
 std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type) {
     std::printf("Loading dataset from: %s\n", path.data());
     std::ifstream file(path.data());
-    
+
     if (!file) {
         throw std::runtime_error("Could not open dataset file: " + std::string { path });
     }
@@ -26,7 +26,7 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
     } else if (type == dataset_type::ROW_BASED) {
         auto ds = std::make_unique<row_dataset>();
         ds->data = std::move(file_content);
-        
+
         std::string_view remaining_view(ds->data);
         const std::string_view delimiter = "<|endoftext|>";
 
@@ -41,7 +41,7 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
             }
 
             ds->rows.push_back(remaining_view.substr(0, delimiter_pos));
-            
+
             size_t advance_by = delimiter_pos + delimiter.length();
             if (advance_by < remaining_view.length() && remaining_view[advance_by] == '\n') {
                 advance_by++; // Also skip the newline that often follows the delimiter

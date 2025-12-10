@@ -9,6 +9,9 @@
 
 #include <inference/network_node.hpp>
 
+#include <vector>
+#include <memory>
+
 struct RecursionData : INodeData {
     size_t recursionCount;
     std::vector<float> loopProbabilities;

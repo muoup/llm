@@ -3,6 +3,8 @@
 #include <training/optimizer.hpp>
 #include <tokenizer/token.hpp>
 
+#include <cmath>
+
 LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
     : dimensions(dimensions), vocab_size(vocab_size), w(dimensions, vocab_size), b(1, vocab_size) {}
 
