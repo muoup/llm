@@ -279,8 +279,9 @@ static __global__ void kernel_get_row_vector(const float* data,
     ::matrix result(1, mat.cols);
 
     kernel_get_row_vector<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, row, result.data, result.stride);
-    
+        mat.data, mat.stride, mat.rows, mat.cols, row, result.data,
+        result.stride);
+
     return result;
 }
 
@@ -289,21 +290,27 @@ static __global__ void add_row_vector_kernel(float* data,
                                              const size_t rows,
                                              const size_t cols,
                                              const size_t row,
-                                             const float* vec) {
+                                             const float* vec,
+                                             size_t vec_stride) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < cols) {
-        data[row + col * stride] += vec[col];
+        auto val
+            = kernel::matrix::device_get(data, stride, rows, cols, row, col);
+        kernel::matrix::device_set(data, stride, rows, cols, row, col,
+                                   val + vec[col * vec_stride]);
     }
 }
 
-void kernel::matrix::add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec) {
+void kernel::matrix::add_row_vector(::matrix& mat,
+                                    const size_t row,
+                                    const ::matrix& vec) {
     const size_t threads_per_block = 256;
     const size_t blocks
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
     add_row_vector_kernel<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, row, vec.data);
+        mat.data, mat.stride, mat.rows, mat.cols, row, vec.data, vec.stride);
 }
 
 static __global__ void set_horizontal_slice_kernel(float* data,
@@ -316,7 +323,10 @@ static __global__ void set_horizontal_slice_kernel(float* data,
 
     if (row < rows) {
         for (size_t col = 0; col < slice_cols; ++col) {
-            data[row + (start_col + col) * stride] = slice[row + col * stride];
+            auto val = kernel::matrix::device_get(slice, stride, row,
+                                                  slice_cols, row, col);
+            kernel::matrix::device_set(data, stride, rows, slice_cols, row,
+                                       start_col + col, val);
         }
     }
 }
@@ -333,11 +343,11 @@ void kernel::matrix::set_horizontal_slice(::matrix& mat,
 }
 
 static __global__ void get_horizontal_slice_kernel(const float* data,
-                                               const size_t stride,
-                                               const size_t rows,
-                                               const size_t start_col,
-                                               float* slice,
-                                               const size_t slice_cols) {
+                                                   const size_t stride,
+                                                   const size_t rows,
+                                                   const size_t start_col,
+                                                   float* slice,
+                                                   const size_t slice_cols) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < rows) {
@@ -347,7 +357,9 @@ static __global__ void get_horizontal_slice_kernel(const float* data,
     }
 }
 
-::matrix kernel::matrix::get_horizontal_slice(const ::matrix &mat, const size_t start_col, const size_t slice_cols) {
+::matrix kernel::matrix::get_horizontal_slice(const ::matrix& mat,
+                                              const size_t start_col,
+                                              const size_t slice_cols) {
     ::matrix slice(mat.rows, slice_cols);
 
     const size_t threads_per_block = 256;
@@ -356,7 +368,7 @@ static __global__ void get_horizontal_slice_kernel(const float* data,
 
     get_horizontal_slice_kernel<<<blocks, threads_per_block>>>(
         mat.data, mat.stride, mat.rows, start_col, slice.data, slice.cols);
-    
+
     return slice;
 }
 
@@ -369,15 +381,16 @@ static __global__ void matrix_add_matrix(float* data,
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t total_size = rows * cols;
 
+    // We are okay here to ignore strides for performance reasons, there is no
+    // problem with mutating padding data as long as we stay within bounds
+
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] += offset_data[row + col * offset_stride];
+        data[idx] += offset_data[idx];
     }
 }
 
 void kernel::matrix::add(::matrix& mat, const ::matrix& offset) {
-    const size_t total_size = mat.rows * mat.cols;
+    const size_t total_size = mat.buffer_size() / sizeof(float);
     const size_t threads_per_block = 256;
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;
@@ -397,17 +410,14 @@ static __global__ void matrix_add_value(float* data,
     const size_t total_size = rows * cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride]
-            += other_data[row + col * other_stride] * factor;
+        data[idx] += other_data[idx] * factor;
     }
 }
 
 void kernel::matrix::add_scaled(::matrix& mat,
                                 const ::matrix& other,
                                 const float factor) {
-    const size_t total_size = mat.rows * mat.cols;
+    const size_t total_size = mat.buffer_size() / sizeof(float);
     const size_t threads_per_block = 256;
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;
@@ -426,14 +436,12 @@ static __global__ void matrix_add_value(float* data,
     const size_t total_size = rows * cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] += value;
+        data[idx] += value;
     }
 }
 
 void kernel::matrix::add(::matrix& mat, float value) {
-    const size_t total_size = mat.rows * mat.cols;
+    const size_t total_size = mat.buffer_size() / sizeof(float);
     const size_t threads_per_block = 256;
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;
