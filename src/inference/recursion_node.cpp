@@ -2,7 +2,7 @@
 
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
-#include <training/optimizer.hpp>
+#include <kernels/optimizer.hpp>
 
 #include <cmath>
 
@@ -113,7 +113,7 @@ std::vector<matrix> RecursionNode::backpropogate(
             = y_gradient.t_cross_multiplied(y_n).sum() + dp_n_ponder;
 
         matrix dP_n = matrix(y_n.rows, 1);
-        dP_n.map([&](size_t val) { return dp_n; });
+        dP_n.set_all(dp_n * chance_acc);
 
         auto dw = y_n.t_cross_multiplied(dP_n);
         adjust_parameter_matrix(w, dw, learning_rate);

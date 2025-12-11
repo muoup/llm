@@ -1,6 +1,6 @@
 #include "logit_layer.hpp"
 
-#include <training/optimizer.hpp>
+#include <kernels/optimizer.hpp>
 #include <tokenizer/token.hpp>
 
 #include <cmath>

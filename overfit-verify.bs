@@ -7,6 +7,11 @@ prompt="Talking Heads"
 
 ./build.bs
 
+if [ $? -ne 0 ]; then
+    echo "Build failed"
+    exit 1
+fi
+
 echo "Tokenizing"
 build/llm train-tokenizer \
     --corpus "$text" \

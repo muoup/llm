@@ -1,9 +1,9 @@
 #pragma once
 
-#include <limits>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #ifdef MATRIX_CHECKS
@@ -12,12 +12,12 @@
 #endif
 
 #ifdef MATRIX_CHECKS
-#define MATRIX_ASSERT(condition, message, ...)                            \
-    if (!(condition)) {                                                   \
-        std::printf("Matrix assertion failed: " message, ##__VA_ARGS__);  \
-        std::printf("\nAt: %s:%d\n", __FILE__, __LINE__);              \
-        std::fflush(stdout);                                              \
-        std::abort();                                                     \
+#define MATRIX_ASSERT(condition, message, ...)                           \
+    if (!(condition)) {                                                  \
+        std::printf("Matrix assertion failed: " message, ##__VA_ARGS__); \
+        std::printf("\nAt: %s:%d\n", __FILE__, __LINE__);                \
+        std::fflush(stdout);                                             \
+        std::abort();                                                    \
     }
 #else
 #define MATRIX_ASSERT(condition, message, ...) \
@@ -50,9 +50,16 @@ struct matrix {
     float* data_ptr() { return data; }
     const float* data_ptr() const { return data; }
 
+    matrix& scale(const float factor);
+    matrix& add(const matrix& offset);
+    matrix& add(float f);
+    matrix& add_scaled(const matrix& other, const float factor);
+    matrix& map(float (*mapping)(float));
+    matrix& set_all(const float value);
+    float reduce(float acc, float (*reducer)(float, float)) const;
+
     [[nodiscard]] float get(const size_t row, const size_t col) const;
     void set(const size_t row, const size_t col, const float value);
-
     void offset(const size_t row, const size_t col, const float offset) {
         verify_bounds(row, col);
         const auto current_value = get(row, col);
@@ -109,7 +116,6 @@ struct matrix {
     matrix& softmax();
     matrix& mask_upper_triangular(float mask_value
                                   = -std::numeric_limits<float>::infinity());
-
     matrix& normalize() {
         this->scale(1.0f / this->absmax());
 
@@ -126,69 +132,13 @@ struct matrix {
 
     matrix clone() const;
 
-    matrix& scale(const float factor) {
-        this->map([factor](const float value) { return value * factor; });
-
-        return *this;
-    }
-
     matrix scaled(const float factor) const {
         auto copy = this->clone();
         copy.scale(factor);
         return copy;
     }
 
-    matrix& add(const matrix& offset) {
-        MATRIX_ASSERT(this->cols == offset.cols && this->rows == offset.rows,
-                   "Matrix dimensions do not match for offset operation");
-
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                set(i, j, get(i, j) + offset.get(i, j));
-            }
-        }
-
-        return *this;
-    }
-
-    matrix& add(float f) {
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                set(i, j, get(i, j) + f);
-            }
-        }
-
-        return *this;
-    }
-
-    matrix& add_scaled(const matrix& other, const float factor) {
-        MATRIX_ASSERT(
-            this->cols == other.cols && this->rows == other.rows,
-            "Matrix dimensions do not match for scaled addition operation");
-
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                set(i, j, get(i, j) + other.get(i, j) * factor);
-            }
-        }
-
-        return *this;
-    }
-
-    template <typename Func>
-    matrix& map(const Func mapping) {
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                const auto value = get(i, j);
-                set(i, j, mapping(value));
-            }
-        }
-
-        return *this;
-    }
-
-    template <typename Func>
-    matrix mapped(const Func mapping) const {
+    matrix mapped(float (*mapping)(float)) const {
         auto copy = this->clone();
         copy.map(mapping);
         return copy;
@@ -205,16 +155,6 @@ struct matrix {
         }
 
         return *this;
-    }
-    
-    float reduce(float acc, const auto reducer) const {
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                acc = reducer(acc, get(i, j));
-            }
-        }
-
-        return acc;
     }
 
     matrix get_row_vector(const size_t row) const {

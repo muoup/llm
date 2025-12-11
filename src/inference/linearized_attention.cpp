@@ -1,6 +1,6 @@
 #include "linearized_attention.hpp"
 
-#include <training/optimizer.hpp>
+#include <kernels/optimizer.hpp>
 
 #include <cmath>
 

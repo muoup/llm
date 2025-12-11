@@ -2,7 +2,7 @@
 
 #include <cmath>
 #include <span>
-#include <training/optimizer.hpp>
+#include <kernels/optimizer.hpp>
 #include <vector>
 #include "inference/network_node.hpp"
 

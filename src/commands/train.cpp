@@ -44,7 +44,7 @@ int handle_train(int argc, char* argv[]) {
     // TODO: Get these from CLI args
     constexpr size_t dimensions = 512;
     constexpr size_t attention_heads = 8;
-    constexpr size_t num_layers = 4;
+    constexpr size_t num_layers = 1;
     
     InferenceModel model = [&]() {
         if (!input_model_path.empty()) {
@@ -56,7 +56,7 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model = standard_attention_model(dimensions, _tokenizer.vocab_size(), attention_heads, num_layers);
+            InferenceModel model = standard_attention_model(dimensions, _tokenizer.vocab_size(), num_layers, attention_heads);
             // InferenceModel model = linearized_attention_model(dimensions, _tokenizer.vocab_size(), attention_heads, num_layers);
             // InferenceModel model = standard_recursive_model(dimensions, _tokenizer.vocab_size(), attention_heads, num_layers, 10);
             model.randomize();

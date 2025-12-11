@@ -1,4 +1,4 @@
-#include "training/optimizer.hpp"
+#include "kernels/optimizer.hpp"
 #include "embedding.hpp"
 
 #include <cassert>

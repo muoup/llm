@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "inference/network_node.hpp"
-#include "training/optimizer.hpp"
+#include "kernels/optimizer.hpp"
 
 static matrix activate(const matrix& input) {
     constexpr static auto leaky_relu

@@ -1,0 +1,45 @@
+#pragma once
+
+#include <util/matrix.hpp>
+
+namespace kernel::matrix {
+
+float get(const ::matrix& mat, const size_t row, const size_t col);
+void set(::matrix& mat, const size_t row, const size_t col, const float value);
+
+void load_into(::matrix& matrix, const float* buffer);
+void store_from(const ::matrix& matrix, float* buffer);
+
+void randomize(::matrix& matrix, const float min, const float max);
+
+float* allocate_buffer(const size_t size);
+void free_buffer(float* buffer);
+    
+void general_map(::matrix& mat, float (*func)(float));
+float general_reduce(const ::matrix& mat,
+                     float acc,
+                     float (*reducer)(float, float));
+
+::matrix clone(const ::matrix& mat);
+
+void set_all(::matrix& mat, float value);
+void offset_all(::matrix& mat, float offset);
+
+void add(::matrix& mat, float value);
+void add(::matrix& mat, const ::matrix& offset);
+void add_scaled(::matrix& mat, const ::matrix& other, const float factor);
+void scale(::matrix& mat, float factor);
+
+void softmax(::matrix& mat);
+::matrix backprop_softmax(const ::matrix& output, const ::matrix& gradient);
+
+void mask_upper_triangular(::matrix& mat, const float mask_value);
+
+::matrix dot_product(const ::matrix& a, const ::matrix& b);
+::matrix cross_multiplied(const ::matrix& a, const ::matrix& b);
+::matrix t_cross_multiplied(const ::matrix& a, const ::matrix& b);
+::matrix cross_t_multiplied(const ::matrix& a, const ::matrix& b);
+
+bool is_equal(const ::matrix& a, const ::matrix& b, const float epsilon);
+
+}  // namespace kernel::matrix
