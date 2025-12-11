@@ -66,49 +66,16 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         std::span<const matrix>{ &grad_output, 1 }, learning_rate);
     matrix& grad_normalized = inner_backprop_outputs[0];
 
-    matrix grad_input(layer_input.rows, layer_input.cols);
-    matrix grad_gamma(1, dimensions);
-    matrix grad_beta(1, dimensions);
+    auto results = kernel::layer_norm::layer_normalization_backward(
+        *this, layer_input, gamma, beta, mean, inv_variance, grad_normalized,
+        epsilon);
 
-    for (size_t i = 0; i < layer_input.rows; i++) {
-        float row_mean = mean.get(i, 0);
-        float row_inv_var = inv_variance.get(i, 0);
-
-        float d_norm_sum = 0.0f;
-        float d_norm_dot_x_norm = 0.0f;
-
-        for (size_t j = 0; j < layer_input.cols; j++) {
-            float grad_norm_val = grad_normalized.get(i, j);
-            float normalized_val
-                = (layer_input.get(i, j) - row_mean) * row_inv_var;
-
-            grad_beta.offset(0, j, grad_norm_val);
-            grad_gamma.offset(0, j, grad_norm_val * normalized_val);
-
-            float d_norm = grad_norm_val * gamma.get(0, j);
-            d_norm_sum += d_norm;
-            d_norm_dot_x_norm += d_norm * normalized_val;
-        }
-
-        for (size_t j = 0; j < layer_input.cols; j++) {
-            float normalized_val
-                = (layer_input.get(i, j) - row_mean) * row_inv_var;
-            float d_norm = grad_normalized.get(i, j) * gamma.get(0, j);
-
-            float grad_in = (dimensions * d_norm) - d_norm_sum
-                            - (normalized_val * d_norm_dot_x_norm);
-            grad_in *= row_inv_var / static_cast<float>(dimensions);
-
-            grad_input.set(i, j, grad_in);
-        }
-    }
-
-    adjust_parameter_matrix(gamma, grad_gamma, learning_rate);
-    adjust_parameter_matrix(beta, grad_beta, learning_rate);
+    adjust_parameter_matrix(gamma, results.grad_gamma, learning_rate);
+    adjust_parameter_matrix(beta, results.grad_beta, learning_rate);
 
     // Add the gradient from the residual path
-    grad_input.add(grad_residual);
-    return matrix::construct_vec(grad_input);
+    results.grad_input.add(grad_residual);
+    return matrix::construct_vec(results.grad_input);
 }
 
 void LayerNorm::save(std::ostream& out) const {

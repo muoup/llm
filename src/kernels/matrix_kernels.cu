@@ -1,26 +1,12 @@
-#include "matrix_global_kernels.hpp"
+#include "matrix_device_kernels.hpp"
 #include "matrix_kernels.hpp"
+
+#include <kernels/kernel_utils.hpp>
 
 #include <cublas_api.h>
 #include <cublas_v2.h>
 #include <cuda_device_runtime_api.h>
 #include <curand.h>
-
-struct cublas_handle {
-    cublasHandle_t handle;
-
-    cublas_handle() {
-        if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) {
-            std::abort();
-        }
-    }
-
-    ~cublas_handle() { cublasDestroy(handle); }
-
-    operator cublasHandle_t() const { return handle; }
-};
-
-static cublas_handle handle;
 
 float* kernel::matrix::allocate_buffer(const size_t size) {
     float* data;
@@ -380,14 +366,14 @@ static __global__ void kernel_backprop_softmax(const float* softmax_output,
         float s_dot = 0.0f;
 
         for (size_t c = 0; c < cols; ++c) {
-            float s_j = softmax_output[row + c * stride];
-            float g_j = gradient[row + c * stride];
+            float s_j = kernel::matrix::device_get(softmax_output, stride, rows, cols, row, c);
+            float g_j = kernel::matrix::device_get(gradient, stride, rows, cols, row, c); 
             s_dot += s_j * g_j;
         }
 
         for (size_t c = 0; c < cols; ++c) {
-            float s_j = softmax_output[row + c * stride];
-            float g_j = gradient[row + c * stride];
+            float s_j = kernel::matrix::device_get(softmax_output, stride, rows, cols, row, c); 
+            float g_j = kernel::matrix::device_get(gradient, stride, rows, cols, row, c); 
             softmax_gradient[row + c * stride] = s_j * (g_j - s_dot);
         }
     }

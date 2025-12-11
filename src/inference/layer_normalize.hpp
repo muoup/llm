@@ -22,7 +22,6 @@ public:
     void save(std::ostream& out) const override;
     static LayerNorm load(std::istream& in);
     
-   private:
     std::unique_ptr<INode> inner_node;
     matrix gamma;
     matrix beta;
