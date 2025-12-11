@@ -27,7 +27,7 @@ matrix::~matrix() {
     if (data != nullptr) {
         kernel::matrix::free_buffer(data);
     }
-    
+
     this->data = nullptr;
 }
 
@@ -115,6 +115,35 @@ matrix& matrix::add_scaled(const matrix& other, const float factor) {
 matrix& matrix::add(float f) {
     kernel::matrix::add(*this, f);
     return *this;
+}
+
+void matrix::set_row_vector(const size_t row, const matrix& row_vector) {
+    MATRIX_ASSERT(row_vector.rows == 1 && row_vector.cols == this->cols,
+                  "Row vector dimensions do not match for setting row");
+
+    kernel::matrix::set_row_vector(*this, row, row_vector);
+}
+
+void matrix::add_row_vector(const size_t row, const matrix& other) {
+    MATRIX_ASSERT(other.rows == 1 && other.cols == this->cols,
+                  "Row vector dimensions do not match for adding row");
+
+    kernel::matrix::add_row_vector(*this, row, other);
+}
+
+void matrix::set_horizontal_slice(const size_t col_start, const matrix& slice) {
+    MATRIX_ASSERT(col_start + slice.cols <= this->cols,
+                  "Slice dimensions do not match for setting horizontal slice");
+
+    kernel::matrix::set_horizontal_slice(*this, col_start, slice);
+}
+
+matrix matrix::get_horizontal_slice(const size_t col_start,
+                                    const size_t slice_cols) const {
+    MATRIX_ASSERT(col_start + slice_cols <= this->cols,
+                  "Slice dimensions do not match for getting horizontal slice");
+
+    return kernel::matrix::get_horizontal_slice(*this, col_start, slice_cols);
 }
 
 float matrix::variance() const {

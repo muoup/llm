@@ -66,52 +66,11 @@ struct matrix {
         set(row, col, current_value + offset);
     }
 
-    void set_row_vector(const size_t row, const matrix& row_vector) {
-        MATRIX_ASSERT(
-            this->cols == row_vector.cols,
-            "Row vector must have the same number of columns as the matrix");
-
-        for (size_t j = 0; j < row_vector.cols; ++j) {
-            set(row, j, row_vector.get(0, j));
-        }
-    }
-
-    void add_row_vector(const size_t row, const matrix& other) {
-        MATRIX_ASSERT(
-            this->cols == other.cols,
-            "Row vector must have the same number of columns as the matrix");
-
-        for (size_t i = 0; i < cols; ++i) {
-            set(row, i, get(row, i) + other.get(0, i));
-        }
-    }
-
-    void set_horizontal_slice(const size_t col_start, const matrix& slice) {
-        MATRIX_ASSERT(this->rows == slice.rows,
-                      "Slice must have the same number of rows as the matrix");
-        MATRIX_ASSERT(col_start + slice.cols <= this->cols,
-                      "Slice exceeds matrix row bounds");
-
-        for (size_t i = 0; i < slice.rows; ++i) {
-            for (size_t j = 0; j < slice.cols; ++j) {
-                set(i, j + col_start, slice.get(i, j));
-            }
-        }
-    }
-
+    void set_row_vector(const size_t row, const matrix& row_vector);
+    void add_row_vector(const size_t row, const matrix& other);
+    void set_horizontal_slice(const size_t col_start, const matrix& slice);
     matrix get_horizontal_slice(const size_t col_start,
-                                const size_t slice_cols) const {
-        MATRIX_ASSERT(col_start + slice_cols <= this->cols,
-                      "Slice exceeds matrix row bounds");
-
-        matrix slice{ this->rows, slice_cols };
-        for (size_t i = 0; i < this->rows; ++i) {
-            for (size_t j = 0; j < slice_cols; ++j) {
-                slice.set(i, j, this->get(i, j + col_start));
-            }
-        }
-        return slice;
-    }
+                                const size_t slice_cols) const;
 
     matrix& softmax();
     matrix& mask_upper_triangular(float mask_value

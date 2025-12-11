@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <inference/inference.hpp>
 
+InferenceModel minimal_model(size_t vocab_size);
+
 InferenceModel standard_attention_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t ff_layers,

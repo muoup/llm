@@ -97,16 +97,11 @@ void FeedForwardLayer::save(std::ostream& out) const {
 }
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
-    auto w1 = matrix::load(in);
-    auto b1 = matrix::load(in);
-    auto w2 = matrix::load(in);
-    auto b2 = matrix::load(in);
-
     FeedForwardLayer layer(0, 0);  // 0, 0 to avoid unnecessary allocation
-    layer.w1 = std::move(w1);
-    layer.b1 = std::move(b1);
-    layer.w2 = std::move(w2);
-    layer.b2 = std::move(b2);
+    layer.w1 = matrix::load(in);
+    layer.b1 = matrix::load(in);
+    layer.w2 = matrix::load(in);
+    layer.b2 = matrix::load(in);
 
     return layer;
 }

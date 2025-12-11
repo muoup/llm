@@ -5,6 +5,17 @@
 #include <inference/layer_normalize.hpp>
 #include <inference/linearized_attention.hpp>
 #include <inference/recursion_node.hpp>
+#include "inference/inference.hpp"
+
+InferenceModel minimal_model(size_t vocab_size) {
+    InferenceModel model(1, vocab_size);
+    
+    model.add_layer(std::make_unique<FeedForwardLayer>(1, 4));
+
+    model.finalize();
+    model.randomize();
+    return model;
+}
 
 InferenceModel standard_attention_model(size_t dimensions,
                                         size_t vocab_size,

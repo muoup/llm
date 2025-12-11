@@ -14,7 +14,7 @@ void randomize(::matrix& matrix, const float min, const float max);
 
 float* allocate_buffer(const size_t size);
 void free_buffer(float* buffer);
-    
+
 void general_map(::matrix& mat, float (*func)(float));
 float general_reduce(const ::matrix& mat,
                      float acc,
@@ -24,6 +24,16 @@ float general_reduce(const ::matrix& mat,
 
 void set_all(::matrix& mat, float value);
 void offset_all(::matrix& mat, float offset);
+
+void set_row_vector(::matrix& mat, const size_t row, const ::matrix& vec);
+::matrix get_row_vector(const ::matrix& mat, const size_t row);
+void add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec);
+void set_horizontal_slice(::matrix& mat,
+                          const size_t start_col,
+                          const ::matrix& slice);
+::matrix get_horizontal_slice(const ::matrix& mat,
+                              const size_t start_col,
+                              const size_t slice_cols);
 
 void add(::matrix& mat, float value);
 void add(::matrix& mat, const ::matrix& offset);
