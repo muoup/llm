@@ -19,6 +19,6 @@ void adjust_parameter_matrix(matrix& adjust,
                              float learning_rate) {
     MATRIX_ASSERT(adjust.rows == gradient.rows && adjust.cols == gradient.cols,
                   "Dimension mismatch in adjust_parameter_matrix");
-
+    
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
 }

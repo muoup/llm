@@ -49,7 +49,11 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
         const auto& embedding = m_embeddings[tokens[i]];
         output.set_row_vector(i, embedding.m_data);
     }
-
+    
+    std::cout << "Pre-positional Encoding Output ABSMAX: " << output.absmax() << " "
+                << std::endl;
+    std::cout << "Pre-positional Encoding Output Max/Min: " << output.max() << " "
+              << output.min() << std::endl;
     positional_encoding(output);
     return output;
 }

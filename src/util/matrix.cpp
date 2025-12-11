@@ -18,9 +18,7 @@ static constexpr size_t calculate_stride(const size_t i) {
 
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), stride(calculate_stride(rows)) {
-    const auto buffer_size = this->buffer_size();
-
-    this->data = kernel::matrix::allocate_buffer(buffer_size);
+    this->data = kernel::matrix::allocate_buffer(this->buffer_size());
 }
 
 matrix::~matrix() {
@@ -41,7 +39,7 @@ size_t matrix::buffer_size() const {
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
     MATRIX_ASSERT(row < rows && col < cols,
-                  "Index out of bounds: (%d, %d) for matrix of size (%d x %d)",
+                  "Index out of bounds: (%zu, %zu) for matrix of size (%zu x %zu)",
                   row, col, rows, cols);
 }
 
@@ -60,21 +58,19 @@ matrix matrix::clone() const {
 }
 
 float matrix::sum() const {
-    return this->reduce(0, [](float acc, float b) { return acc + b; });
+    return kernel::matrix::sum(*this);
 }
 
 float matrix::max() const {
-    return this->reduce(0, [](float a, float b) { return std::max(a, b); });
+    return kernel::matrix::max(*this);
 }
 
 float matrix::min() const {
-    return this->reduce(0, [](float a, float b) { return std::min(a, b); });
+    return kernel::matrix::min(*this);
 }
 
 float matrix::absmax() const {
-    return this->reduce(0, [](float a, float b) -> float {
-        return std::max(std::abs(a), std::abs(b));
-    });
+    return kernel::matrix::absmax(*this);
 }
 
 matrix& matrix::map(float (*func)(float)) {
@@ -85,10 +81,6 @@ matrix& matrix::map(float (*func)(float)) {
 matrix& matrix::set_all(float value) {
     kernel::matrix::set_all(*this, value);
     return *this;
-}
-
-float matrix::reduce(float acc, float (*reducer)(float, float)) const {
-    return kernel::matrix::general_reduce(*this, acc, reducer);
 }
 
 matrix& matrix::scale(const float factor) {
@@ -147,11 +139,7 @@ matrix matrix::get_horizontal_slice(const size_t col_start,
 }
 
 float matrix::variance() const {
-    float sum = this->reduce(0, [](float acc, float b) { return acc + b; });
-    float sum_sq
-        = this->reduce(0, [](float acc, float b) { return acc + b * b; });
-
-    return (sum_sq / size()) - (sum / size()) * (sum / size());
+    return kernel::matrix::variance(*this);
 }
 
 float matrix::stddev() const {

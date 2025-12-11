@@ -208,16 +208,21 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
     std::vector<ForwardingResult> results;
 
     matrix embeddings = m_embedding_layer.forward(tokens);
-    results.emplace_back(INode::standardResult(matrix::construct_vec(embeddings)));
+    results.emplace_back(
+        INode::standardResult(matrix::construct_vec(embeddings)));
+    // std::cout << "Embeddings: " << embeddings.absmax();
 
     for (size_t node_idx : execution_order) {
         auto forward_result
             = this->m_layers.at(node_idx)->forward(results.back().outputs);
         results.emplace_back(std::move(forward_result));
+        // std::cout << " | Layer " << node_idx
+                  // << " output absmax: " << results.back().outputs[0].absmax();
     }
 
     auto logits = m_logit_layer.forward(results.back().outputs[0]);
     results.emplace_back(INode::standardResult(matrix::construct_vec(logits)));
+    // std::cout << " | Logits absmax: " << logits.absmax() << std::endl;
     return results;
 }
 
@@ -252,11 +257,11 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     }
 
     auto results = this->forwarding_results(tokens);
-    
+
     // Backprop through logit layer
-    auto [logit_gradients, loss]
-        = m_logit_layer.backpropogate(results[results.size() - 2].outputs[0],
-                                      results.back().outputs[0], actual, learning_rate);
+    auto [logit_gradients, loss] = m_logit_layer.backpropogate(
+        results[results.size() - 2].outputs[0], results.back().outputs[0],
+        actual, learning_rate);
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
@@ -264,7 +269,8 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     for (size_t i = execution_order.size(); i-- > 0;) {
         size_t node_idx = execution_order[i];
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
-            results[i + 1], results[i].outputs, gradients.back(), learning_rate));
+            results[i + 1], results[i].outputs, gradients.back(),
+            learning_rate));
     }
 
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],

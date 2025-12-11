@@ -16,9 +16,12 @@ float* allocate_buffer(const size_t size);
 void free_buffer(float* buffer);
 
 void general_map(::matrix& mat, float (*func)(float));
-float general_reduce(const ::matrix& mat,
-                     float acc,
-                     float (*reducer)(float, float));
+
+float sum(const ::matrix& mat);
+float max(const ::matrix& mat);
+float min(const ::matrix& mat);
+float absmax(const ::matrix& mat);
+float variance(const ::matrix& mat);
 
 ::matrix clone(const ::matrix& mat);
 

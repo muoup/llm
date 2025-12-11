@@ -1,12 +1,47 @@
 #include "matrix_device_kernels.hpp"
 #include "matrix_kernels.hpp"
 
-#include <kernels/kernel_utils.hpp>
-
 #include <cublas_api.h>
 #include <cublas_v2.h>
 #include <cuda_device_runtime_api.h>
 #include <curand.h>
+#include <device_atomic_functions.h>
+
+#include <float.h>
+
+void cleanup_cublas();
+
+struct cublas_handle {
+    cublasHandle_t handle;
+    bool initialized = false;
+
+    // The linker does not seem to like this function having undefined behaviour
+    // checks.
+    __attribute__((no_sanitize("address"), no_sanitize("undefined")))
+    cublas_handle() {}
+
+    void initialize() {
+        auto status = cublasCreate(&handle);
+
+        if (status != CUBLAS_STATUS_SUCCESS) {
+            std::puts("Failed to create cuBLAS handle");
+            std::printf("Error Code: %d\n", status);
+            std::fflush(stdout);
+            std::exit(1);
+        }
+    }
+
+    ~cublas_handle() { cublasDestroy(handle); }
+    operator cublasHandle_t() {
+        if (!initialized) {
+            initialize();
+        }
+
+        return handle;
+    }
+};
+
+static cublas_handle handle;
 
 float* kernel::matrix::allocate_buffer(const size_t size) {
     float* data;
@@ -50,9 +85,14 @@ static __global__ void global_get(const float* data,
 float kernel::matrix::get(const ::matrix& matrix,
                           const size_t row,
                           const size_t col) {
-    float value;
+    float* storage;
+    cudaMalloc(&storage, sizeof(float));
     global_get<<<1, 1>>>(matrix.data, matrix.stride, matrix.rows, matrix.cols,
-                         row, col, &value);
+                         row, col, storage);
+    float value;
+    cudaMemcpy(&value, storage, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaFree(storage);
+
     return value;
 }
 
@@ -78,11 +118,13 @@ void kernel::matrix::randomize(::matrix& matrix,
         generator_initialized = true;
     }
 
-    curandGenerateUniform(gen, matrix.data, matrix.buffer_size());
+    curandGenerateUniform(gen, matrix.data,
+                          matrix.buffer_size() / sizeof(float));
     const auto range = max - min;
 
     matrix.add(-0.5f);
     matrix.scale(range);
+    matrix.add(min);
 }
 
 matrix kernel::matrix::clone(const ::matrix& other) {
@@ -90,18 +132,6 @@ matrix kernel::matrix::clone(const ::matrix& other) {
     cudaMemcpy(result.data, other.data, other.buffer_size(),
                cudaMemcpyDeviceToDevice);
     return result;
-}
-
-static __device__ void matrix_map_single(float* data,
-                                         const size_t stride,
-                                         const size_t rows,
-                                         const size_t cols,
-                                         const size_t row,
-                                         const size_t col,
-                                         float (*func)(float)) {
-    kernel::matrix::device_set(
-        data, stride, rows, cols, row, col,
-        func(kernel::matrix::device_get(data, stride, rows, cols, row, col)));
 }
 
 static __global__ void matrix_map_all(float* data,
@@ -113,14 +143,12 @@ static __global__ void matrix_map_all(float* data,
     const size_t total_size = rows * cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        matrix_map_single(data, stride, rows, cols, row, col, func);
+        data[idx] = func(data[idx]);
     }
 }
 
 void kernel::matrix::general_map(::matrix& mat, float (*func)(float)) {
-    const size_t total_size = mat.rows * mat.cols;
+    const size_t total_size = mat.buffer_size() / sizeof(float);
     const size_t threads_per_block = 256;
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;
@@ -154,58 +182,109 @@ void kernel::matrix::set_all(::matrix& mat, float value) {
                                                   mat.rows, mat.cols, value);
 }
 
+struct reduction_mutex {
+    int lock;
+    float result;
+};
+
+// 'matrix_reduce' is not really used in any hot paths as of right now, so the
+// implementation will be simplified down to 1 thread per row, and some locking
+// mechanism to map the partial reudction to the result. A more optimized
+// version could use shared memory and parallel reduction within blocks, but
+// that is more complex to implement.
 static __global__ void matrix_reduce(const float* data,
                                      const size_t stride,
                                      const size_t rows,
                                      const size_t cols,
+                                     float acc,
                                      float (*reducer)(float, float),
-                                     float* result) {
-    extern __shared__ float shared_data[];
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+                                     reduction_mutex* result_mutex) {
+    float partial_reduction = acc;
+    size_t col = blockIdx.x;
 
-    float temp = 0.0f;
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        temp = data[row + col * stride];
-    }
-    shared_data[threadIdx.x] = temp;
-    __syncthreads();
+    std::printf("Debug: Starting reduction for column %zu\n", col);
 
-    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
-            shared_data[threadIdx.x] = reducer(shared_data[threadIdx.x],
-                                               shared_data[threadIdx.x + s]);
-        }
-        __syncthreads();
+    if (col >= cols) {
+        return;
     }
 
-    if (threadIdx.x == 0) {
-        atomicAdd(result, shared_data[0]);
+    for (size_t row = 0; row < rows; ++row) {
+        float val
+            = kernel::matrix::device_get(data, stride, rows, cols, row, col);
+        partial_reduction = reducer(partial_reduction, val);
     }
+
+    volatile int* lock = &result_mutex->lock;
+    while (atomicExch((int*)lock, 1) == 1)
+        ;
+
+    result_mutex->result = reducer(result_mutex->result, partial_reduction);
+
+    // Q: Is there a CUDA-supported way to print from device code for
+    // debugging?
+    // A: Yes, you can use the `printf` function in device code, but it has some
+    std::printf("Debug: Acquired lock for column %zu, partial reduction: %f\n",
+                col, partial_reduction);
+
+    // Release lock
+    atomicExch((int*)lock, 0);
 };
 
-float kernel::matrix::general_reduce(const ::matrix& mat,
-                                     float acc,
-                                     float (*reducer)(float, float)) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+float general_reduce(const ::matrix& mat,
+                     float acc,
+                     float (*reducer)(float, float)) {
+    reduction_mutex host_reference = { .lock = 0, .result = acc };
+    reduction_mutex* d_result;
+    cudaMalloc(&d_result, sizeof(reduction_mutex));
+    cudaMemcpy(&d_result, &host_reference, sizeof(reduction_mutex),
+               cudaMemcpyHostToDevice);
 
-    float* d_result;
-    cudaMalloc(&d_result, sizeof(float));
-    cudaMemset(d_result, acc, sizeof(float));
+    const size_t blocks = mat.cols;
+    const size_t threads_per_block = 1;
 
-    matrix_reduce<<<blocks, threads_per_block,
-                    threads_per_block * sizeof(float)>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, reducer, d_result);
+    matrix_reduce<<<blocks, threads_per_block>>>(
+        mat.data, mat.stride, mat.rows, mat.cols, acc, reducer, d_result);
 
-    float h_result;
-    cudaMemcpy(&h_result, d_result, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&host_reference, d_result, sizeof(reduction_mutex),
+               cudaMemcpyDeviceToHost);
     cudaFree(d_result);
-    return h_result;
+    return host_reference.result;
+}
+
+__device__ float add_float(float a, float b) {
+    return a + b;
+}
+
+float kernel::matrix::sum(const ::matrix& mat) {
+    return general_reduce(mat, 0.0f, ::add_float);
+}
+
+float kernel::matrix::max(const ::matrix& mat) {
+    return general_reduce(mat, FLT_MIN, fmaxf);
+}
+
+float kernel::matrix::min(const ::matrix& mat) {
+    return general_reduce(mat, FLT_MAX, fminf);
+}
+
+__device__ float individual_absmax(float a, float b) {
+    return fmaxf(fabsf(a), fabsf(b));
+}
+
+float kernel::matrix::absmax(const ::matrix& mat) {
+    return general_reduce(mat, 0.0f, individual_absmax);
+}
+
+__device__ float square_sum(float a, float b) {
+    return a + b * b;
+}
+
+float kernel::matrix::variance(const ::matrix& mat) {
+    float sum = kernel::matrix::sum(mat);
+    float sum_of_squares = general_reduce(mat, 0.0f, square_sum);
+
+    return (sum_of_squares / (mat.rows * mat.cols))
+           - (sum * sum) / (mat.rows * mat.cols * mat.rows * mat.cols);
 }
 
 __global__ void kernel_scale(float* data,
@@ -217,14 +296,12 @@ __global__ void kernel_scale(float* data,
     const size_t total_size = rows * cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] *= factor;
+        data[idx] = data[idx] * factor;
     }
 }
 
 void kernel::matrix::scale(::matrix& mat, const float factor) {
-    const size_t total_size = mat.rows * mat.cols;
+    const size_t total_size = mat.buffer_size() / sizeof(float);
     const size_t threads_per_block = 256;
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;

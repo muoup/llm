@@ -5,24 +5,30 @@
 #include <cublas_v2.h>
 
 __global__ void add_row_vector(float* mat,
+                               size_t mat_stride,
+                               size_t mat_rows,
+                               size_t mat_cols,
                                const float* row_vec,
-                               int stride,
-                               int rows,
-                               int cols) {
+                               size_t row_vec_stride) {
+    // We can safely assume that:
+    // row_vec_rows = 1
+    // row_vec_cols = mat_cols
+
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row < rows && col < cols) {
-        auto val
-            = kernel::matrix::device_get(mat, rows, cols, row, col, stride);
-        kernel::matrix::device_set(mat, rows, cols, row, col, stride,
-                                   val + row_vec[col]);
+    if (row < mat_rows && col < mat_cols) {
+        auto val = kernel::matrix::device_get(mat, 0, mat_cols, row, col,
+                                              row_vec_stride);
+        kernel::matrix::device_offset_elem(mat, mat_rows, mat_cols, row, col,
+                                           mat_stride, val);
     }
 }
 
 void kernel::feed_forward::add_bias(::matrix& mat, const ::matrix& row_vec) {
-    add_row_vector<<<mat.cols, mat.rows>>>(mat.data, row_vec.data, mat.stride,
-                                           mat.rows, mat.cols);
+    add_row_vector<<<dim3((mat.cols + 15) / 16, (mat.rows + 15) / 16),
+                     dim3(16, 16)>>>(mat.data, mat.stride, mat.rows, mat.cols,
+                                     row_vec.data, row_vec.stride);
 }
 
 __global__ void sum_columns_kernel(const float* mat,

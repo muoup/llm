@@ -56,7 +56,6 @@ struct matrix {
     matrix& add_scaled(const matrix& other, const float factor);
     matrix& map(float (*mapping)(float));
     matrix& set_all(const float value);
-    float reduce(float acc, float (*reducer)(float, float)) const;
 
     [[nodiscard]] float get(const size_t row, const size_t col) const;
     void set(const size_t row, const size_t col, const float value);
