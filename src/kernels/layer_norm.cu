@@ -45,11 +45,11 @@ __global__ void row_mean(const float* input,
                          size_t mean_stride) {
     size_t row_idx = blockIdx.x;
 
-    float* sum = &mean[row_idx * mean_stride];
+    float* sum = &mean[row_idx + 0 * mean_stride];
     *sum = 0.0f;
 
     for (size_t j = 0; j < cols; ++j) {
-        *sum += input[row_idx * stride + j];
+        *sum += input[row_idx + j * stride];
     }
 
     *sum /= static_cast<float>(cols);
@@ -66,7 +66,7 @@ __global__ void row_variance(const float* input,
                              float epsilon) {
     size_t row_idx = blockIdx.x;
 
-    float row_mean = mean[row_idx * mean_stride];
+    float row_mean = mean[row_idx + 0 * mean_stride];
     float variance = 0.0f;
 
     for (size_t col = 0; col < cols; ++col) {
@@ -75,7 +75,7 @@ __global__ void row_variance(const float* input,
     }
 
     variance /= static_cast<float>(cols);
-    inv_variance[row_idx * inv_variance_stride]
+    inv_variance[row_idx + 0 * inv_variance_stride]
         = 1.0f / sqrtf(variance + epsilon);
 }
 
@@ -94,15 +94,15 @@ __global__ void normalize_and_scale(const float* input,
                                     float* output,
                                     size_t output_stride) {
     size_t row_idx = blockIdx.x;
-    size_t col_idx = threadIdx.x;
+    size_t col_idx = threadIdx.x + blockDim.x * blockIdx.y;
 
     if (col_idx < cols) {
         float normalized
-            = (input[row_idx * stride + col_idx] - mean[row_idx * mean_stride])
-              * inv_variance[row_idx * inv_variance_stride];
-        float scaled = normalized * gamma[col_idx * gamma_stride]
-                       + beta[col_idx * beta_stride];
-        output[row_idx * output_stride + col_idx] = scaled;
+            = (input[row_idx + col_idx * stride] - mean[row_idx + 0 * mean_stride])
+              * inv_variance[row_idx + 0 * inv_variance_stride];
+        float scaled = normalized * gamma[0 + col_idx * gamma_stride]
+                       + beta[0 + col_idx * beta_stride];
+        output[row_idx + col_idx * output_stride] = scaled;
     }
 }
 
@@ -122,7 +122,11 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
         input.data, input.rows, input.cols, input.stride, mean.data,
         mean.stride, inv_variance.data, inv_variance.stride, epsilon);
 
-    normalize_and_scale<<<input.rows, input.cols>>>(
+    const size_t threads_per_block = 256;
+    const size_t blocks_y = (input.cols + threads_per_block - 1) / threads_per_block;
+    dim3 gridSize(input.rows, blocks_y);
+    
+    normalize_and_scale<<<gridSize, threads_per_block>>>(
         input.data, input.rows, input.cols, input.stride, mean.data,
         mean.stride, inv_variance.data, inv_variance.stride, gamma.data,
         gamma.stride, beta.data, beta.stride, normalized_input.data,

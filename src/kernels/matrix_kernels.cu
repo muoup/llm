@@ -407,30 +407,38 @@ static __global__ void kernel_backprop_softmax(const float* softmax_output,
 }
 
 void __global__ kernel_mask_upper_triangular(float* data,
-                                             const size_t stride,
-                                             const size_t rows,
-                                             const size_t cols,
-                                             const float mask_value) {
-    const size_t row = blockIdx.x;
-    const size_t col = threadIdx.x + row + 1;
+                                               const size_t stride,
+                                               const size_t rows,
+                                               const size_t cols,
+                                               const float mask_value) {
+     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+     const size_t total_size = rows * cols;
 
-    if (row < rows && col < cols) {
-        data[row + col * stride] = mask_value;
-    }
-}
+     if (idx < total_size) {
+         const size_t row = idx % rows;
+         const size_t col = idx / rows;
+         if (col > row) {
+             data[row + col * stride] = mask_value;
+         }
+     }
+ }
 
-void kernel::matrix::mask_upper_triangular(::matrix& mat,
-                                           const float mask_value) {
-    const size_t threads_per_block = mat.cols - 1;
-    const size_t blocks = mat.rows;
+ void kernel::matrix::mask_upper_triangular(::matrix& mat,
+                                            const float mask_value) {
+     const size_t total_size = mat.rows * mat.cols;
+     const size_t threads_per_block = 256;
+     const size_t blocks = (total_size + threads_per_block - 1) / threads_per_block;
 
-    kernel_mask_upper_triangular<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, mask_value);
-}
+     kernel_mask_upper_triangular<<<blocks, threads_per_block>>>(
+         mat.data, mat.stride, mat.rows, mat.cols, mask_value);
+ }
 
 __global__ void matrixDotProductKernel(float* A,
                                        float* B,
                                        float* C,
+                                       int stride_a,
+                                       int stride_b,
+                                       int stride_c,
                                        int M,
                                        int N,
                                        int K) {
@@ -441,9 +449,9 @@ __global__ void matrixDotProductKernel(float* A,
     if (row < M && col < N) {
         float sum = 0.0f;
         for (int i = 0; i < K; ++i) {
-            sum += A[row * K + i] * B[i * N + col];
+            sum += A[row + i * stride_a] * B[i + col * stride_b];
         }
-        C[row * N + col] = sum;
+        C[row + col * stride_c] = sum;
     }
 }
 
@@ -455,6 +463,7 @@ matrix kernel::matrix::dot_product(const ::matrix& a, const ::matrix& b) {
                   (a.rows + blockSize.y - 1) / blockSize.y);
 
     matrixDotProductKernel<<<gridSize, blockSize>>>(a.data, b.data, result.data,
+                                                    a.stride, b.stride, result.stride,
                                                     a.rows, b.cols, a.cols);
 
     return result;
@@ -528,10 +537,16 @@ bool kernel::matrix::is_equal(const ::matrix& a,
         return false;
     }
 
-    bool d_result;
+    bool* d_result;
+    cudaMalloc(&d_result, sizeof(bool));
+    cudaMemset(d_result, 1, sizeof(bool));
 
     compare<<<(a.rows * a.cols + 255) / 256, 256>>>(
-        a.data, b.data, a.stride, b.stride, a.rows, a.cols, epsilon, &d_result);
+        a.data, b.data, a.stride, b.stride, a.rows, a.cols, epsilon, d_result);
 
-    return d_result;
+    bool h_result;
+    cudaMemcpy(&h_result, d_result, sizeof(bool), cudaMemcpyDeviceToHost);
+    cudaFree(d_result);
+    
+    return h_result;
 }
