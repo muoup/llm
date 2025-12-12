@@ -9,7 +9,7 @@
 #include <inference/feed_forward.hpp>
 #include <inference/layer_normalize.hpp>
 #include <inference/linearized_attention.hpp>
-#include "inference/network_node.hpp"
+#include <inference/network_node.hpp>
 
 std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
@@ -182,11 +182,6 @@ void InferenceModel::generate_path() {
             }
         }
     }
-
-    // std::cout << "Execution order of nodes: ";
-    // for (size_t idx : execution_order) {
-    //     std::cout << idx << " ";
-    // }
 
     if (execution_order.size() != node_count) {
         throw std::runtime_error(

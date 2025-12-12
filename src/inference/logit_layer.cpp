@@ -2,9 +2,8 @@
 
 #include <kernels/optimizer.hpp>
 #include <kernels/feed_forward.hpp>
+#include <kernels/logit_layer.hpp>
 #include <tokenizer/token.hpp>
-
-#include <cmath>
 
 LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
     : dimensions(dimensions), vocab_size(vocab_size), w(dimensions, vocab_size), b(1, vocab_size) {}
@@ -27,31 +26,19 @@ matrix LogitLayer::forward(const matrix& input) const {
 }
 
 std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const matrix& predictions, const std::span<const token_id_t> actual, float learning_rate) {
-    matrix logit_loss_gradient(predictions.rows, vocab_size);
-    matrix logit_bias_gradient(1, vocab_size);
-    
-    float average_loss = 0.0f;
-    
-    for (size_t i = 0; i < predictions.rows; ++i) {
-        for (size_t j = 0; j < predictions.cols; ++j) {
-            const auto delta_loss = predictions.get(i, j) - (j == actual[i + 1] ? 1.0f : 0.0f);
-            logit_loss_gradient.set(i, j, delta_loss);
-            logit_bias_gradient.offset(0, j, delta_loss);
-            if (j == actual[i + 1]) {
-                average_loss -= (std::log(predictions.get(i, j) + 1e-10f)) / predictions.rows;
-            }
-        }
-    }
+    kernel::logit_layer::LossResult loss_result
+        = kernel::logit_layer::compute_loss_gradient(
+            predictions, actual, vocab_size);
 
-    adjust_parameter_matrix(b, logit_bias_gradient, learning_rate);
+    adjust_parameter_matrix(b, loss_result.logit_bias_gradient, learning_rate);
 
-    matrix h_final_gradient = logit_loss_gradient.cross_t_multiplied(w);
+    matrix h_final_gradient = loss_result.logit_loss_gradient.cross_t_multiplied(w);
     norm_clip(h_final_gradient);
-    matrix logit_weight_gradient = input.t_cross_multiplied(logit_loss_gradient);
+    matrix logit_weight_gradient = input.t_cross_multiplied(loss_result.logit_loss_gradient);
 
     adjust_parameter_matrix(w, logit_weight_gradient, learning_rate);
 
-    return { std::move(h_final_gradient), average_loss };
+    return { std::move(h_final_gradient), loss_result.average_loss };
 }
 
 void LogitLayer::save(std::ostream& out) const {
