@@ -19,7 +19,6 @@ add_compile_options(-fopenmp)
 add_link_options(-fopenmp)
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
-add_link_options("-lcurand")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build")
@@ -41,4 +40,4 @@ target_compile_definitions(llm PRIVATE
 )
 
 target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(llm PRIVATE CUDA::cudart CUDA::cublas)
+target_link_libraries(llm PRIVATE CUDA::cudart CUDA::cublas CUDA::curand)
