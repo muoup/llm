@@ -336,16 +336,14 @@ void kernel::matrix::transfer_row(::matrix& dest,
         src.stride, src.rows, src.cols, src_row);
 }
 
-static __global__ void kernel_set_row_vector(float* data,
-                                             const size_t stride,
-                                             const size_t rows,
-                                             const size_t cols,
-                                             const size_t row,
-                                             const float* vec) {
+static __global__ void kernel_set_row_vector(const matrix_view data,
+                                             const const_matrix_view row_vector,
+                                             size_t row) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (col < cols) {
-        data[row + col * stride] = vec[col];
+    if (col < data.cols) {
+        auto val = kernel::matrix::device_get(row_vector, 0, col);
+        kernel::matrix::device_set(data, row, col, val);
     }
 }
 
@@ -356,8 +354,7 @@ void kernel::matrix::set_row_vector(::matrix& mat,
     const size_t blocks
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    kernel_set_row_vector<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, row, vec.data);
+    kernel_set_row_vector<<<blocks, threads_per_block>>>(mat, vec, row);
 }
 
 static __global__ void kernel_get_row_vector(const float* data,
@@ -503,12 +500,8 @@ void kernel::matrix::add(::matrix& mat, const ::matrix& offset) {
         mat.data, mat.stride, mat.rows, mat.cols, offset.data, offset.stride);
 }
 
-static __global__ void kernel_add_scaled(float* data,
-                                         const std::uint64_t stride,
-                                         const std::uint64_t rows,
-                                         const std::uint64_t cols,
-                                         const float* other_data,
-                                         const size_t other_stride,
+static __global__ void kernel_add_scaled(const matrix_view data,
+                                         const const_matrix_view other,
                                          const float factor) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -516,12 +509,11 @@ static __global__ void kernel_add_scaled(float* data,
     // We are safe to assume here that both matrices are the same size
     // i.e. other_rows == rows and other_cols == cols
 
-    if (row >= rows || col >= cols)
+    if (row >= data.rows || col >= data.cols)
         return;
 
-    float value
-        = kernel::matrix::device_get(other_data, other_stride, row, col);
-    kernel::matrix::device_offset_elem(data, stride, row, col, value * factor);
+    float value = kernel::matrix::device_get(other, row, col);
+    kernel::matrix::device_offset_elem(data, row, col, value * factor);
 }
 
 void kernel::matrix::add_scaled(::matrix& mat,
@@ -531,9 +523,7 @@ void kernel::matrix::add_scaled(::matrix& mat,
     dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
                 (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_add_scaled<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, other.data, other.stride,
-        factor);
+    kernel_add_scaled<<<blocks, threads_per_block>>>(mat, other, factor);
 }
 
 static __global__ void kernel_add_value(float* data,

@@ -30,20 +30,14 @@ std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const ma
     kernel::logit_layer::LossResult loss_result
         = kernel::logit_layer::compute_loss_gradient(
             predictions, actual, vocab_size);
-    kernel::matrix::check_errors("LogitLayer Backprop - Loss gradient computation");
         
     adjust_parameter_matrix(b, loss_result.logit_bias_gradient, learning_rate);
-    kernel::matrix::check_errors("LogitLayer Backprop - Bias adjustment");
-
     matrix h_final_gradient = loss_result.logit_loss_gradient.cross_t_multiplied(w);
-    kernel::matrix::check_errors("LogitLayer Backprop - Hidden gradient computation");
-    norm_clip(h_final_gradient);
-    kernel::matrix::check_errors("LogitLayer Backprop - Hidden gradient clipping");
-    matrix logit_weight_gradient = input.t_cross_multiplied(loss_result.logit_loss_gradient);
-    kernel::matrix::check_errors("LogitLayer Backprop - Weight gradient computation");
     
+    norm_clip(h_final_gradient);
+    
+    matrix logit_weight_gradient = input.t_cross_multiplied(loss_result.logit_loss_gradient);
     adjust_parameter_matrix(w, logit_weight_gradient, learning_rate);
-    kernel::matrix::check_errors("LogitLayer Backprop - Weight adjustment");
     
     return { std::move(h_final_gradient), loss_result.average_loss };
 }

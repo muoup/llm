@@ -12,7 +12,8 @@ InferenceModel minimal_model(size_t vocab_size) {
 
     InferenceModel model(dimensions, vocab_size);
 
-    // model.add_layer(std::make_unique<AttentionLayer>(dimensions, 8));
+    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 8);
+    model.add_layer(std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
  
     auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions);
     model.add_layer(std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));

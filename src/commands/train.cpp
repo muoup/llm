@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <cmath>
 
 #include <commands/arg_parser.hpp>
 #include <inference/inference.hpp>
@@ -62,9 +63,10 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model = minimal_model(_tokenizer.vocab_size());
-            // InferenceModel model = standard_attention_model(dimensions,
-            // _tokenizer.vocab_size(), num_layers, attention_heads);
+            // InferenceModel model = minimal_model(_tokenizer.vocab_size());
+            InferenceModel model
+                = standard_attention_model(dimensions, _tokenizer.vocab_size(),
+                                           num_layers, attention_heads);
             // InferenceModel model = linearized_attention_model(dimensions,
             // _tokenizer.vocab_size(), attention_heads, num_layers);
             // InferenceModel model = standard_recursive_model(dimensions,
@@ -113,11 +115,11 @@ int handle_train(int argc, char* argv[]) {
                 auto tokens = encode(_tokenizer, row);
                 const auto truncated_input
                     = std::span{ tokens.begin(), tokens.end() - 1 };
-                float loss = model.train_on(truncated_input, tokens, 0.0001f);
+                float loss = model.train_on(truncated_input, tokens, learning_rate);
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;
-                learning_rate = 0.005f * loss;
+                learning_rate = 0.001f * std::logb(loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

@@ -1,7 +1,8 @@
 .*
 build*/*
-datasets*
+datasets/*
 
 perf.*
 
 !.gitignore
+!datasets/wiki-trunc/th.txt

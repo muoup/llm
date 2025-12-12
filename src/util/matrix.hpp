@@ -180,7 +180,12 @@ struct const_matrix_view {
     const float* data;
 
     const_matrix_view() : rows(0), cols(0), stride(0), data(nullptr) {}
-    const_matrix_view(matrix_view& other)
+    const_matrix_view(const matrix_view& other)
+        : rows(other.rows),
+          cols(other.cols),
+          stride(other.stride),
+          data(other.data) {}
+    const_matrix_view(matrix& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),

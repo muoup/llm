@@ -30,6 +30,5 @@ public:
     size_t get_vocab_size() const { return m_embeddings.rows; }
     size_t get_dimensions() const { return m_embeddings.cols; }
 
-private:
     matrix m_embeddings;
 };

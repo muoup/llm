@@ -176,7 +176,7 @@ __global__ void layer_norm_backward_kernel(const const_matrix_view mean,
                                            matrix_view grad_beta,
                                            matrix_view grad_gamma,
                                            matrix_view grad_input) {
-    const size_t row = blockIdx.x;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row >= layer_input.rows) {
         return;
@@ -235,11 +235,14 @@ kernel::layer_norm::layer_normalization_backward(const ::LayerNorm& layer,
     ::matrix grad_input(layer_input.rows, layer_input.cols);
     ::matrix grad_gamma(gamma.rows, gamma.cols);
     ::matrix grad_beta(beta.rows, beta.cols);
-
-    layer_norm_backward_kernel<<<layer_input.rows, 1>>>(mean, gamma, inv_variance, layer_input,
+    
+    constexpr size_t threads_per_block = 255;
+    size_t num_blocks = (layer_input.rows + threads_per_block - 1)
+                        / threads_per_block;
+    
+    layer_norm_backward_kernel<<<num_blocks, threads_per_block>>>(mean, gamma, inv_variance, layer_input,
                                          grad_output, grad_beta, grad_gamma,
                                          grad_input);
-    cudaDeviceSynchronize();
     kernel::matrix::check_errors("layer_normalization_backward: kernel launch");
 
     return { .grad_input = std::move(grad_input),

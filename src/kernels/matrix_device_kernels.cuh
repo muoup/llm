@@ -53,6 +53,12 @@ inline __device__ float device_get(const float* data,
     return *(device_get_addr(data, stride, row, col));
 }
 
+inline __device__ float device_get(const matrix_view data,
+                                   const size_t row,
+                                   const size_t col) {
+    return device_get(data.data, data.stride, row, col);
+}
+
 inline __device__ float device_get(const const_matrix_view data,
                                    const size_t row,
                                    const size_t col) {
