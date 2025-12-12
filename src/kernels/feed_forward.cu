@@ -17,7 +17,7 @@ __global__ void add_row_vector(float* mat,
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < mat_rows && col < mat_cols) {
-        auto val = kernel::matrix::device_get(mat, row_vec_stride, 0, col);
+        auto val = kernel::matrix::device_get(row_vec, row_vec_stride, 0, col);
         kernel::matrix::device_offset_elem(mat, mat_stride, row, col, val);
     }
 }
@@ -47,9 +47,8 @@ __global__ void sum_columns_kernel(const float* mat,
 matrix kernel::feed_forward::sum_columns(const ::matrix& mat) {
     ::matrix result(1, mat.cols);
 
-    dim3 block_size(16, 16);
-    dim3 grid_size((mat.cols + block_size.x - 1) / block_size.x,
-                   (1 + block_size.y - 1) / block_size.y);
+    dim3 block_size(256, 1);
+    dim3 grid_size((mat.cols + block_size.x - 1) / block_size.x, 1);
 
     sum_columns_kernel<<<grid_size, block_size>>>(
         mat.data, result.data, mat.stride, mat.rows, mat.cols);
