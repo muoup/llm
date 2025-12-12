@@ -4,6 +4,8 @@
 
 namespace kernel::matrix {
 
+void check_errors(const char* step);
+    
 float get(const ::matrix& mat, const size_t row, const size_t col);
 void set(::matrix& mat, const size_t row, const size_t col, const float value);
 

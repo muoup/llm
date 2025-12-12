@@ -29,7 +29,7 @@ struct cublas_handle {
             std::fflush(stdout);
             std::exit(1);
         }
-        
+
         initialized = true;
     }
 
@@ -44,6 +44,15 @@ struct cublas_handle {
 };
 
 static cublas_handle handle;
+
+void kernel::matrix::check_errors(const char* step) {
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::printf("Failure during: %s\n", step);
+        std::printf("CUDA error: %s\n", cudaGetErrorString(err));
+        std::exit(1);
+    }
+}
 
 float* kernel::matrix::allocate_buffer(const size_t size) {
     float* data;
@@ -439,7 +448,9 @@ static __global__ void matrix_add_matrix(float* data,
     if (idx < total_size) {
         const size_t row = idx % rows;
         const size_t col = idx / rows;
-        data[row + col * stride] += offset_data[row + col * offset_stride];
+        float value
+            = kernel::matrix::device_get(offset_data, offset_stride, row, col);
+        kernel::matrix::device_offset_elem(data, stride, row, col, value);
     }
 }
 
@@ -453,38 +464,45 @@ void kernel::matrix::add(::matrix& mat, const ::matrix& offset) {
         mat.data, mat.stride, mat.rows, mat.cols, offset.data, offset.stride);
 }
 
-static __global__ void matrix_add_value(float* data,
-                                        const size_t stride,
-                                        const size_t rows,
-                                        const size_t cols,
-                                        const float* other_data,
-                                        const size_t other_stride,
-                                        const float factor) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+static __global__ void kernel_add_scaled(float* data,
+                                         const std::uint64_t stride,
+                                         const std::uint64_t rows,
+                                         const std::uint64_t cols,
+                                         const float* other_data,
+                                         const size_t other_stride,
+                                         const float factor) {
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride]
-            += other_data[row + col * other_stride] * factor;
-    }
+    // We are safe to assume here that both matrices are the same size
+    // i.e. other_rows == rows and other_cols == cols
+
+    if (row >= rows || col >= cols)
+        return;
+    
+    std::printf("DEVICE GET on size [%llu x %llu] at (%llu, %llu)\n", rows,
+                cols, row, col);
+    float value
+        = kernel::matrix::device_get(other_data, other_stride, row, col);
+    std::printf(
+        "DEVICE OFFSET on size [%llu x %llu] at (%llu, %llu) with value %f * "
+        "%f\n",
+        rows, cols, row, col, value, factor);
+    kernel::matrix::device_offset_elem(data, stride, row, col, value * factor);
 }
 
 void kernel::matrix::add_scaled(::matrix& mat,
                                 const ::matrix& other,
                                 const float factor) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    dim3 blocks(mat.rows * mat.cols + 255 / 256);
+    dim3 threads_per_block(256);
 
-    matrix_add_value<<<blocks, threads_per_block>>>(
+    kernel_add_scaled<<<blocks, threads_per_block>>>(
         mat.data, mat.stride, mat.rows, mat.cols, other.data, other.stride,
         factor);
 }
 
-static __global__ void matrix_add_value(float* data,
+static __global__ void kernel_add_value(float* data,
                                         const size_t stride,
                                         const size_t rows,
                                         const size_t cols,
@@ -505,7 +523,7 @@ void kernel::matrix::add(::matrix& mat, float value) {
     const size_t blocks
         = (total_size + threads_per_block - 1) / threads_per_block;
 
-    matrix_add_value<<<blocks, threads_per_block>>>(mat.data, mat.stride,
+    kernel_add_value<<<blocks, threads_per_block>>>(mat.data, mat.stride,
                                                     mat.rows, mat.cols, value);
 }
 

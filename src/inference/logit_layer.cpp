@@ -37,7 +37,6 @@ std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const ma
     matrix logit_weight_gradient = input.t_cross_multiplied(loss_result.logit_loss_gradient);
 
     adjust_parameter_matrix(w, logit_weight_gradient, learning_rate);
-
     return { std::move(h_final_gradient), loss_result.average_loss };
 }
 

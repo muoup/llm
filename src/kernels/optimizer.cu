@@ -14,6 +14,10 @@ void norm_clip(matrix& gradient) {
     }
 }
 
+__global__ void _test_output() {
+    printf("Optimizer kernel loaded successfully.\n");
+}
+
 void adjust_parameter_matrix(matrix& adjust,
                              const matrix& gradient,
                              float learning_rate) {

@@ -36,9 +36,7 @@ __global__ void compute_loss_gradient_kernel(const float* predictions,
     float delta_loss = pred_value - (col == actual_token ? 1.0f : 0.0f);
 
     kernel::matrix::device_set(loss_gradient, stride, row, col, delta_loss);
-
-    kernel::matrix::device_offset_elem(bias_gradient, stride, 0, col,
-                                       delta_loss);
+    kernel::matrix::device_offset_elem_atomic(bias_gradient, stride, 0, col, delta_loss);
 
     if (col == actual_token) {
         atomicAdd(loss, -std::log(pred_value + 1e-10f) / rows);
@@ -62,6 +60,7 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     dim3 block_size(16, 16);
     dim3 grid_size((predictions.cols + block_size.x - 1) / block_size.x,
                    (predictions.rows + block_size.y - 1) / block_size.y);
+    
     compute_loss_gradient_kernel<<<grid_size, block_size>>>(
         predictions.data, d_actual, logit_loss_gradient.data,
         logit_bias_gradient.data, average_loss, predictions.rows,

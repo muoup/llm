@@ -5,36 +5,58 @@
 
 namespace kernel::matrix {
 
+inline __device__ float* device_get_addr(float* data,
+                                         const size_t stride,
+                                         const size_t row,
+                                         const size_t col) {
+    return &(data[row + col * stride]);
+}
+
+inline __device__ const float* device_get_addr(const float* data,
+                                         const size_t stride,
+                                         const size_t row,
+                                         const size_t col) {
+    return &(data[row + col * stride]);
+}
+
 inline __device__ void device_set(float* data,
                                   const size_t stride,
                                   const size_t row,
                                   const size_t col,
                                   const float value) {
-    data[row + col * stride] = value;
+    *(device_get_addr(data, stride, row, col)) = value;
 }
 
 inline __device__ float device_get(const float* data,
                                    const size_t stride,
                                    const size_t row,
                                    const size_t col) {
-    return data[row + col * stride];
+    return *(device_get_addr(data, stride, row, col));
 }
 
-inline __device__ void device_offset_elem(const float* data,
+inline __device__ void device_offset_elem(float* data,
                                           const size_t stride,
                                           const size_t row,
                                           const size_t col,
                                           float value) {
-    auto current = device_get(data, stride, row, col);
-    device_set(const_cast<float*>(data), stride, row, col, current + value);
+    *(device_get_addr(data, stride, row, col)) += value;
+}
+
+inline __device__ void device_offset_elem_atomic(float* data,
+                                                 const size_t stride,
+                                                 const size_t row,
+                                                 const size_t col,
+                                                 float value) {
+    float* addr = device_get_addr(data, stride, row, col);
+    atomicAdd(addr, value);
 }
 
 template <auto Mapping>
 __global__ void map_matrix_kernel(const float* input,
                                   float* output,
-                                  int stride,
-                                  int rows,
-                                  int cols) {
+                                  std::uint64_t stride,
+                                  std::uint64_t rows,
+                                  std::uint64_t cols) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
