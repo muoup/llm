@@ -208,7 +208,7 @@ float general_reduce(const ::matrix& mat, float acc) {
     reduction_mutex host_reference = { .lock = 0, .result = acc };
     reduction_mutex* d_result;
     cudaMalloc(&d_result, sizeof(reduction_mutex));
-    cudaMemcpy(&d_result, &host_reference, sizeof(reduction_mutex),
+    cudaMemcpy(d_result, &host_reference, sizeof(reduction_mutex),
                cudaMemcpyHostToDevice);
 
     const size_t blocks = mat.cols;
@@ -217,7 +217,6 @@ float general_reduce(const ::matrix& mat, float acc) {
     (matrix_reduce<reducer>)<<<blocks, threads_per_block>>>(
         mat.data, mat.stride, mat.rows, mat.cols, acc, d_result);
 
-    cudaDeviceSynchronize();
     cudaMemcpy(&host_reference, d_result, sizeof(reduction_mutex),
                cudaMemcpyDeviceToHost);
     cudaFree(d_result);
@@ -277,21 +276,18 @@ __global__ void kernel_scale(float* data,
                              const size_t rows,
                              const size_t cols,
                              const float factor) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] = data[row + col * stride] * factor;
+    if (row < rows && col < cols) {
+        *(kernel::matrix::device_get_addr(data, stride, row, col)) *= factor;
     }
 }
 
 void kernel::matrix::scale(::matrix& mat, const float factor) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    dim3 threads_per_block(16, 16);
+    dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+                (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_scale<<<blocks, threads_per_block>>>(mat.data, mat.stride, mat.rows,
                                                 mat.cols, factor);
@@ -480,22 +476,17 @@ static __global__ void kernel_add_scaled(float* data,
     if (row >= rows || col >= cols)
         return;
     
-    std::printf("DEVICE GET on size [%llu x %llu] at (%llu, %llu)\n", rows,
-                cols, row, col);
     float value
         = kernel::matrix::device_get(other_data, other_stride, row, col);
-    std::printf(
-        "DEVICE OFFSET on size [%llu x %llu] at (%llu, %llu) with value %f * "
-        "%f\n",
-        rows, cols, row, col, value, factor);
     kernel::matrix::device_offset_elem(data, stride, row, col, value * factor);
 }
 
 void kernel::matrix::add_scaled(::matrix& mat,
                                 const ::matrix& other,
                                 const float factor) {
-    dim3 blocks(mat.rows * mat.cols + 255 / 256);
-    dim3 threads_per_block(256);
+    dim3 threads_per_block(16, 16);
+    dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+                (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_add_scaled<<<blocks, threads_per_block>>>(
         mat.data, mat.stride, mat.rows, mat.cols, other.data, other.stride,

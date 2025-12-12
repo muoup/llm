@@ -7,6 +7,7 @@
 void norm_clip(matrix& gradient) {
     constexpr auto max_magnitude = 5.0f;
     const auto max = gradient.absmax();
+    kernel::matrix::check_errors("After absmax in norm_clip");
 
     if (max > max_magnitude) {
         float factor = max_magnitude / max;
