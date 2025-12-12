@@ -71,7 +71,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     matrix z1_gradient = kernel::feed_forward::relu_activation_backprop(
         activation_input, a1_gradient);
 
-    matrix b1_gradient = matrix({ 1, z1_gradient.cols });
+    matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
     adjust_parameter_matrix(b1, b1_gradient, learning_rate);
 
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);

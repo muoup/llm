@@ -201,7 +201,7 @@ __global__ void layer_norm_backward_kernel(const const_matrix_view mean,
                                            grad_norm_val * normalized_val);
 
         float d_norm
-            = grad_norm_val * kernel::matrix::device_get(layer_input, 0, col);
+            = grad_norm_val * kernel::matrix::device_get(gamma, 0, col);
         d_norm_sum += d_norm;
         d_norm_dot_x_norm += d_norm * normalized_val;
     }

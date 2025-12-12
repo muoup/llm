@@ -49,6 +49,7 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     ::matrix logit_bias_gradient(1, vocab_size);
     float* average_loss;
     cudaMalloc(&average_loss, sizeof(float));
+    cudaMemset(average_loss, 0, sizeof(float));
 
     token_id_t* d_actual;
     cudaMalloc(&d_actual, actual.size() * sizeof(token_id_t));
