@@ -6,20 +6,6 @@
 #include <kernels/feed_forward.hpp>
 #include <kernels/optimizer.hpp>
 
-static matrix activate(const matrix& input) {
-    constexpr static auto leaky_relu
-        = [](const float f) { return f < 0 ? 0.01f * f : f; };
-
-    return input.mapped(leaky_relu);
-}
-
-static matrix activate_derivative(const matrix& input) {
-    constexpr static auto leaky_relu_derivative
-        = [](const float f) { return f < 0 ? 0.01f : 1.0f; };
-
-    return input.mapped(leaky_relu_derivative);
-}
-
 NodeType FeedForwardLayer::getType() const {
     return NodeType::FeedForward;
 }
@@ -46,19 +32,11 @@ ForwardingResult FeedForwardLayer::forward(
     std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
 
-    std::cout << "Input Max/Min: " << input.max() << " " << input.min()
-              << std::endl;
-    std::cout << "Input ABSMAX: " << input.absmax() << std::endl;
     matrix activation_input = input.cross_multiplied(w1);
     kernel::feed_forward::add_bias(activation_input, b1);
 
-    std::cout << "Activation Input Max/Min: " << activation_input.max() << " "
-              << activation_input.min() << std::endl;
-    std::cout << "Activation Input ABSMAX: " << activation_input.absmax()
-              << std::endl;
-    matrix activation_output = activate(activation_input);
-    std::cout << "Activation Output Max/Min: " << activation_output.max() << " "
-              << activation_output.min() << std::endl;
+    matrix activation_output
+        = kernel::feed_forward::relu_activation(activation_input);
 
     matrix final_output = activation_output.cross_multiplied(w2);
     kernel::feed_forward::add_bias(final_output, b2);

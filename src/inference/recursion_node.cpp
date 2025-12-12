@@ -44,7 +44,8 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
         recursion_data.presigmoidValues.emplace_back(p_n.clone());
 
         // Sigmoid activation
-        p_n = p_n.mapped([](float x) { return 1.0f / (1.0f + std::exp(-x)); });
+        // TODO:
+        // p_n = p_n.mapped([](float x) { return 1.0f / (1.0f + std::exp(-x)); });
 
         auto probability = p_n.col_sum(0) / static_cast<float>(p_n.rows);
         budget += probability;

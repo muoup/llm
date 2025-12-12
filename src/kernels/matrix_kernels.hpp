@@ -15,8 +15,6 @@ void randomize(::matrix& matrix, const float min, const float max);
 float* allocate_buffer(const size_t size);
 void free_buffer(float* buffer);
 
-void general_map(::matrix& mat, float (*func)(float));
-
 float sum(const ::matrix& mat);
 float max(const ::matrix& mat);
 float min(const ::matrix& mat);
@@ -52,6 +50,8 @@ void mask_upper_triangular(::matrix& mat, const float mask_value);
 ::matrix cross_multiplied(const ::matrix& a, const ::matrix& b);
 ::matrix t_cross_multiplied(const ::matrix& a, const ::matrix& b);
 ::matrix cross_t_multiplied(const ::matrix& a, const ::matrix& b);
+
+void element_wise_multiply(::matrix& a, const ::matrix& b);
 
 bool is_equal(const ::matrix& a, const ::matrix& b, const float epsilon);
 

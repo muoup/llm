@@ -26,8 +26,7 @@
 #endif
 
 struct matrix {
-    size_t rows, cols;
-    size_t stride;
+    std::uint64_t rows, cols, stride;
 
     float* data;
 
@@ -54,7 +53,6 @@ struct matrix {
     matrix& add(const matrix& offset);
     matrix& add(float f);
     matrix& add_scaled(const matrix& other, const float factor);
-    matrix& map(float (*mapping)(float));
     matrix& set_all(const float value);
 
     [[nodiscard]] float get(const size_t row, const size_t col) const;
@@ -65,6 +63,7 @@ struct matrix {
         set(row, col, current_value + offset);
     }
 
+    matrix get_row_vector(const size_t row) const;
     void set_row_vector(const size_t row, const matrix& row_vector);
     void add_row_vector(const size_t row, const matrix& other);
     void set_horizontal_slice(const size_t col_start, const matrix& slice);
@@ -87,7 +86,9 @@ struct matrix {
     matrix cross_t_multiplied(const matrix& other) const;
 
     matrix backprop_softmax(const matrix& gradient) const;
-
+   
+    matrix& element_wise_multiply(const matrix& other);
+    
     matrix clone() const;
 
     matrix scaled(const float factor) const {
@@ -95,34 +96,7 @@ struct matrix {
         copy.scale(factor);
         return copy;
     }
-
-    matrix mapped(float (*mapping)(float)) const {
-        auto copy = this->clone();
-        copy.map(mapping);
-        return copy;
-    }
-
-    matrix& element_wise_multiply(const matrix& other) {
-        MATRIX_ASSERT(
-            this->cols == other.cols && this->rows == other.rows,
-            "Matrix dimensions do not match for element-wise multiplication");
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                set(i, j, get(i, j) * other.get(i, j));
-            }
-        }
-
-        return *this;
-    }
-
-    matrix get_row_vector(const size_t row) const {
-        matrix row_vector{ 1, cols };
-        for (size_t j = 0; j < cols; ++j) {
-            row_vector.set(0, j, get(row, j));
-        }
-        return row_vector;
-    }
-
+    
     float row_sum(const size_t row) const {
         float sum = 0.0f;
         for (size_t j = 0; j < cols; ++j) {

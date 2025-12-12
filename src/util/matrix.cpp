@@ -73,11 +73,6 @@ float matrix::absmax() const {
     return kernel::matrix::absmax(*this);
 }
 
-matrix& matrix::map(float (*func)(float)) {
-    kernel::matrix::general_map(*this, func);
-    return *this;
-}
-
 matrix& matrix::set_all(float value) {
     kernel::matrix::set_all(*this, value);
     return *this;
@@ -109,6 +104,10 @@ matrix& matrix::add(float f) {
     return *this;
 }
 
+matrix matrix::get_row_vector(const size_t row) const {
+    return kernel::matrix::get_row_vector(*this, row);
+}
+
 void matrix::set_row_vector(const size_t row, const matrix& row_vector) {
     MATRIX_ASSERT(row_vector.rows == 1 && row_vector.cols == this->cols,
                   "Row vector dimensions do not match for setting row");
@@ -136,6 +135,14 @@ matrix matrix::get_horizontal_slice(const size_t col_start,
                   "Slice dimensions do not match for getting horizontal slice");
 
     return kernel::matrix::get_horizontal_slice(*this, col_start, slice_cols);
+}
+
+matrix& matrix::element_wise_multiply(const matrix& other) {
+    MATRIX_ASSERT(this->rows == other.rows && this->cols == other.cols,
+                  "Matrix dimensions do not match for element-wise multiplication");
+
+    kernel::matrix::element_wise_multiply(*this, other);
+    return *this;
 }
 
 float matrix::variance() const {

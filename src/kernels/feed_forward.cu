@@ -1,8 +1,7 @@
 #include "kernels/feed_forward.hpp"
 
-#include <kernels/matrix_device_kernels.hpp>
-
 #include <cublas_v2.h>
+#include <kernels/matrix_device_kernels.cuh>
 
 __global__ void add_row_vector(float* mat,
                                size_t mat_stride,
@@ -18,10 +17,8 @@ __global__ void add_row_vector(float* mat,
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < mat_rows && col < mat_cols) {
-        auto val = kernel::matrix::device_get(mat, 0, mat_cols, row, col,
-                                              row_vec_stride);
-        kernel::matrix::device_offset_elem(mat, mat_rows, mat_cols, row, col,
-                                           mat_stride, val);
+        auto val = kernel::matrix::device_get(mat, row_vec_stride, 0, col);
+        kernel::matrix::device_offset_elem(mat, mat_stride, row, col, val);
     }
 }
 
@@ -41,8 +38,7 @@ __global__ void sum_columns_kernel(const float* mat,
     if (col < cols) {
         float sum = 0.0f;
         for (int row = 0; row < rows; ++row) {
-            sum += kernel::matrix::device_get(mat, rows, cols, row, col,
-                                              stride);
+            sum += kernel::matrix::device_get(mat, stride, row, col);
         }
         result[col] = sum;
     }
@@ -61,34 +57,24 @@ matrix kernel::feed_forward::sum_columns(const ::matrix& mat) {
     return result;
 }
 
-__global__ void relu_activation_kernel(const float* input,
-                                       float* output,
-                                       int stride,
-                                       int rows,
-                                       int cols) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ float relu(float x) {
+    return x > 0 ? x : 0.0f;
+}
 
-    if (row < rows && col < cols) {
-        float val
-            = kernel::matrix::device_get(input, rows, cols, row, col, stride);
-        float activated = val > 0 ? val : 0.01f * val;
-        kernel::matrix::device_set(output, rows, cols, row, col, stride,
-                                   activated);
-    }
+matrix kernel::feed_forward::relu_activation(const ::matrix& z1) {
+    return kernel::matrix::map_matrix<relu>(z1);
+}
+
+__device__ float relu_derivative(float x) {
+    return x > 0 ? 1.0f : 0.0f;
 }
 
 matrix kernel::feed_forward::relu_activation_backprop(
     const ::matrix& activation_input,
     const ::matrix& a1_gradient) {
-    ::matrix z1_gradient(activation_input.rows, activation_input.cols);
-
-    dim3 block_size(16, 16);
-    dim3 grid_size((activation_input.cols + block_size.x - 1) / block_size.x,
-                   (activation_input.rows + block_size.y - 1) / block_size.y);
-
-    relu_activation_kernel<<<grid_size, block_size>>>(
-        activation_input.data, z1_gradient.data, activation_input.stride,
-        activation_input.rows, activation_input.cols);
-    return z1_gradient;
+    ::matrix z1_mapped
+        = kernel::matrix::map_matrix<relu_derivative>(activation_input);
+    z1_mapped.element_wise_multiply(a1_gradient);
+    
+    return z1_mapped;
 }

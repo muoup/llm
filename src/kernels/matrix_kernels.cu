@@ -1,9 +1,10 @@
-#include "matrix_device_kernels.hpp"
+#include "matrix_device_kernels.cuh"
 #include "matrix_kernels.hpp"
 
 #include <cublas_api.h>
 #include <cublas_v2.h>
 #include <cuda_device_runtime_api.h>
+#include <cuda_runtime_api.h>
 #include <curand.h>
 #include <device_atomic_functions.h>
 
@@ -61,7 +62,7 @@ static __global__ void global_set(float* data,
                                   const size_t row,
                                   const size_t col,
                                   const float value) {
-    kernel::matrix::device_set(data, stride, rows, cols, row, col, value);
+    kernel::matrix::device_set(data, stride, cols, row, col);
 }
 
 void kernel::matrix::set(::matrix& matrix,
@@ -74,12 +75,10 @@ void kernel::matrix::set(::matrix& matrix,
 
 static __global__ void global_get(const float* data,
                                   const size_t stride,
-                                  const size_t rows,
-                                  const size_t cols,
                                   const size_t row,
                                   const size_t col,
                                   float* result) {
-    *result = kernel::matrix::device_get(data, stride, rows, cols, row, col);
+    *result = kernel::matrix::device_get(data, stride, row, col);
 }
 
 float kernel::matrix::get(const ::matrix& matrix,
@@ -87,8 +86,7 @@ float kernel::matrix::get(const ::matrix& matrix,
                           const size_t col) {
     float* storage;
     cudaMalloc(&storage, sizeof(float));
-    global_get<<<1, 1>>>(matrix.data, matrix.stride, matrix.rows, matrix.cols,
-                         row, col, storage);
+    global_get<<<1, 1>>>(matrix.data, matrix.stride, row, col, storage);
     float value;
     cudaMemcpy(&value, storage, sizeof(float), cudaMemcpyDeviceToHost);
     cudaFree(storage);
@@ -134,29 +132,6 @@ matrix kernel::matrix::clone(const ::matrix& other) {
     return result;
 }
 
-static __global__ void matrix_map_all(float* data,
-                                      const size_t stride,
-                                      const size_t rows,
-                                      const size_t cols,
-                                      float (*func)(float)) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
-
-    if (idx < total_size) {
-        data[idx] = func(data[idx]);
-    }
-}
-
-void kernel::matrix::general_map(::matrix& mat, float (*func)(float)) {
-    const size_t total_size = mat.buffer_size() / sizeof(float);
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
-
-    matrix_map_all<<<blocks, threads_per_block>>>(mat.data, mat.stride,
-                                                  mat.rows, mat.cols, func);
-}
-
 __global__ void kernel_set_all(float* data,
                                const size_t stride,
                                const size_t rows,
@@ -192,25 +167,22 @@ struct reduction_mutex {
 // mechanism to map the partial reudction to the result. A more optimized
 // version could use shared memory and parallel reduction within blocks, but
 // that is more complex to implement.
+template <__device__ float (*reducer)(float, float)>
 static __global__ void matrix_reduce(const float* data,
-                                     const size_t stride,
-                                     const size_t rows,
-                                     const size_t cols,
+                                     const std::uint64_t stride,
+                                     const std::uint64_t rows,
+                                     const std::uint64_t cols,
                                      float acc,
-                                     float (*reducer)(float, float),
                                      reduction_mutex* result_mutex) {
     float partial_reduction = acc;
-    size_t col = blockIdx.x;
-
-    std::printf("Debug: Starting reduction for column %zu\n", col);
+    std::uint64_t col = blockIdx.x;
 
     if (col >= cols) {
         return;
     }
 
-    for (size_t row = 0; row < rows; ++row) {
-        float val
-            = kernel::matrix::device_get(data, stride, rows, cols, row, col);
+    for (std::uint64_t row = 0; row < rows; ++row) {
+        float val = kernel::matrix::device_get(data, stride, row, col);
         partial_reduction = reducer(partial_reduction, val);
     }
 
@@ -220,19 +192,13 @@ static __global__ void matrix_reduce(const float* data,
 
     result_mutex->result = reducer(result_mutex->result, partial_reduction);
 
-    // Q: Is there a CUDA-supported way to print from device code for
-    // debugging?
-    // A: Yes, you can use the `printf` function in device code, but it has some
-    std::printf("Debug: Acquired lock for column %zu, partial reduction: %f\n",
-                col, partial_reduction);
-
     // Release lock
     atomicExch((int*)lock, 0);
 };
 
+template <__device__ float (*reducer)(float, float)>
 float general_reduce(const ::matrix& mat,
-                     float acc,
-                     float (*reducer)(float, float)) {
+                     float acc) {
     reduction_mutex host_reference = { .lock = 0, .result = acc };
     reduction_mutex* d_result;
     cudaMalloc(&d_result, sizeof(reduction_mutex));
@@ -242,37 +208,50 @@ float general_reduce(const ::matrix& mat,
     const size_t blocks = mat.cols;
     const size_t threads_per_block = 1;
 
-    matrix_reduce<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, acc, reducer, d_result);
+    (matrix_reduce<reducer>)<<<blocks, threads_per_block>>>(
+        mat.data, mat.stride, mat.rows, mat.cols, acc, d_result);
 
+    cudaDeviceSynchronize();
     cudaMemcpy(&host_reference, d_result, sizeof(reduction_mutex),
                cudaMemcpyDeviceToHost);
     cudaFree(d_result);
     return host_reference.result;
 }
 
-__device__ float add_float(float a, float b) {
+__device__ float kernel_fadd(float a, float b) {
     return a + b;
 }
 
 float kernel::matrix::sum(const ::matrix& mat) {
-    return general_reduce(mat, 0.0f, ::add_float);
+    return general_reduce<kernel_fadd>(mat, 0.0f);
+}
+
+__device__ float kernel_fmaxf(float a, float b) {
+    return a > b ? a : b;
 }
 
 float kernel::matrix::max(const ::matrix& mat) {
-    return general_reduce(mat, FLT_MIN, fmaxf);
+    return general_reduce<kernel_fadd>(mat, FLT_MIN);
+}
+
+__device__ float kernel_fminf(float a, float b) {
+    return a < b ? a : b;
 }
 
 float kernel::matrix::min(const ::matrix& mat) {
-    return general_reduce(mat, FLT_MAX, fminf);
+    return general_reduce<kernel_fminf>(mat, FLT_MAX);
+}
+
+__device__ float kernel_fabsf(float a) {
+    return a < 0 ? -a : a;
 }
 
 __device__ float individual_absmax(float a, float b) {
-    return fmaxf(fabsf(a), fabsf(b));
+    return kernel_fmaxf(kernel_fabsf(a), kernel_fabsf(b));
 }
 
 float kernel::matrix::absmax(const ::matrix& mat) {
-    return general_reduce(mat, 0.0f, individual_absmax);
+    return general_reduce<individual_absmax>(mat, 0.0f);
 }
 
 __device__ float square_sum(float a, float b) {
@@ -281,7 +260,7 @@ __device__ float square_sum(float a, float b) {
 
 float kernel::matrix::variance(const ::matrix& mat) {
     float sum = kernel::matrix::sum(mat);
-    float sum_of_squares = general_reduce(mat, 0.0f, square_sum);
+    float sum_of_squares = general_reduce<square_sum>(mat, 0.0f);
 
     return (sum_of_squares / (mat.rows * mat.cols))
            - (sum * sum) / (mat.rows * mat.cols * mat.rows * mat.cols);
@@ -372,9 +351,8 @@ static __global__ void add_row_vector_kernel(float* data,
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < cols) {
-        auto val
-            = kernel::matrix::device_get(data, stride, rows, cols, row, col);
-        kernel::matrix::device_set(data, stride, rows, cols, row, col,
+        auto val = kernel::matrix::device_get(data, stride, row, col);
+        kernel::matrix::device_set(data, stride, row, col,
                                    val + vec[col * vec_stride]);
     }
 }
@@ -398,12 +376,13 @@ static __global__ void set_horizontal_slice_kernel(float* data,
                                                    const size_t slice_cols) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
+    // We can assume here that slice_stride == data_stride since they both have
+    // the same number of rows
+
     if (row < rows) {
         for (size_t col = 0; col < slice_cols; ++col) {
-            auto val = kernel::matrix::device_get(slice, stride, row,
-                                                  slice_cols, row, col);
-            kernel::matrix::device_set(data, stride, rows, slice_cols, row,
-                                       start_col + col, val);
+            auto val = kernel::matrix::device_get(slice, stride, row, col);
+            kernel::matrix::device_set(data, stride, row, start_col + col, val);
         }
     }
 }
@@ -579,18 +558,16 @@ static __global__ void kernel_backprop_softmax(const float* softmax_output,
         float s_dot = 0.0f;
 
         for (size_t c = 0; c < cols; ++c) {
-            float s_j = kernel::matrix::device_get(softmax_output, stride, rows,
-                                                   cols, row, c);
-            float g_j = kernel::matrix::device_get(gradient, stride, rows, cols,
-                                                   row, c);
+            float s_j
+                = kernel::matrix::device_get(softmax_output, stride, row, c);
+            float g_j = kernel::matrix::device_get(gradient, stride, row, c);
             s_dot += s_j * g_j;
         }
 
         for (size_t c = 0; c < cols; ++c) {
-            float s_j = kernel::matrix::device_get(softmax_output, stride, rows,
-                                                   cols, row, c);
-            float g_j = kernel::matrix::device_get(gradient, stride, rows, cols,
-                                                   row, c);
+            float s_j
+                = kernel::matrix::device_get(softmax_output, stride, row, c);
+            float g_j = kernel::matrix::device_get(gradient, stride, row, c);
             softmax_gradient[row + c * stride] = s_j * (g_j - s_dot);
         }
     }
@@ -711,6 +688,34 @@ matrix kernel::matrix::t_cross_multiplied(const ::matrix& a,
                 result.data_ptr(), result.stride);
 
     return result;
+}
+
+__global__ void element_wise_multiply_kernel(float* a_data,
+                                            const size_t a_stride,
+                                            const float* b_data,
+                                            const size_t b_stride,
+                                            const size_t rows,
+                                            const size_t cols) {
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t total_size = rows * cols;
+
+    if (idx < total_size) {
+        const size_t row = idx % rows;
+        const size_t col = idx / rows;
+        float val_a = a_data[row + col * a_stride];
+        float val_b = b_data[row + col * b_stride];
+        a_data[row + col * a_stride] = val_a * val_b;
+    }
+}
+
+void kernel::matrix::element_wise_multiply(::matrix& a, const ::matrix& b) {
+    const size_t total_size = a.rows * a.cols;
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (total_size + threads_per_block - 1) / threads_per_block;
+
+    element_wise_multiply_kernel<<<blocks, threads_per_block>>>(
+        a.data, a.stride, b.data, b.stride, a.rows, a.cols);
 }
 
 __global__ void compare(const float* a,
