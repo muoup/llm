@@ -29,6 +29,8 @@ void kernel::feed_forward::add_bias(::matrix& mat, const ::matrix& row_vec) {
 
     kernel_add_bias<<<grid_size, block_size>>>(
         mat.data, mat.stride, mat.rows, mat.cols, row_vec.data, row_vec.stride);
+    
+    cudaDeviceSynchronize();
 }
 
 __global__ void sum_columns_kernel(const float* base,

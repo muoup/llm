@@ -34,11 +34,10 @@ struct matrix {
 
     matrix() : rows(0), cols(0), stride(0), data(nullptr) {}
     matrix(const size_t rows, const size_t cols);
-
-    ~matrix();
-
-    matrix(matrix&&) = default;
+    matrix(matrix&&);
     matrix(const matrix& other) = delete;
+ 
+    ~matrix();
 
     matrix& operator=(matrix&&) = default;
     matrix& operator=(const matrix& other) = delete;

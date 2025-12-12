@@ -5,6 +5,7 @@
 #include <inference/network_node.hpp>
 #include <kernels/feed_forward.hpp>
 #include <kernels/optimizer.hpp>
+#include "kernels/matrix_kernels.hpp"
 
 NodeType FeedForwardLayer::getType() const {
     return NodeType::FeedForward;
@@ -41,8 +42,11 @@ ForwardingResult FeedForwardLayer::forward(
     matrix final_output = activation_output.cross_multiplied(w2);
     kernel::feed_forward::add_bias(final_output, b2);
 
-    return standardResult(matrix::construct_vec(final_output, activation_input,
-                                                activation_output));
+    auto vec = matrix::construct_vec(final_output, activation_input,
+                                     activation_output);
+    auto results = standardResult(std::move(vec));
+
+    return results;
 }
 
 std::vector<matrix> FeedForwardLayer::backpropogate(

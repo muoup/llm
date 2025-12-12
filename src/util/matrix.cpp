@@ -21,6 +21,14 @@ matrix::matrix(const size_t rows, const size_t cols)
     this->data = kernel::matrix::allocate_buffer(this->buffer_size());
 }
 
+matrix::matrix(matrix&& other) {
+    this->data = other.data;
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->stride = other.stride;
+    other.data = nullptr;
+}
+
 matrix::~matrix() {
     if (data != nullptr) {
         kernel::matrix::free_buffer(data);

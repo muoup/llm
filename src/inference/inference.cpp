@@ -204,22 +204,22 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
 
     std::vector<ForwardingResult> results;
 
-    kernel::matrix::check_errors("Forwarding embeddings...");
     matrix embeddings = m_embedding_layer.forward(tokens);
+    kernel::matrix::check_errors("Forwarding embeddings...");
     results.emplace_back(
         INode::standardResult(matrix::construct_vec(embeddings)));
 
     for (size_t node_idx : execution_order) {
-        std::string msg = std::string("Forwarding layer ")
-                               + std::to_string(node_idx + 1) + "/"
-                               + std::to_string(m_layers.size()) + "...";
         auto forward_result
             = this->m_layers.at(node_idx)->forward(results.back().outputs);
         results.emplace_back(std::move(forward_result));
+        std::string msg
+            = std::string("Forwarding layer ") + std::to_string(node_idx + 1);
+        kernel::matrix::check_errors(msg.data());
     }
 
-    kernel::matrix::check_errors("Forwarding logits...");
     auto logits = m_logit_layer.forward(results.back().outputs[0]);
+    kernel::matrix::check_errors("Forwarding logits...");
     results.emplace_back(INode::standardResult(matrix::construct_vec(logits)));
     return results;
 }
@@ -257,26 +257,26 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     auto results = this->forwarding_results(tokens);
 
     // Backprop through logit layer
-    kernel::matrix::check_errors("Backpropogating logits...");
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
         results[results.size() - 2].outputs[0], results.back().outputs[0],
         actual, learning_rate);
+    kernel::matrix::check_errors("Backpropogating logits...");
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
     // Backprop through layers in reverse order
     for (size_t i = execution_order.size(); i-- > 0;) {
-        std::string msg = std::string("Backpropogating layer ")
-                               + std::to_string(i + 1) + "...";
-        kernel::matrix::check_errors(msg.data());
         size_t node_idx = execution_order[i];
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients.back(),
             learning_rate));
+        std::string msg = std::string("Backpropogating layer ")
+                          + std::to_string(i + 1) + "...";
+        kernel::matrix::check_errors(msg.data());
     }
 
-    kernel::matrix::check_errors("Backpropogating embeddings...");
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
                                           learning_rate);
+    kernel::matrix::check_errors("Backpropogating embeddings...");
     return loss;
 }
