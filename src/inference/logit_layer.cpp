@@ -1,6 +1,7 @@
 #include "logit_layer.hpp"
 
 #include <kernels/optimizer.hpp>
+#include <kernels/feed_forward.hpp>
 #include <tokenizer/token.hpp>
 
 #include <cmath>
@@ -19,10 +20,7 @@ void LogitLayer::randomize(const float min, const float max) {
 
 matrix LogitLayer::forward(const matrix& input) const {
     matrix logits = input.cross_multiplied(w);
-    
-    for (size_t i = 0; i < logits.rows; ++i) {
-        logits.add_row_vector(i, b);
-    }
+    kernel::feed_forward::add_bias(logits, b);
     
     logits.softmax();   
     return logits;

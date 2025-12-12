@@ -210,19 +210,15 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
     matrix embeddings = m_embedding_layer.forward(tokens);
     results.emplace_back(
         INode::standardResult(matrix::construct_vec(embeddings)));
-    // std::cout << "Embeddings: " << embeddings.absmax();
 
     for (size_t node_idx : execution_order) {
         auto forward_result
             = this->m_layers.at(node_idx)->forward(results.back().outputs);
         results.emplace_back(std::move(forward_result));
-        // std::cout << " | Layer " << node_idx
-                  // << " output absmax: " << results.back().outputs[0].absmax();
     }
 
     auto logits = m_logit_layer.forward(results.back().outputs[0]);
     results.emplace_back(INode::standardResult(matrix::construct_vec(logits)));
-    // std::cout << " | Logits absmax: " << logits.absmax() << std::endl;
     return results;
 }
 

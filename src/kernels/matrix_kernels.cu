@@ -57,20 +57,17 @@ void kernel::matrix::free_buffer(float* data) {
 
 static __global__ void global_set(float* data,
                                   const size_t stride,
-                                  const size_t rows,
-                                  const size_t cols,
                                   const size_t row,
                                   const size_t col,
                                   const float value) {
-    kernel::matrix::device_set(data, stride, cols, row, col);
+    kernel::matrix::device_set(data, stride, row, col, value);
 }
 
 void kernel::matrix::set(::matrix& matrix,
                          const size_t row,
                          const size_t col,
                          const float value) {
-    global_set<<<1, 1>>>(matrix.data, matrix.stride, matrix.rows, matrix.cols,
-                         row, col, value);
+    global_set<<<1, 1>>>(matrix.data, matrix.stride, row, col, value);
 }
 
 static __global__ void global_get(const float* data,
@@ -197,8 +194,7 @@ static __global__ void matrix_reduce(const float* data,
 };
 
 template <__device__ float (*reducer)(float, float)>
-float general_reduce(const ::matrix& mat,
-                     float acc) {
+float general_reduce(const ::matrix& mat, float acc) {
     reduction_mutex host_reference = { .lock = 0, .result = acc };
     reduction_mutex* d_result;
     cudaMalloc(&d_result, sizeof(reduction_mutex));
@@ -691,11 +687,11 @@ matrix kernel::matrix::t_cross_multiplied(const ::matrix& a,
 }
 
 __global__ void element_wise_multiply_kernel(float* a_data,
-                                            const size_t a_stride,
-                                            const float* b_data,
-                                            const size_t b_stride,
-                                            const size_t rows,
-                                            const size_t cols) {
+                                             const size_t a_stride,
+                                             const float* b_data,
+                                             const size_t b_stride,
+                                             const size_t rows,
+                                             const size_t cols) {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t total_size = rows * cols;
 
