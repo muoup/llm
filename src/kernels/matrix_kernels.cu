@@ -56,8 +56,9 @@ void kernel::matrix::check_errors(const char* step) {
 
 float* kernel::matrix::allocate_buffer(const size_t size) {
     float* data;
-    cudaMalloc(&data, size * sizeof(float));
-    cudaMemset(data, 0, size * sizeof(float));
+    cudaMalloc(&data, size);
+    cudaMemset(data, 0, size);
+    kernel::matrix::check_errors("Allocating matrix buffer");
     return data;
 }
 
@@ -102,12 +103,12 @@ float kernel::matrix::get(const ::matrix& matrix,
 }
 
 void kernel::matrix::load_into(::matrix& matrix, const float* host_data) {
-    cudaMemcpy(matrix.data, host_data, matrix.buffer_size() * sizeof(float),
+    cudaMemcpy(matrix.data, host_data, matrix.buffer_size(),
                cudaMemcpyHostToDevice);
 }
 
 void kernel::matrix::store_from(const ::matrix& matrix, float* host_data) {
-    cudaMemcpy(host_data, matrix.data, matrix.buffer_size() * sizeof(float),
+    cudaMemcpy(host_data, matrix.data, matrix.buffer_size(),
                cudaMemcpyDeviceToHost);
 }
 
@@ -475,7 +476,7 @@ static __global__ void kernel_add_scaled(float* data,
 
     if (row >= rows || col >= cols)
         return;
-    
+
     float value
         = kernel::matrix::device_get(other_data, other_stride, row, col);
     kernel::matrix::device_offset_elem(data, stride, row, col, value * factor);

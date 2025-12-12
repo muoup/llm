@@ -39,9 +39,10 @@ struct matrix {
  
     ~matrix();
 
-    matrix& operator=(matrix&&) = default;
+    matrix& operator=(matrix&&);
     matrix& operator=(const matrix& other) = delete;
-
+    matrix& operator=(matrix&) = delete;
+    
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
 

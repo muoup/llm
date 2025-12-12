@@ -6,27 +6,15 @@
 #include <cassert>
 #include <cmath>
 
-void Embeddings::randomize(const float min, const float max) {
-    m_data.randomize(min, max);
-}
-
 EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
-    : m_dimensions(dimensions) {
-    m_embeddings.reserve(vocab_size);
-
-    for (size_t i = 0; i < vocab_size; ++i) {
-        m_embeddings.emplace_back(dimensions);
-    }
-}
+    : m_embeddings(vocab_size, dimensions) {}
 
 size_t EmbeddingLayer::parameterCount() const {
-    return m_embeddings.size() * m_dimensions;
+    return m_embeddings.size();
 }
 
 void EmbeddingLayer::randomize(float min, float max) {
-    for (auto& embedding : m_embeddings) {
-        embedding.randomize(min, max);
-    }
+    m_embeddings.randomize(min, max);
 }
 
 static void positional_encoding(matrix& input) {
@@ -43,11 +31,12 @@ static void positional_encoding(matrix& input) {
 }
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
-    matrix output = matrix(tokens.size(), m_dimensions);
+    matrix output = matrix(tokens.size(), this->get_dimensions());
 
     for (size_t i = 0; i < tokens.size(); ++i) {
-        const auto& embedding = m_embeddings[tokens[i]];
-        output.set_row_vector(i, embedding.m_data);
+        matrix embedding
+            = kernel::matrix::get_row_vector(m_embeddings, tokens[i]);
+        output.set_row_vector(i, embedding);
     }
 
     positional_encoding(output);
@@ -60,46 +49,18 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
 #pragma omp parallel for
     for (size_t t = 0; t < tokens.size() - 1; t++) {
         const auto& token = tokens[t];
-        auto& embedding = m_embeddings[token];
-
+        matrix embedding = kernel::matrix::get_row_vector(m_embeddings, token);
         matrix embedding_gradient_row
             = kernel::matrix::get_row_vector(x_gradient, t);
-        adjust_parameter_matrix(embedding.m_data, embedding_gradient_row,
+        adjust_parameter_matrix(embedding, embedding_gradient_row,
                                 learning_rate);
     }
 }
 
 void EmbeddingLayer::save(std::ostream& out) const {
-    const size_t embeddings = this->m_embeddings.size();
-    const size_t dimensions = this->m_dimensions;
-
-    out.write(reinterpret_cast<const char*>(&embeddings), sizeof(embeddings));
-    out.put('|');
-    out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
-    out.put('|');
-
-    for (const auto& embedding : m_embeddings) {
-        embedding.m_data.save(out);
-    }
+    m_embeddings.save(out);
 }
 
 EmbeddingLayer EmbeddingLayer::load(std::istream& in) {
-    size_t embeddings, dimensions;
-    char pipe;
-
-    in.read(reinterpret_cast<char*>(&embeddings), sizeof(embeddings));
-    in.get(pipe);
-    assert(pipe == '|');
-
-    in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
-    in.get(pipe);
-    assert(pipe == '|');
-
-    EmbeddingLayer layer(embeddings, dimensions);
-
-    for (size_t i = 0; i < embeddings; ++i) {
-        layer.m_embeddings.at(i).m_data = matrix::load(in);
-    }
-
-    return layer;
+    return { matrix::load(in) };
 }

@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 static constexpr size_t calculate_stride(const size_t i) {
     // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
@@ -17,8 +18,10 @@ static constexpr size_t calculate_stride(const size_t i) {
 }
 
 matrix::matrix(const size_t rows, const size_t cols)
-    : rows(rows), cols(cols), stride(calculate_stride(rows)) {
-    this->data = kernel::matrix::allocate_buffer(this->buffer_size());
+    : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
+        
+    if (this->buffer_size() > 0)
+        this->data = kernel::matrix::allocate_buffer(this->buffer_size());
 }
 
 matrix::matrix(matrix&& other) {
@@ -26,15 +29,27 @@ matrix::matrix(matrix&& other) {
     this->rows = other.rows;
     this->cols = other.cols;
     this->stride = other.stride;
+
     other.data = nullptr;
 }
 
-matrix::~matrix() {
-    if (data != nullptr) {
-        kernel::matrix::free_buffer(data);
-    }
+matrix& matrix::operator=(matrix&& other) {
+    if (this == &other)
+        return *this;
 
-    this->data = nullptr;
+    if (this->data != nullptr)
+        kernel::matrix::free_buffer(this->data);
+
+    this->data = std::exchange(other.data, nullptr);
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->stride = other.stride;
+    return *this;
+}
+
+matrix::~matrix() {
+    if (data != nullptr)
+        kernel::matrix::free_buffer(data);
 }
 
 void matrix::randomize(const float min, const float max) {
@@ -46,9 +61,10 @@ size_t matrix::buffer_size() const {
 }
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
-    MATRIX_ASSERT(row < rows && col < cols,
-                  "Index out of bounds: (%zu, %zu) for matrix of size (%zu x %zu)",
-                  row, col, rows, cols);
+    MATRIX_ASSERT(
+        row < rows && col < cols,
+        "Index out of bounds: (%zu, %zu) for matrix of size (%zu x %zu)", row,
+        col, rows, cols);
 }
 
 [[nodiscard]] float matrix::get(const size_t row, const size_t col) const {
@@ -146,8 +162,9 @@ matrix matrix::get_horizontal_slice(const size_t col_start,
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {
-    MATRIX_ASSERT(this->rows == other.rows && this->cols == other.cols,
-                  "Matrix dimensions do not match for element-wise multiplication");
+    MATRIX_ASSERT(
+        this->rows == other.rows && this->cols == other.cols,
+        "Matrix dimensions do not match for element-wise multiplication");
 
     kernel::matrix::element_wise_multiply(*this, other);
     return *this;
@@ -243,7 +260,7 @@ void matrix::save(std::ostream& out) const {
     out.write(reinterpret_cast<const char*>(&rows), sizeof(size_t));
     out.write(reinterpret_cast<const char*>(&cols), sizeof(size_t));
 
-    float* buffer = new float[buffer_size()];
+    float* buffer = new float[buffer_size() / sizeof(float)];
     kernel::matrix::store_from(*this, buffer);
     out.write(reinterpret_cast<const char*>(buffer), buffer_size());
     delete[] buffer;
@@ -255,11 +272,14 @@ matrix matrix::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
 
     matrix new_matrix = matrix(new_rows, new_cols);
-
-    float* buffer_data = new float[new_matrix.buffer_size()];
+    kernel::matrix::check_errors("pre2 matrix::load");
+    std::printf("Loading matrix of size (%zu x %zu)\n", new_rows, new_cols);
+    
+    float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);
     delete[] buffer_data;
+    kernel::matrix::check_errors("matrix::load");
 
     return new_matrix;
 }

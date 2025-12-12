@@ -42,7 +42,7 @@ struct InferenceModel {
             throw std::runtime_error("Cannot add null layer to model.");
         }
         
-        m_layers.push_back(std::move(layer));
+        m_layers.emplace_back(std::move(layer));
         return m_layers.size() - 1;
     }
     
@@ -51,7 +51,7 @@ struct InferenceModel {
             throw std::runtime_error("Cannot add connection to finalized model.");
         }
     
-        m_connections.push_back({from_idx, to_idx});
+        m_connections.emplace_back(from_idx, to_idx);
         return m_connections.size() - 1;
     }
     

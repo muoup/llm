@@ -3,19 +3,20 @@
 #include <iostream>
 
 #include <inference/network_node.hpp>
+
 #include <kernels/feed_forward.hpp>
 #include <kernels/optimizer.hpp>
-#include "kernels/matrix_kernels.hpp"
+#include <kernels/matrix_kernels.hpp>
 
 NodeType FeedForwardLayer::getType() const {
     return NodeType::FeedForward;
 }
 
 FeedForwardLayer::FeedForwardLayer(size_t dimensions, size_t projection_size)
-    : w1({ dimensions, projection_size }),
-      b1({ 1, projection_size }),
-      w2({ projection_size, dimensions }),
-      b2({ 1, dimensions }) {}
+    : w1(dimensions, projection_size),
+      b1(1, projection_size),
+      w2(projection_size, dimensions),
+      b2(1, dimensions) {}
 
 size_t FeedForwardLayer::parameterCount() const {
     return (w1.rows * w1.cols) + (b1.rows * b1.cols) + (w2.rows * w2.cols)
@@ -88,11 +89,20 @@ void FeedForwardLayer::save(std::ostream& out) const {
 }
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
-    FeedForwardLayer layer(0, 0);  // 0, 0 to avoid unnecessary allocation
-    layer.w1 = matrix::load(in);
+    kernel::matrix::check_errors("FeedForwardLayer Load - Start");
+    
+    FeedForwardLayer layer(0, 0);
+    auto matrix = matrix::load(in);
+    kernel::matrix::check_errors("FeedForwardLayer Load - w1 pre-move");
+    layer.w1 = std::move(matrix);
+    kernel::matrix::check_errors("FeedForwardLayer Load - w1");
     layer.b1 = matrix::load(in);
+    kernel::matrix::check_errors("FeedForwardLayer Load - b1");
     layer.w2 = matrix::load(in);
+    kernel::matrix::check_errors("FeedForwardLayer Load - w2");
     layer.b2 = matrix::load(in);
+    kernel::matrix::check_errors("FeedForwardLayer Load - b2");
+    
 
     return layer;
 }

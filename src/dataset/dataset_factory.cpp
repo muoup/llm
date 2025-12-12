@@ -7,7 +7,7 @@
 #include <string_view>
 
 // Implementation of the factory function
-std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type) {
+std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type, std::optional<size_t> specified_size) {
     std::printf("Loading dataset from: %s\n", path.data());
     std::ifstream file(path.data());
 
@@ -51,7 +51,7 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
         return ds;
     } else if (type == dataset_type::OVERFIT) {
         auto ds = std::make_unique<overfit_dataset>();
-        ds->repeat_count = 1000;
+        ds->repeat_count = specified_size.value_or(1000);
         ds->data = file_content.substr(0, 250); // Take first 250 characters
         return ds;
     }

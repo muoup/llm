@@ -1,7 +1,7 @@
 #pragma once
 
-#include <util/matrix.hpp>
 #include <tokenizer/token.hpp>
+#include <util/matrix.hpp>
 
 #include <iostream>
 #include <span>
@@ -10,15 +10,17 @@
 // the final matrix back to logits over the vocabulary.
 class LogitLayer {
    public:
-    explicit LogitLayer(const size_t dimensions, const size_t vocab_size);
-    
+    LogitLayer(const size_t dimensions, const size_t vocab_size);
+
     size_t parameterCount() const;
 
     void randomize(float min, float max);
     matrix forward(const matrix& input) const;
     std::pair<matrix, float> backpropogate(
-        const matrix& input, const matrix& predictions,
-        const std::span<const token_id_t> actual, float learning_rate);
+        const matrix& input,
+        const matrix& predictions,
+        const std::span<const token_id_t> actual,
+        float learning_rate);
 
     void save(std::ostream& out) const;
     static LogitLayer load(std::istream& in);

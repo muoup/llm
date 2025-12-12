@@ -102,8 +102,9 @@ InferenceModel InferenceModel::load(std::istream& in) {
 
     InferenceModel model = InferenceModel();
     model.m_dimensions = dimensions;
-
+    std::puts("Loading Embedding Layer");
     model.m_embedding_layer = EmbeddingLayer::load(in);
+    kernel::matrix::check_errors("Loading embedding layer...");
 
     size_t connection_count;
     in.read(reinterpret_cast<char*>(&connection_count),
@@ -114,7 +115,7 @@ InferenceModel InferenceModel::load(std::istream& in) {
         NodeConnection conn;
         in.read(reinterpret_cast<char*>(&conn.from_idx), sizeof(conn.from_idx));
         in.read(reinterpret_cast<char*>(&conn.to_idx), sizeof(conn.to_idx));
-        model.m_connections.push_back(conn);
+        model.m_connections.emplace_back(conn);
     }
 
     size_t layer_count;
@@ -122,15 +123,17 @@ InferenceModel InferenceModel::load(std::istream& in) {
     model.m_layers.reserve(layer_count);
 
     for (size_t i = 0; i < layer_count; ++i) {
-        auto node = load_node(in);
-        if (node) {
+        std::puts("Loading Model Layer");
+        if (auto node = load_node(in)) {
             model.m_layers.emplace_back(std::move(node));
         } else {
             throw std::runtime_error("Failed to load model layer.");
         }
     }
 
+    std::puts("Loading Logit Layer");
     model.m_logit_layer = LogitLayer::load(in);
+    kernel::matrix::check_errors("Loading logit layer...");
     model.finalize();
 
     return model;
