@@ -28,6 +28,8 @@ float variance(const ::matrix& mat);
 void set_all(::matrix& mat, float value);
 void offset_all(::matrix& mat, float offset);
 
+void transfer_row(::matrix& dest, const size_t dest_row,
+                  const ::matrix& src, const size_t src_row);
 void set_row_vector(::matrix& mat, const size_t row, const ::matrix& vec);
 ::matrix get_row_vector(const ::matrix& mat, const size_t row);
 void add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec);

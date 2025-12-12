@@ -8,9 +8,11 @@
 #include "inference/inference.hpp"
 
 InferenceModel minimal_model(size_t vocab_size) {
-    InferenceModel model(1, vocab_size);
+    const size_t dimensions = 128;
     
-    model.add_layer(std::make_unique<FeedForwardLayer>(1, 4));
+    InferenceModel model(dimensions, vocab_size);
+    
+    model.add_layer(std::make_unique<FeedForwardLayer>(dimensions, 128));
 
     model.finalize();
     model.randomize();

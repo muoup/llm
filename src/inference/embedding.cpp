@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <cmath>
+#include "kernels/embedding_layer.hpp"
 
 EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
     : m_embeddings(vocab_size, dimensions) {}
@@ -34,12 +35,11 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     matrix output = matrix(tokens.size(), this->get_dimensions());
 
     for (size_t i = 0; i < tokens.size(); ++i) {
-        matrix embedding
-            = kernel::matrix::get_row_vector(m_embeddings, tokens[i]);
-        output.set_row_vector(i, embedding);
+        kernel::matrix::transfer_row(
+            output, i, m_embeddings, tokens[i]);
     }
 
-    positional_encoding(output);
+    kernel::embedding::positional_encoding(output);
     return output;
 }
 

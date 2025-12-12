@@ -1,6 +1,7 @@
 #include "matrix_device_kernels.cuh"
 #include "matrix_kernels.hpp"
 
+#include <cublas_api.h>
 #include <cublas_v2.h>
 #include <cuda_device_runtime_api.h>
 #include <cuda_runtime_api.h>
@@ -292,6 +293,38 @@ void kernel::matrix::scale(::matrix& mat, const float factor) {
 
     kernel_scale<<<blocks, threads_per_block>>>(mat.data, mat.stride, mat.rows,
                                                 mat.cols, factor);
+}
+
+static __global__ void kernel_transfer_row(float* dest_data,
+                                           const size_t dest_stride,
+                                           const size_t dest_rows,
+                                           const size_t dest_cols,
+                                           const size_t dest_row,
+                                           const float* src_data,
+                                           const size_t src_stride,
+                                           const size_t src_rows,
+                                           const size_t src_cols,
+                                           const size_t src_row) {
+    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (col < src_cols && col < dest_cols) {
+        auto val
+            = kernel::matrix::device_get(src_data, src_stride, src_row, col);
+        kernel::matrix::device_set(dest_data, dest_stride, dest_row, col, val);
+    }
+}
+
+void kernel::matrix::transfer_row(::matrix& dest,
+                                  const size_t dest_row,
+                                  const ::matrix& src,
+                                  const size_t src_row) {
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (src.cols + threads_per_block - 1) / threads_per_block;
+
+    kernel_transfer_row<<<blocks, threads_per_block>>>(
+        dest.data, dest.stride, dest.rows, dest.cols, dest_row, src.data,
+        src.stride, src.rows, src.cols, src_row);
 }
 
 static __global__ void kernel_set_row_vector(float* data,

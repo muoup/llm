@@ -227,7 +227,9 @@ float matrix::dot_product(const matrix& other) const {
 
 matrix matrix::cross_multiplied(const matrix& other) const {
     MATRIX_ASSERT(this->cols == other.rows,
-                  "Matrix dimensions do not match for cross multiplication");
+                  "Matrix dimensions do not match for cross multiplication\n"
+                  "[%zu x %zu] x [%zu x %zu]", this->rows, this->cols,
+                  other.rows, other.cols);
 
     return kernel::matrix::cross_multiplied(*this, other);
 }
