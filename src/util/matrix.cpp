@@ -19,37 +19,32 @@ static constexpr size_t calculate_stride(const size_t i) {
 
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
-        
-    if (this->buffer_size() > 0)
+    if (this->buffer_size() > 0) {       
         this->data = kernel::matrix::allocate_buffer(this->buffer_size());
+    }
 }
 
-matrix::matrix(matrix&& other) {
-    this->data = other.data;
-    this->rows = other.rows;
-    this->cols = other.cols;
-    this->stride = other.stride;
-
-    other.data = nullptr;
-}
+matrix::matrix(matrix&& other)
+    : rows(std::exchange(other.rows, 0)),
+      cols(std::exchange(other.cols, 0)),
+      stride(std::exchange(other.stride, 0)),
+      data(std::exchange(other.data, nullptr)) {}
 
 matrix& matrix::operator=(matrix&& other) {
     if (this == &other)
         return *this;
 
-    if (this->data != nullptr)
-        kernel::matrix::free_buffer(this->data);
-
     this->data = std::exchange(other.data, nullptr);
-    this->rows = other.rows;
-    this->cols = other.cols;
-    this->stride = other.stride;
+    this->rows = std::exchange(other.rows, 0);
+    this->cols = std::exchange(other.cols, 0);
+    this->stride = std::exchange(other.stride, 0);
     return *this;
 }
 
 matrix::~matrix() {
-    if (data != nullptr)
-        kernel::matrix::free_buffer(data);
+    // If data is nullptr, free_buffer will handle it gracefully
+    kernel::matrix::free_buffer(std::exchange(this->data, nullptr));
+    kernel::matrix::check_errors("matrix::~matrix");
 }
 
 void matrix::randomize(const float min, const float max) {
@@ -228,8 +223,8 @@ float matrix::dot_product(const matrix& other) const {
 matrix matrix::cross_multiplied(const matrix& other) const {
     MATRIX_ASSERT(this->cols == other.rows,
                   "Matrix dimensions do not match for cross multiplication\n"
-                  "[%zu x %zu] x [%zu x %zu]", this->rows, this->cols,
-                  other.rows, other.cols);
+                  "[%zu x %zu] x [%zu x %zu]",
+                  this->rows, this->cols, other.rows, other.cols);
 
     return kernel::matrix::cross_multiplied(*this, other);
 }
@@ -276,7 +271,7 @@ matrix matrix::load(std::istream& in) {
     matrix new_matrix = matrix(new_rows, new_cols);
     kernel::matrix::check_errors("pre2 matrix::load");
     std::printf("Loading matrix of size (%zu x %zu)\n", new_rows, new_cols);
-    
+
     float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);

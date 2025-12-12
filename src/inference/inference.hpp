@@ -30,7 +30,7 @@ struct InferenceModel {
     size_t parameter_count() const;
     
     InferenceModel(size_t dimensions, size_t vocab_size)
-        : m_dimensions(dimensions), m_embedding_layer(vocab_size, dimensions),
+        : m_dimensions(dimensions), m_embedding_layer(dimensions, vocab_size),
           m_logit_layer(dimensions, vocab_size) {}
 
     size_t add_layer(std::unique_ptr<INode> layer) {

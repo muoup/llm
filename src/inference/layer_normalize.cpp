@@ -3,6 +3,7 @@
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
 #include <kernels/layer_norm.hpp>
+#include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
 
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
@@ -33,9 +34,18 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
 
     auto results
         = kernel::layer_norm::layer_normalization(input, gamma, beta, epsilon);
+
+    MATRIX_ASSERT(results.normalized.rows == input.rows
+                      && results.normalized.cols == input.cols,
+                  "LayerNorm forward: normalized output dimensions mismatch "
+                  "(expected %zux%zu, got %zux%zu)",
+                  input.rows, input.cols, results.normalized.rows,
+                  results.normalized.cols);
+
     auto inner_node_outputs
-        = inner_node->forward(std::span{ &results.normalized, 1 });
+        = inner_node->forward(std::span(&results.normalized, 1));
     matrix final_output = inner_node_outputs.outputs[0].clone();
+
     final_output.add(input);  // Residual connection
 
     std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
@@ -54,27 +64,27 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     const matrix& normalized_input = result.outputs[result.outputs.size() - 3];
     const matrix& mean = result.outputs[result.outputs.size() - 2];
     const matrix& inv_variance = result.outputs[result.outputs.size() - 1];
-    const matrix& grad_output = gradients[0];
 
     // The gradient dL/dy splits at the residual connection y = x + z
     // The gradient for the residual path (x) is grad_output.
     // The gradient for the main path (z) is also grad_output.
-    matrix grad_residual = grad_output.clone();
-
-    auto inner_backprop_outputs = inner_node->backpropogate(
-        result, std::span<const matrix>{ &normalized_input, 1 },
-        std::span<const matrix>{ &grad_output, 1 }, learning_rate);
+    std::vector<matrix> inner_backprop_outputs = inner_node->backpropogate(
+        result, std::span<const matrix>{ &normalized_input, 1 }, gradients,
+        learning_rate);
     matrix& grad_normalized = inner_backprop_outputs[0];
 
-    auto results = kernel::layer_norm::layer_normalization_backward(
-        *this, layer_input, gamma, beta, mean, inv_variance, grad_normalized,
-        epsilon);
+    kernel::layer_norm::LayerNormGradients results
+        = kernel::layer_norm::layer_normalization_backward(
+            *this, layer_input, gamma, beta, mean, inv_variance,
+            grad_normalized, epsilon);
 
     adjust_parameter_matrix(gamma, results.grad_gamma, learning_rate);
+    kernel::matrix::check_errors("pre adjust beta");
     adjust_parameter_matrix(beta, results.grad_beta, learning_rate);
+    kernel::matrix::check_errors("post adjust beta");
 
     // Add the gradient from the residual path
-    results.grad_input.add(grad_residual);
+    results.grad_input.add(gradients[0]);
     return matrix::construct_vec(results.grad_input);
 }
 

@@ -14,7 +14,8 @@ class EmbeddingLayer {
 public:
     EmbeddingLayer() : m_embeddings(0, 0) {}
     EmbeddingLayer(matrix&& embeddings) : m_embeddings(std::move(embeddings)) {}
-    EmbeddingLayer(size_t vocab_size, size_t dimensions);
+    EmbeddingLayer(size_t dimensions, size_t vocab_size)
+        : m_embeddings(vocab_size, dimensions) {}
     
     size_t parameterCount() const;
 

@@ -36,13 +36,13 @@ struct matrix {
     matrix(const size_t rows, const size_t cols);
     matrix(matrix&&);
     matrix(const matrix& other) = delete;
- 
+
     ~matrix();
 
     matrix& operator=(matrix&&);
     matrix& operator=(const matrix& other) = delete;
     matrix& operator=(matrix&) = delete;
-    
+
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
 
@@ -86,9 +86,9 @@ struct matrix {
     matrix cross_t_multiplied(const matrix& other) const;
 
     matrix backprop_softmax(const matrix& gradient) const;
-   
+
     matrix& element_wise_multiply(const matrix& other);
-    
+
     matrix clone() const;
 
     matrix scaled(const float factor) const {
@@ -96,7 +96,7 @@ struct matrix {
         copy.scale(factor);
         return copy;
     }
-    
+
     float row_sum(const size_t row) const {
         float sum = 0.0f;
         for (size_t j = 0; j < cols; ++j) {
@@ -156,4 +156,43 @@ struct matrix {
 
    private:
     void verify_bounds(const size_t row, const size_t col) const;
+};
+
+struct matrix_view {
+    size_t rows, cols, stride;
+    float* data;
+
+    matrix_view() : rows(0), cols(0), stride(0), data(nullptr) {}
+    matrix_view(matrix& other)
+        : rows(other.rows),
+          cols(other.cols),
+          stride(other.stride),
+          data(other.data) {}
+    matrix_view(const size_t rows,
+                const size_t cols,
+                const size_t stride,
+                float* data)
+        : rows(rows), cols(cols), stride(stride), data(data) {}
+};
+
+struct const_matrix_view {
+    size_t rows, cols, stride;
+    const float* data;
+
+    const_matrix_view() : rows(0), cols(0), stride(0), data(nullptr) {}
+    const_matrix_view(matrix_view& other)
+        : rows(other.rows),
+          cols(other.cols),
+          stride(other.stride),
+          data(other.data) {}
+    const_matrix_view(const matrix& other)
+        : rows(other.rows),
+          cols(other.cols),
+          stride(other.stride),
+          data(other.data) {}
+    const_matrix_view(const size_t rows,
+                      const size_t cols,
+                      const size_t stride,
+                      const float* data)
+        : rows(rows), cols(cols), stride(stride), data(data) {}
 };

@@ -7,9 +7,6 @@
 #include <cmath>
 #include "kernels/embedding_layer.hpp"
 
-EmbeddingLayer::EmbeddingLayer(size_t vocab_size, size_t dimensions)
-    : m_embeddings(vocab_size, dimensions) {}
-
 size_t EmbeddingLayer::parameterCount() const {
     return m_embeddings.size();
 }

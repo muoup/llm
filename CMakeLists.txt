@@ -19,9 +19,11 @@ add_compile_options(-fopenmp)
 add_link_options(-fopenmp)
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DMATRIX_CHECKS")
     add_compile_options(-DMATRIX_CHECKS -DATTENTION_DEBUG)
     add_compile_options(-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG)
     add_compile_options(-O0 -g -fno-omit-frame-pointer -fPIC)

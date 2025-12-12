@@ -9,10 +9,15 @@
 
 InferenceModel minimal_model(size_t vocab_size) {
     const size_t dimensions = 128;
-    
+
     InferenceModel model(dimensions, vocab_size);
-    
-    model.add_layer(std::make_unique<FeedForwardLayer>(dimensions, 128));
+
+    // model.add_layer(std::make_unique<AttentionLayer>(dimensions, 8));
+ 
+    auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions);
+    model.add_layer(std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
+
+    // model.add_connection(0, 1);
 
     model.finalize();
     model.randomize();
@@ -112,7 +117,7 @@ InferenceModel standard_recursive_model(size_t dimensions,
         std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
 
     model.add_connection(attn, ff);
-    
+
     std::vector<std::unique_ptr<INode>> loop;
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer

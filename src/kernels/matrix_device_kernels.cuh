@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 #include <util/matrix.hpp>
 
 namespace kernel::matrix {
@@ -12,11 +12,23 @@ inline __device__ float* device_get_addr(float* data,
     return &(data[row + col * stride]);
 }
 
-inline __device__ const float* device_get_addr(const float* data,
-                                         const size_t stride,
+inline __device__ float* device_get_addr(matrix_view data,
                                          const size_t row,
                                          const size_t col) {
+    return device_get_addr(data.data, data.stride, row, col);
+}
+
+inline __device__ const float* device_get_addr(const float* data,
+                                               const size_t stride,
+                                               const size_t row,
+                                               const size_t col) {
     return &(data[row + col * stride]);
+}
+
+inline __device__ const float* device_get_addr(const const_matrix_view data,
+                                               const size_t row,
+                                               const size_t col) {
+    return device_get_addr(data.data, data.stride, row, col);
 }
 
 inline __device__ void device_set(float* data,
@@ -27,11 +39,24 @@ inline __device__ void device_set(float* data,
     *(device_get_addr(data, stride, row, col)) = value;
 }
 
+inline __device__ void device_set(matrix_view data,
+                                  const size_t row,
+                                  const size_t col,
+                                  const float value) {
+    device_set(data.data, data.stride, row, col, value);
+}
+
 inline __device__ float device_get(const float* data,
                                    const size_t stride,
                                    const size_t row,
                                    const size_t col) {
     return *(device_get_addr(data, stride, row, col));
+}
+
+inline __device__ float device_get(const const_matrix_view data,
+                                   const size_t row,
+                                   const size_t col) {
+    return device_get(data.data, data.stride, row, col);
 }
 
 inline __device__ void device_offset_elem(float* data,
@@ -42,6 +67,13 @@ inline __device__ void device_offset_elem(float* data,
     *(device_get_addr(data, stride, row, col)) += value;
 }
 
+inline __device__ void device_offset_elem(matrix_view data,
+                                          const size_t row,
+                                          const size_t col,
+                                          float value) {
+    device_offset_elem(data.data, data.stride, row, col, value);
+}
+
 inline __device__ void device_offset_elem_atomic(float* data,
                                                  const size_t stride,
                                                  const size_t row,
@@ -49,6 +81,13 @@ inline __device__ void device_offset_elem_atomic(float* data,
                                                  float value) {
     float* addr = device_get_addr(data, stride, row, col);
     atomicAdd(addr, value);
+}
+
+inline __device__ void device_offset_elem_atomic(matrix_view data,
+                                                 const size_t row,
+                                                 const size_t col,
+                                                 float value) {
+    device_offset_elem_atomic(data.data, data.stride, row, col, value);
 }
 
 template <auto Mapping>

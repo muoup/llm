@@ -46,12 +46,21 @@ struct cublas_handle {
 
 static cublas_handle handle;
 
+__global__ void test_print() {
+    printf("Hello from CUDA kernel!\n");
+}
+
+void kernel::matrix::test_print() {
+    ::test_print<<<1, 1>>>();
+}
+
 void kernel::matrix::check_errors(const char* step) {
+    cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         std::printf("Failure during: %s\n", step);
         std::printf("CUDA error: %s\n", cudaGetErrorString(err));
-        std::exit(1);
+        std::abort();
     }
 }
 

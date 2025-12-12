@@ -237,7 +237,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
 
     // Find the index of the maximum logit
     const size_t last_row = logits.rows - 1;
-    float random = static_cast<float>(rand()) / RAND_MAX;
+    float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 
     for (size_t i = 0; i < logits.cols; ++i) {
         random -= logits.get(last_row, i);
