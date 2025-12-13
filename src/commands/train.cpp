@@ -108,8 +108,11 @@ int handle_train(int argc, char* argv[]) {
                   << ". Iterating over rows..." << std::endl;
         size_t n_rows = dataset->size();
         
-        constexpr float starting_learning_rate = 0.0005f;
+        constexpr float starting_learning_rate = 0.005f;
         float learning_rate = 0.0f;
+        
+        float previous_loss1 = 100.0f;
+        float previous_loss2 = 100.0f;
  
         dataset->enumerate(
             [&](size_t i, std::string_view row) {
@@ -120,7 +123,11 @@ int handle_train(int argc, char* argv[]) {
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;
-                learning_rate = starting_learning_rate * std::pow(0.98f, 25 - loss);
+                
+                previous_loss1 = previous_loss2;
+                previous_loss2 = loss;
+                          
+                learning_rate = starting_learning_rate * std::min(1.0f, std::pow(0.90f, i / 1000.0f));
             },
             n_rows);
     } catch (const std::out_of_range& e) {

@@ -15,7 +15,7 @@
 //         }
 //     }
 
-__global__ void compute_loss_gradient_kernel(
+static __global__ void compute_loss_gradient_kernel(
     const token_id_t actual[],
     const const_matrix_view predictions,
     const matrix_view loss_gradient,

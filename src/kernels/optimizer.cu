@@ -20,8 +20,8 @@ __global__ void _test_output() {
 }
 
 static __global__ void regularize_gradient(const matrix_view gradient,
-                                    const const_matrix_view parameters) {
-    constexpr float regularization_term = 0.01f;
+                                           const const_matrix_view parameters) {
+    constexpr float regularization_strength = 0.01f;
 
     size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     size_t col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -31,15 +31,12 @@ static __global__ void regularize_gradient(const matrix_view gradient,
     }
 
     float param_value = kernel::matrix::device_get(parameters, row, col);
-    if (param_value != 0.0f) {
-        float grad_value = kernel::matrix::device_get(gradient, row, col);
-        grad_value += 2 * regularization_term * param_value;
-        kernel::matrix::device_set(gradient, row, col, grad_value);
-    }
+    float regularization = 2 * regularization_strength * param_value;
+    kernel::matrix::device_offset_elem(gradient, row, col, regularization);
 }
 
 void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
-                                            const ::matrix& parameters) {
+                                                   const ::matrix& parameters) {
     MATRIX_ASSERT(
         gradient.rows == parameters.rows && gradient.cols == parameters.cols,
         "Dimension mismatch in regularize_gradient");

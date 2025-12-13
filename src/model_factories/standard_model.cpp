@@ -8,7 +8,7 @@
 #include "inference/inference.hpp"
 
 InferenceModel minimal_model(size_t vocab_size) {
-    const size_t dimensions = 128;
+    const size_t dimensions = 256;
 
     InferenceModel model(dimensions, vocab_size);
 
@@ -17,7 +17,7 @@ InferenceModel minimal_model(size_t vocab_size) {
     // model.add_layer(std::move(attn_layer));
     // model.add_layer(std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
  
-    auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions);
+    auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions * 4);
     model.add_layer(std::move(ff_layer));
     // model.add_layer(std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
 

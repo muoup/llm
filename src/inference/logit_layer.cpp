@@ -31,8 +31,8 @@ std::pair<matrix, float> LogitLayer::backpropogate(const matrix& input, const ma
             predictions, actual, vocab_size);
         
     kernel::optimizer::adjust_parameter_matrix(b, loss_result.logit_bias_gradient, learning_rate);
-    matrix h_final_gradient = loss_result.logit_loss_gradient.cross_t_multiplied(w);
     
+    matrix h_final_gradient = loss_result.logit_loss_gradient.cross_t_multiplied(w);
     kernel::optimizer::norm_clip(h_final_gradient);
     
     matrix logit_weight_gradient = input.t_cross_multiplied(loss_result.logit_loss_gradient);

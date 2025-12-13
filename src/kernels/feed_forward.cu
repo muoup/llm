@@ -38,10 +38,10 @@ __global__ void sum_columns_kernel(const const_matrix_view base,
 matrix kernel::feed_forward::sum_columns(const ::matrix& mat) {
     ::matrix result(1, mat.cols);
 
-    dim3 block_size(256, 1);
-    dim3 grid_size((mat.cols + block_size.x - 1) / block_size.x, 1);
+    size_t threads_per_block = 256;
+    size_t num_blocks = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    sum_columns_kernel<<<grid_size, block_size>>>(mat, result);
+    sum_columns_kernel<<<num_blocks, threads_per_block>>>(mat, result);
     return result;
 }
 

@@ -39,7 +39,7 @@ ForwardingResult FeedForwardLayer::forward(
 
     matrix activation_output
         = kernel::feed_forward::relu_activation(activation_input);
-
+    
     matrix final_output = activation_output.cross_multiplied(w2);
     kernel::feed_forward::add_bias(final_output, b2);
 

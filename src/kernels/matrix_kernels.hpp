@@ -31,7 +31,7 @@ void offset_all(::matrix& mat, float offset);
 
 void transfer_row(::matrix& dest, const size_t dest_row,
                   const ::matrix& src, const size_t src_row);
-void set_row_vector(::matrix& mat, const size_t row, const ::matrix& vec);
+void set_row_vector(::matrix& mat, const size_t mat_row, const ::matrix& vec, const size_t vec_row = 0);
 ::matrix get_row_vector(const ::matrix& mat, const size_t row);
 void add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec, const size_t vec_row = 0);
 void set_horizontal_slice(::matrix& mat,

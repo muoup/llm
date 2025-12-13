@@ -328,24 +328,26 @@ void kernel::matrix::transfer_row(::matrix& dest,
 }
 
 static __global__ void kernel_set_row_vector(const matrix_view data,
+                                             size_t data_row,
                                              const const_matrix_view row_vector,
-                                             size_t row) {
+                                             size_t vector_row) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < data.cols) {
-        auto val = kernel::matrix::device_get(row_vector, 0, col);
-        kernel::matrix::device_set(data, row, col, val);
+        auto val = kernel::matrix::device_get(row_vector, vector_row, col);
+        kernel::matrix::device_set(data, data_row, col, val);
     }
 }
 
 void kernel::matrix::set_row_vector(::matrix& mat,
-                                    const size_t row,
-                                    const ::matrix& vec) {
+                                    const size_t mat_row,
+                                    const ::matrix& vec,
+                                    const size_t vec_row) {
     const size_t threads_per_block = 256;
     const size_t blocks
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    kernel_set_row_vector<<<blocks, threads_per_block>>>(mat, vec, row);
+    kernel_set_row_vector<<<blocks, threads_per_block>>>(mat, mat_row, vec, vec_row);
 }
 
 static __global__ void kernel_get_row_vector(const float* data,
@@ -358,7 +360,8 @@ static __global__ void kernel_get_row_vector(const float* data,
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < cols) {
-        vec[col * vec_stride] = data[row + col * stride];
+        const float val = kernel::matrix::device_get(data, stride, row, col);
+        kernel::matrix::device_set(vec, vec_stride, 0, col, val);
     }
 }
 
@@ -451,7 +454,8 @@ static __global__ void get_horizontal_slice_kernel(const const_matrix_view data,
     dim3 blocks(((mat.rows + threads_per_block.x - 1) / threads_per_block.x),
                 ((slice_cols + threads_per_block.y - 1) / threads_per_block.y));
 
-    get_horizontal_slice_kernel<<<blocks, threads_per_block>>>(mat, slice, start_col);
+    get_horizontal_slice_kernel<<<blocks, threads_per_block>>>(mat, slice,
+                                                               start_col);
     return slice;
 }
 
@@ -488,9 +492,6 @@ static __global__ void kernel_add_scaled(const matrix_view data,
                                          const float factor) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
-
-    // We are safe to assume here that both matrices are the same size
-    // i.e. other_rows == rows and other_cols == cols
 
     if (row >= data.rows || col >= data.cols)
         return;
@@ -534,17 +535,16 @@ void kernel::matrix::add(::matrix& mat, float value) {
                                                     mat.rows, mat.cols, value);
 }
 
-__global__ void kernel_softmax(float* data,
-                               size_t stride,
-                               size_t rows,
-                               size_t cols) {
+__global__ void kernel_softmax(const matrix_view data) {
     const size_t row = blockIdx.x;
 
-    if (row < rows) {
+    if (row < data.rows) {
         // Find max value for numerical stability
-        float max_val = data[row + 0 * stride];
-        for (size_t j = 1; j < cols; ++j) {
-            float val = data[row + j * stride];
+        float max_val = kernel::matrix::device_get(
+            data, row, 0);  // data[row + 0 * stride];
+        for (size_t j = 1; j < data.cols; ++j) {
+            const float val = kernel::matrix::device_get(
+                data, row, j);  // data[row + j * stride];
             if (val > max_val) {
                 max_val = val;
             }
@@ -552,16 +552,17 @@ __global__ void kernel_softmax(float* data,
 
         // Compute exponentials and sum
         float sum_exp = 0.0f;
-        for (size_t j = 0; j < cols; ++j) {
-            float exp_val = expf(data[row + j * stride] - max_val);
-            data[row + j * stride] = exp_val;
+        for (size_t j = 0; j < data.cols; ++j) {
+            const float exp_val
+                = expf(kernel::matrix::device_get(data, row, j) - max_val);
+            kernel::matrix::device_set(data, row, j, exp_val);
             sum_exp += exp_val;
         }
 
         // Normalize to get probabilities
-        for (size_t j = 0; j < cols; ++j) {
-            float val = data[row + j * stride];
-            data[row + j * stride] = val / sum_exp;
+        for (size_t j = 0; j < data.cols; ++j) {
+            const float val = kernel::matrix::device_get(data, row, j);  //
+            kernel::matrix::device_set(data, row, j, val / sum_exp);
         }
     }
 }
@@ -570,8 +571,7 @@ void kernel::matrix::softmax(::matrix& mat) {
     const size_t threads_per_block = 1;
     const size_t blocks = mat.rows;
 
-    kernel_softmax<<<blocks, threads_per_block>>>(mat.data, mat.stride,
-                                                  mat.rows, mat.cols);
+    kernel_softmax<<<blocks, threads_per_block>>>(mat);
 }
 
 static __global__ void kernel_backprop_softmax(
@@ -678,6 +678,7 @@ matrix kernel::matrix::cross_multiplied(const ::matrix& a, const ::matrix& b) {
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, a.rows, b.cols, a.cols,
                 &alpha, a.data_ptr(), a.stride, b.data_ptr(), b.stride, &beta,
                 result.data_ptr(), result.stride);
+    kernel::matrix::check_errors("cross_multiplied");
 
     return result;
 }
@@ -691,6 +692,7 @@ matrix kernel::matrix::cross_t_multiplied(const ::matrix& a,
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, a.rows, b.rows, a.cols,
                 &alpha, a.data_ptr(), a.stride, b.data_ptr(), b.stride, &beta,
                 result.data_ptr(), result.stride);
+    kernel::matrix::check_errors("cross_t_multiplied");
 
     return result;
 }
@@ -704,6 +706,7 @@ matrix kernel::matrix::t_cross_multiplied(const ::matrix& a,
     cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols, b.cols, a.rows,
                 &alpha, a.data_ptr(), a.stride, b.data_ptr(), b.stride, &beta,
                 result.data_ptr(), result.stride);
+    kernel::matrix::check_errors("t_cross_multiplied");
 
     return result;
 }
