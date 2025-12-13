@@ -40,47 +40,37 @@
 //     return normalized_input;
 // }
 
-__global__ void row_mean(const float* input,
-                         size_t rows,
-                         size_t cols,
-                         size_t stride,
-                         float* mean,
-                         size_t mean_stride) {
+__global__ void row_mean(const const_matrix_view input,
+                         const matrix_view mean) {
     size_t row_idx = blockIdx.x;
 
-    float* sum = &mean[row_idx + 0 * mean_stride];
+    float* sum = kernel::matrix::device_get_addr(mean, row_idx, 0);
     *sum = 0.0f;
 
-    for (size_t j = 0; j < cols; ++j) {
-        *sum += input[row_idx + j * stride];
+    for (size_t j = 0; j < input.cols; ++j) {
+        *sum += kernel::matrix::device_get(input, row_idx, j);
     }
 
-    *sum /= static_cast<float>(cols);
+    *sum /= static_cast<float>(input.cols);
 }
 
-__global__ void row_variance(const float* input,
-                             size_t rows,
-                             size_t cols,
-                             size_t stride,
-                             const float* mean,
-                             size_t mean_stride,
-                             float* inv_variance,
-                             size_t inv_variance_stride,
+__global__ void row_variance(const const_matrix_view input,
+                             const const_matrix_view mean,
+                             const matrix_view inv_variance,
                              float epsilon) {
     size_t row_idx = blockIdx.x;
 
-    float row_mean = mean[row_idx + 0 * mean_stride];
+    float row_mean = kernel::matrix::device_get(mean, row_idx, 0);
     float variance = 0.0f;
 
-    for (size_t col = 0; col < cols; ++col) {
-        float diff = kernel::matrix::device_get(input, stride, row_idx, col)
-                     - row_mean;
+    for (size_t col = 0; col < input.cols; ++col) {
+        float diff = kernel::matrix::device_get(input, row_idx, col) - row_mean;
         variance += diff * diff;
     }
 
-    variance /= static_cast<float>(cols);
-    inv_variance[row_idx + 0 * inv_variance_stride]
-        = 1.0f / sqrtf(variance + epsilon);
+    variance /= static_cast<float>(input.cols);
+    kernel::matrix::device_set(inv_variance, row_idx, 0,
+                               1.0f / sqrtf(variance + epsilon));
 }
 
 __global__ void normalize_and_scale(const const_matrix_view input,
@@ -95,8 +85,8 @@ __global__ void normalize_and_scale(const const_matrix_view input,
     if (col_idx < output.cols) {
         float normalized
             = (kernel::matrix::device_get(input, row_idx, col_idx)
-               - kernel::matrix::device_get(mean, row_idx, 0)
-                     * kernel::matrix::device_get(inv_variance, row_idx, 0));
+               - kernel::matrix::device_get(mean, row_idx, 0))
+              * kernel::matrix::device_get(inv_variance, row_idx, 0);
         float scaled
             = normalized * kernel::matrix::device_get(gamma, 0, col_idx)
               + kernel::matrix::device_get(beta, 0, col_idx);
@@ -113,12 +103,8 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     ::matrix mean(input.rows, 1);
     ::matrix inv_variance(input.rows, 1);
 
-    row_mean<<<input.rows, 1>>>(input.data, input.rows, input.cols,
-                                input.stride, mean.data, mean.stride);
-
-    row_variance<<<input.rows, 1>>>(
-        input.data, input.rows, input.cols, input.stride, mean.data,
-        mean.stride, inv_variance.data, inv_variance.stride, epsilon);
+    row_mean<<<input.rows, 1>>>(input, mean);
+    row_variance<<<input.rows, 1>>>(input, mean, inv_variance, epsilon);
 
     const size_t threads_per_block = 256;
     const size_t blocks_y
@@ -235,14 +221,14 @@ kernel::layer_norm::layer_normalization_backward(const ::LayerNorm& layer,
     ::matrix grad_input(layer_input.rows, layer_input.cols);
     ::matrix grad_gamma(gamma.rows, gamma.cols);
     ::matrix grad_beta(beta.rows, beta.cols);
-    
+
     constexpr size_t threads_per_block = 255;
-    size_t num_blocks = (layer_input.rows + threads_per_block - 1)
-                        / threads_per_block;
-    
-    layer_norm_backward_kernel<<<num_blocks, threads_per_block>>>(mean, gamma, inv_variance, layer_input,
-                                         grad_output, grad_beta, grad_gamma,
-                                         grad_input);
+    size_t num_blocks
+        = (layer_input.rows + threads_per_block - 1) / threads_per_block;
+
+    layer_norm_backward_kernel<<<num_blocks, threads_per_block>>>(
+        mean, gamma, inv_variance, layer_input, grad_output, grad_beta,
+        grad_gamma, grad_input);
     kernel::matrix::check_errors("layer_normalization_backward: kernel launch");
 
     return { .grad_input = std::move(grad_input),

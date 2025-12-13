@@ -97,7 +97,8 @@ inline __device__ void device_offset_elem_atomic(matrix_view data,
 }
 
 template <auto Mapping>
-__global__ void map_matrix_kernel(const const_matrix_view input, const matrix_view output) {
+__global__ void map_matrix_kernel(const const_matrix_view input,
+                                  const matrix_view output) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -115,8 +116,7 @@ template <auto Mapping>
     dim3 gridSize((input.cols + blockSize.x - 1) / blockSize.x,
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
-    map_matrix_kernel<Mapping>
-        <<<gridSize, blockSize>>>(input, output);
+    map_matrix_kernel<Mapping><<<gridSize, blockSize>>>(input, output);
     return output;
 }
 
@@ -126,9 +126,7 @@ void map_matrix_inplace(::matrix& input) {
     dim3 gridSize((input.cols + blockSize.x - 1) / blockSize.x,
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
-    map_matrix_kernel<Mapping>
-        <<<gridSize, blockSize>>>(input.data_ptr(), input.data_ptr(),
-                                  input.stride, input.rows, input.cols);
+    map_matrix_kernel<Mapping><<<gridSize, blockSize>>>(input, input);
 }
 
 }  // namespace kernel::matrix
