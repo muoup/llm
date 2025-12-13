@@ -376,31 +376,28 @@ static __global__ void kernel_get_row_vector(const float* data,
     return result;
 }
 
-static __global__ void add_row_vector_kernel(float* data,
-                                             const size_t stride,
-                                             const size_t rows,
-                                             const size_t cols,
-                                             const size_t row,
-                                             const float* vec,
-                                             size_t vec_stride) {
+static __global__ void add_row_vector_kernel(const matrix_view data,
+                                             size_t data_row,
+                                             const const_matrix_view offset,
+                                             size_t offset_row) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (col < cols) {
-        auto val = kernel::matrix::device_get(data, stride, row, col);
-        kernel::matrix::device_set(data, stride, row, col,
-                                   val + vec[col * vec_stride]);
+    if (col < data.cols) {
+        auto val = kernel::matrix::device_get(offset, offset_row, col);
+        kernel::matrix::device_offset_elem(data, data_row, col, val);
     }
 }
 
 void kernel::matrix::add_row_vector(::matrix& mat,
                                     const size_t row,
-                                    const ::matrix& vec) {
+                                    const ::matrix& vec,
+                                    size_t vec_row) {
     const size_t threads_per_block = 256;
     const size_t blocks
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    add_row_vector_kernel<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, row, vec.data, vec.stride);
+    add_row_vector_kernel<<<blocks, threads_per_block>>>(mat, row, vec,
+                                                         vec_row);
 }
 
 static __global__ void set_horizontal_slice_kernel(float* data,

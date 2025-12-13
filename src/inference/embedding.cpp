@@ -29,16 +29,14 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
 void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
                                    float learning_rate) {
+    matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
+                                       
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        matrix embedding = kernel::matrix::get_row_vector(m_embeddings, token);
-        matrix embedding_gradient_row
-            = kernel::matrix::get_row_vector(x_gradient, t);
-        adjust_parameter_matrix(embedding, embedding_gradient_row,
-                                learning_rate);
-        
-        m_embeddings.set_row_vector(token, embedding);
+        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t);
     }
+    
+    adjust_parameter_matrix(m_embeddings, embedding_gradient, learning_rate);
 }
 
 void EmbeddingLayer::save(std::ostream& out) const {

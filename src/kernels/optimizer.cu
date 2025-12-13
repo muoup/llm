@@ -48,8 +48,9 @@ void adjust_parameter_matrix(matrix& adjust,
     dim3 blocks((adjust.rows + threads_per_block.x - 1) / threads_per_block.x,
                 (adjust.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    regularize_gradient<<<blocks, threads_per_block>>>(gradient, adjust);
-    kernel::matrix::check_errors("After regularize_gradient");
+    // regularize_gradient<<<blocks, threads_per_block>>>(gradient, adjust);
+    // kernel::matrix::check_errors("After regularize_gradient");
+    norm_clip(gradient);
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
     kernel::matrix::check_errors("After adjust_parameter_matrix");
 }

@@ -107,10 +107,12 @@ int handle_train(int argc, char* argv[]) {
                   << (type == dataset_type::RAW ? "raw" : "row-based")
                   << ". Iterating over rows..." << std::endl;
         size_t n_rows = dataset->size();
-
+        
+        constexpr float starting_learning_rate = 0.0005f;
+        float learning_rate = 0.0f;
+ 
         dataset->enumerate(
             [&](size_t i, std::string_view row) {
-                const float learning_rate = 0.000001f;
                 auto tokens = encode(_tokenizer, row);
                 const auto truncated_input
                     = std::span{ tokens.begin(), tokens.end() - 1 };
@@ -118,6 +120,7 @@ int handle_train(int argc, char* argv[]) {
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;
+                learning_rate = starting_learning_rate * std::pow(0.98f, 25.0f / loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

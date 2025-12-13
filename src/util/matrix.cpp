@@ -270,8 +270,6 @@ matrix matrix::load(std::istream& in) {
 
     matrix new_matrix = matrix(new_rows, new_cols);
     kernel::matrix::check_errors("pre2 matrix::load");
-    std::printf("Loading matrix of size (%zu x %zu)\n", new_rows, new_cols);
-
     float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);
