@@ -127,8 +127,7 @@ void map_matrix_inplace(::matrix& input) {
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
     map_matrix_kernel<Mapping>
-        <<<gridSize, blockSize>>>(input.data_ptr(), input.data_ptr(),
-                                  input.stride, input.rows, input.cols);
+        <<<gridSize, blockSize>>>(input, input);
 }
 
 }  // namespace kernel::matrix

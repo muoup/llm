@@ -95,8 +95,8 @@ __global__ void normalize_and_scale(const const_matrix_view input,
     if (col_idx < output.cols) {
         float normalized
             = (kernel::matrix::device_get(input, row_idx, col_idx)
-               - kernel::matrix::device_get(mean, row_idx, 0)
-                     * kernel::matrix::device_get(inv_variance, row_idx, 0));
+               - kernel::matrix::device_get(mean, row_idx, 0))
+              * kernel::matrix::device_get(inv_variance, row_idx, 0);
         float scaled
             = normalized * kernel::matrix::device_get(gamma, 0, col_idx)
               + kernel::matrix::device_get(beta, 0, col_idx);
