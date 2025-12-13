@@ -2,10 +2,9 @@
 
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
+#include <kernels/embedding_layer.hpp>
 
 #include <cassert>
-#include <cmath>
-#include "kernels/embedding_layer.hpp"
 
 size_t EmbeddingLayer::parameterCount() const {
     return m_embeddings.size();
@@ -13,19 +12,6 @@ size_t EmbeddingLayer::parameterCount() const {
 
 void EmbeddingLayer::randomize(float min, float max) {
     m_embeddings.randomize(min, max);
-}
-
-static void positional_encoding(matrix& input) {
-    for (size_t token_i = 0; token_i < input.rows; ++token_i) {
-        for (size_t encoding_i = 0; encoding_i < input.cols / 2; ++encoding_i) {
-            const auto offset = encoding_i * 2;
-            const auto inner
-                = token_i
-                  / std::pow(10000, offset / static_cast<float>(input.cols));
-            input.offset(token_i, offset, std::sin(inner));
-            input.offset(token_i, offset + 1, std::cos(inner));
-        }
-    }
 }
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {

@@ -97,17 +97,13 @@ inline __device__ void device_offset_elem_atomic(matrix_view data,
 }
 
 template <auto Mapping>
-__global__ void map_matrix_kernel(const float* input,
-                                  float* output,
-                                  std::uint64_t stride,
-                                  std::uint64_t rows,
-                                  std::uint64_t cols) {
+__global__ void map_matrix_kernel(const const_matrix_view input, const matrix_view output) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row < rows && col < cols) {
-        float val = kernel::matrix::device_get(input, stride, row, col);
-        kernel::matrix::device_set(output, stride, row, col, Mapping(val));
+    if (row < input.rows && col < input.cols) {
+        float val = kernel::matrix::device_get(input, row, col);
+        kernel::matrix::device_set(output, row, col, Mapping(val));
     }
 }
 
@@ -120,10 +116,7 @@ template <auto Mapping>
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
     map_matrix_kernel<Mapping>
-        <<<gridSize, blockSize>>>(input.data_ptr(), output.data_ptr(),
-                                  input.stride, input.rows, input.cols);
-
-    cudaDeviceSynchronize();
+        <<<gridSize, blockSize>>>(input, output);
     return output;
 }
 
@@ -136,8 +129,6 @@ void map_matrix_inplace(::matrix& input) {
     map_matrix_kernel<Mapping>
         <<<gridSize, blockSize>>>(input.data_ptr(), input.data_ptr(),
                                   input.stride, input.rows, input.cols);
-
-    cudaDeviceSynchronize();
 }
 
 }  // namespace kernel::matrix
