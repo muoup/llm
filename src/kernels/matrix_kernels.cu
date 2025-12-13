@@ -430,18 +430,15 @@ void kernel::matrix::set_horizontal_slice(::matrix& mat,
         mat.data, mat.stride, mat.rows, start_col, slice.data, slice.cols);
 }
 
-static __global__ void get_horizontal_slice_kernel(const float* data,
-                                                   const size_t stride,
-                                                   const size_t rows,
-                                                   const size_t start_col,
-                                                   float* slice,
-                                                   const size_t slice_cols) {
+static __global__ void get_horizontal_slice_kernel(const const_matrix_view data,
+                                                   matrix_view slice,
+                                                   const size_t start_col) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (row < rows) {
-        for (size_t col = 0; col < slice_cols; ++col) {
-            slice[row + col * stride] = data[row + (start_col + col) * stride];
-        }
+    if (col < slice.cols && row < slice.rows) {
+        auto val = kernel::matrix::device_get(data, row, start_col + col);
+        kernel::matrix::device_set(slice, row, col, val);
     }
 }
 
@@ -450,13 +447,11 @@ static __global__ void get_horizontal_slice_kernel(const float* data,
                                               const size_t slice_cols) {
     ::matrix slice(mat.rows, slice_cols);
 
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (mat.rows + threads_per_block - 1) / threads_per_block;
+    dim3 threads_per_block(16, 16);
+    dim3 blocks(((mat.rows + threads_per_block.x - 1) / threads_per_block.x),
+                ((slice_cols + threads_per_block.y - 1) / threads_per_block.y));
 
-    get_horizontal_slice_kernel<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, start_col, slice.data, slice.cols);
-
+    get_horizontal_slice_kernel<<<blocks, threads_per_block>>>(mat, slice, start_col);
     return slice;
 }
 
@@ -579,29 +574,26 @@ void kernel::matrix::softmax(::matrix& mat) {
                                                   mat.rows, mat.cols);
 }
 
-static __global__ void kernel_backprop_softmax(const float* softmax_output,
-                                               const float* gradient,
-                                               size_t stride,
-                                               size_t rows,
-                                               size_t cols,
-                                               float* softmax_gradient) {
+static __global__ void kernel_backprop_softmax(
+    const const_matrix_view softmax_output,
+    const const_matrix_view gradient,
+    matrix_view softmax_gradient) {
     const size_t row = blockIdx.x;
 
-    if (row < rows) {
+    if (row < softmax_output.rows) {
         float s_dot = 0.0f;
 
-        for (size_t c = 0; c < cols; ++c) {
-            float s_j
-                = kernel::matrix::device_get(softmax_output, stride, row, c);
-            float g_j = kernel::matrix::device_get(gradient, stride, row, c);
+        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
+            float s_j = kernel::matrix::device_get(softmax_output, row, col);
+            float g_j = kernel::matrix::device_get(gradient, row, col);
             s_dot += s_j * g_j;
         }
 
-        for (size_t c = 0; c < cols; ++c) {
-            float s_j
-                = kernel::matrix::device_get(softmax_output, stride, row, c);
-            float g_j = kernel::matrix::device_get(gradient, stride, row, c);
-            softmax_gradient[row + c * stride] = s_j * (g_j - s_dot);
+        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
+            float s_j = kernel::matrix::device_get(softmax_output, row, col);
+            float g_j = kernel::matrix::device_get(gradient, row, col);
+            kernel::matrix::device_set(softmax_gradient, row, col,
+                                       s_j * (g_j - s_dot));
         }
     }
 }
@@ -613,39 +605,32 @@ static __global__ void kernel_backprop_softmax(const float* softmax_output,
     const size_t threads_per_block = 1;
     const size_t blocks = gradient.rows;
 
-    kernel_backprop_softmax<<<blocks, threads_per_block>>>(
-        output.data, gradient.data, output.stride, output.rows, output.cols,
-        softmax_gradient.data);
+    kernel_backprop_softmax<<<blocks, threads_per_block>>>(output, gradient,
+                                                           softmax_gradient);
 
     return softmax_gradient;
 }
 
-void __global__ kernel_mask_upper_triangular(float* data,
-                                             const size_t stride,
-                                             const size_t rows,
-                                             const size_t cols,
+void __global__ kernel_mask_upper_triangular(const matrix_view data,
                                              const float mask_value) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    const size_t row = data.rows;
+    const size_t col = data.cols;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
+    if (col > row && (row < data.rows || col < data.cols)) {
         if (col > row) {
-            data[row + col * stride] = mask_value;
+            kernel::matrix::device_set(data, row, col, mask_value);
         }
     }
 }
 
 void kernel::matrix::mask_upper_triangular(::matrix& mat,
                                            const float mask_value) {
-    const size_t total_size = mat.rows * mat.cols;
     const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    const dim3 blocks((mat.rows + threads_per_block - 1) / threads_per_block,
+                      (mat.cols + threads_per_block - 1) / threads_per_block);
 
-    kernel_mask_upper_triangular<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, mask_value);
+    kernel_mask_upper_triangular<<<blocks, threads_per_block>>>(mat,
+                                                                mask_value);
 }
 
 __global__ void matrixDotProductKernel(float* A,

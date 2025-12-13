@@ -114,7 +114,8 @@ std::vector<matrix> AttentionLayer::backpropogate(
     matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
 
-    adjust_parameter_matrix(wo, wo_gradient, learning_rate);
+    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
+    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
 
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
@@ -149,9 +150,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
 
         AttentionHead& head = heads[h];
-        adjust_parameter_matrix(head.wq, wq_gradient, learning_rate);
-        adjust_parameter_matrix(head.wk, wk_gradient, learning_rate);
-        adjust_parameter_matrix(head.wv, wv_gradient, learning_rate);
+        kernel::optimizer::regularize_weight_gradient(wq_gradient, head.wq);
+        kernel::optimizer::regularize_weight_gradient(wk_gradient, head.wk);
+        kernel::optimizer::regularize_weight_gradient(wv_gradient, head.wv);
+        
+        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient, learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient, learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient, learning_rate);
 
         // Gradient of the input: sum of contributions via each projection +
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);

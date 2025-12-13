@@ -2,6 +2,14 @@
 
 #include <util/matrix.hpp>
 
-void norm_clip(matrix &gradient);
+namespace kernel::optimizer {
 
-void adjust_parameter_matrix(matrix &adjust, matrix &gradient, float learning_rate);
+void norm_clip(::matrix& gradient);
+
+void regularize_weight_gradient(::matrix& gradient, const ::matrix& parameters);
+
+void adjust_parameter_matrix(::matrix& adjust,
+                             ::matrix& gradient,
+                             float learning_rate);
+
+}  // namespace kernel::optimizer

@@ -120,7 +120,7 @@ int handle_train(int argc, char* argv[]) {
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;
-                learning_rate = starting_learning_rate * std::pow(0.98f, 25.0f / loss);
+                learning_rate = starting_learning_rate * std::pow(0.98f, 25 - loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

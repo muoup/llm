@@ -23,13 +23,12 @@ struct LayerNormGradients {
     ::matrix grad_beta;
 };
 
-LayerNormGradients layer_normalization_backward(const ::LayerNorm& layer,
-                                                const ::matrix& input,
+LayerNormGradients layer_normalization_backward(const ::matrix& input,
                                                 const ::matrix& gamma,
                                                 const ::matrix& beta,
                                                 const ::matrix& mean,
                                                 const ::matrix& inv_variance,
-                                                const ::matrix& grad_outputv,
+                                                const ::matrix& grad_normalized,
                                                 float epsilon);
 
 }  // namespace kernel::layer_norm

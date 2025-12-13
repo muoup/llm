@@ -117,7 +117,7 @@ std::vector<matrix> RecursionNode::backpropogate(
         dP_n.set_all(dp_n * chance_acc);
 
         auto dw = y_n.t_cross_multiplied(dP_n);
-        adjust_parameter_matrix(w, dw, learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(w, dw, learning_rate);
 
         auto db = matrix(1, 1);
         for (size_t r = 0; r < dP_n.cols; r++) {
@@ -125,7 +125,7 @@ std::vector<matrix> RecursionNode::backpropogate(
             db.set(0, 0, db.get(0, 0) + col_sum);
         }
 
-        adjust_parameter_matrix(b, db, learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(b, db, learning_rate);
 
         auto dy_n = y_gradient.scaled(p_n);
         output_gradient_span = std::span(&dy_n, 1);
