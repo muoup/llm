@@ -108,10 +108,9 @@ int handle_train(int argc, char* argv[]) {
                   << ". Iterating over rows..." << std::endl;
         size_t n_rows = dataset->size();
 
-        float learning_rate = 0;
-
         dataset->enumerate(
             [&](size_t i, std::string_view row) {
+                const float learning_rate = 0.000001f;
                 auto tokens = encode(_tokenizer, row);
                 const auto truncated_input
                     = std::span{ tokens.begin(), tokens.end() - 1 };
@@ -119,7 +118,6 @@ int handle_train(int argc, char* argv[]) {
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;
-                learning_rate = 0.001f * std::logb(loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

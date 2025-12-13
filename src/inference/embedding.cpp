@@ -29,8 +29,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
 void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
                                    float learning_rate) {
-#pragma omp parallel for
-    for (size_t t = 0; t < tokens.size() - 1; t++) {
+    for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
         matrix embedding = kernel::matrix::get_row_vector(m_embeddings, token);
         matrix embedding_gradient_row
