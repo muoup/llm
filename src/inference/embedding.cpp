@@ -16,15 +16,17 @@ void EmbeddingLayer::randomize(float min, float max) {
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     matrix output = matrix(tokens.size(), this->get_dimensions());
+    kernel::optimizer::wait_for_operations();
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         kernel::matrix::transfer_row(
             output, i, m_embeddings, tokens[i]);
+        kernel::optimizer::wait_for_operations();
     }
 
-    kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
     kernel::optimizer::wait_for_operations();
+    
     return output;
 }
 
@@ -32,6 +34,7 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
                                    float learning_rate) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
+    kernel::optimizer::wait_for_operations();
                                        
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];

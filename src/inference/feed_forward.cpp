@@ -33,9 +33,10 @@ void FeedForwardLayer::randomize(const float min, const float max) {
 ForwardingResult FeedForwardLayer::forward(
     std::span<const matrix> inputs) const {
     const matrix& input = inputs[0];
-
+    
     matrix activation_input = input.cross_multiplied(w1);
     kernel::optimizer::wait_for_operations();
+    
     kernel::feed_forward::add_bias(activation_input, b1);
     kernel::optimizer::wait_for_operations();
 
@@ -45,6 +46,7 @@ ForwardingResult FeedForwardLayer::forward(
 
     matrix final_output = activation_output.cross_multiplied(w2);
     kernel::optimizer::wait_for_operations();
+    
     kernel::feed_forward::add_bias(final_output, b2);
     kernel::optimizer::wait_for_operations();
 
@@ -61,15 +63,19 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const matrix& activation_input = result.outputs[1];
     const matrix& activation_output = result.outputs[2];
     const matrix& post_layer_gradient = gradients[0];
+    
+    kernel::optimizer::wait_for_operations();
 
     matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
     matrix w2_gradient
         = activation_output.t_cross_multiplied(post_layer_gradient);
     const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
     kernel::optimizer::wait_for_operations();
+    
     matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
         activation_input, a1_gradient);
     kernel::optimizer::wait_for_operations();
+    
     matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
     auto input_gradient = z1_gradient.cross_t_multiplied(w1);
@@ -84,6 +90,8 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate);
 
     kernel::optimizer::norm_clip(input_gradient);
+    kernel::optimizer::wait_for_operations();
+    
     return matrix::construct_vec(input_gradient);
 }
 

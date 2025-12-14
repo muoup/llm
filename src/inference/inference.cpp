@@ -12,6 +12,7 @@
 #include <inference/network_node.hpp>
 
 #include <kernels/matrix_kernels.hpp>
+#include <kernels/optimizer.hpp>
 
 std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
@@ -258,12 +259,15 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     }
 
     std::vector<ForwardingResult> results = this->forwarding_results(tokens);
+    kernel::optimizer::wait_for_operations();
 
     // Backprop through logit layer
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
         results[results.size() - 2].outputs[0], results.back().outputs[0],
         actual, learning_rate);
     kernel::matrix::check_errors("Backpropogating logits...");
+    kernel::optimizer::wait_for_operations();
+    
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
@@ -273,6 +277,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients.back(),
             learning_rate));
+        
         std::string msg = std::string("Backpropogating layer ")
                           + std::to_string(i + 1) + "...";
         kernel::matrix::check_errors(msg.data());

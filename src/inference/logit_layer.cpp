@@ -22,9 +22,13 @@ void LogitLayer::randomize(const float min, const float max) {
 
 matrix LogitLayer::forward(const matrix& input) const {
     matrix logits = input.cross_multiplied(w);
+    kernel::optimizer::wait_for_operations();
+    
     kernel::feed_forward::add_bias(logits, b);
+    kernel::optimizer::wait_for_operations();
 
     logits.softmax();
+    kernel::optimizer::wait_for_operations();
     return logits;
 }
 

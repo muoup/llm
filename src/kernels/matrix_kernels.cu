@@ -1,3 +1,4 @@
+#include "kernels/optimizer.hpp"
 #include "matrix_device_kernels.cuh"
 #include "matrix_kernels.hpp"
 
@@ -68,6 +69,7 @@ float* kernel::matrix::allocate_buffer(const size_t size) {
     cudaMalloc(&data, size);
     cudaMemset(data, 0, size);
     kernel::matrix::check_errors("Allocating matrix buffer");
+    kernel::optimizer::wait_for_operations();
     return data;
 }
 
