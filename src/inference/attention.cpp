@@ -37,11 +37,11 @@ void AttentionLayer::randomize(const float min, const float max) {
 }
 
 size_t AttentionLayer::parameterCount() const {
-    size_t count = wo.rows * wo.cols;
+    size_t count = wo.size();
     for (const auto& head : heads) {
-        count += head.wq.rows * head.wq.cols;
-        count += head.wk.rows * head.wk.cols;
-        count += head.wv.rows * head.wv.cols;
+        count += head.wq.size();
+        count += head.wk.size();
+        count += head.wv.size();
     }
     return count;
 }
@@ -80,6 +80,17 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
 
         matrix& concatenated_heads = returns[1];
         concatenated_heads.set_horizontal_slice(h * head_size, weighted_sum);
+        
+        logger::log(LogLevel::DEBUG, "  Attention Head %zu Forward:", h);
+        logger::log(LogLevel::DEBUG, "    wq norm: %f", head.wq.norm());
+        logger::log(LogLevel::DEBUG, "    wk norm: %f", head.wk.norm());
+        logger::log(LogLevel::DEBUG, "    wv norm: %f", head.wv.norm());
+        logger::log(LogLevel::DEBUG, "    q norm: %f", q.norm());
+        logger::log(LogLevel::DEBUG, "    k norm: %f", k.norm());
+        logger::log(LogLevel::DEBUG, "    v norm: %f", v.norm());
+        logger::log(LogLevel::DEBUG, "    scores norm: %f", scores.norm());
+        logger::log(LogLevel::DEBUG, "    weighted_sum norm: %f",
+                    weighted_sum.norm());
 
         // returns is not modified, so the output reference will remain valid
         // until this point

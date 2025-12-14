@@ -8,13 +8,13 @@
 #include "inference/inference.hpp"
 
 InferenceModel minimal_model(size_t vocab_size) {
-    const size_t dimensions = 256;
+    const size_t dimensions = 128;
 
     InferenceModel model(dimensions, vocab_size);
 
     model.add_connection(0, 1);
     
-    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 8);
+    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1);
     // model.add_layer(std::move(attn_layer));
     model.add_layer(std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
  
