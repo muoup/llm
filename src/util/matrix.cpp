@@ -51,6 +51,25 @@ void matrix::randomize(const float min, const float max) {
     kernel::matrix::randomize(*this, min, max);
 }
 
+void matrix::leaky_kaiming_randomize() {
+    constexpr float negative_slope = 0.01f;
+    
+    float n_in = static_cast<float>(rows * cols);
+    float stddev = std::sqrt(2.0f / ((1 + negative_slope * negative_slope) * n_in));
+    
+    float bound = stddev * std::sqrt(3.0f); // Uniform bound from stddev
+    
+    kernel::matrix::randomize(*this, -bound, bound);
+}
+
+void matrix::xavier_randomize() {
+    float n_in = static_cast<float>(rows);
+    float n_out = static_cast<float>(cols);
+    float bound = std::sqrt(6.0f / (n_in + n_out));
+    
+    kernel::matrix::randomize(*this, -bound, bound);
+}
+
 size_t matrix::buffer_size() const {
     return stride * cols * sizeof(float);
 }

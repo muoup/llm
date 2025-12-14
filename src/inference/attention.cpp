@@ -28,12 +28,12 @@ AttentionLayer::AttentionLayer(size_t dimensions, size_t head_count)
 
 void AttentionLayer::randomize(const float min, const float max) {
     for (auto& head : heads) {
-        head.wq.randomize(min, max);
-        head.wk.randomize(min, max);
-        head.wv.randomize(min, max);
+        head.wq.leaky_kaiming_randomize();
+        head.wk.leaky_kaiming_randomize();
+        head.wv.leaky_kaiming_randomize();
     }
 
-    wo.randomize(min, max);
+    wo.leaky_kaiming_randomize();
 }
 
 size_t AttentionLayer::parameterCount() const {

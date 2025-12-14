@@ -25,10 +25,10 @@ size_t FeedForwardLayer::parameterCount() const {
 }
 
 void FeedForwardLayer::randomize(const float min, const float max) {
-    w1.randomize(min, max);
-    b1.randomize(min, max);
-    w2.randomize(min, max);
-    b2.randomize(min, max);
+    w1.leaky_kaiming_randomize();
+    b1.leaky_kaiming_randomize();
+    w2.leaky_kaiming_randomize();
+    b2.leaky_kaiming_randomize();
 }
 
 ForwardingResult FeedForwardLayer::forward(

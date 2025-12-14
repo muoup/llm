@@ -15,11 +15,11 @@
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
-// #ifndef MATRIX_CHECKS
+#ifdef MATRIX_CHECKS
     logger::set_log_level(LogLevel::DEBUG);
-// #else
-    // logger::set_log_level(LogLevel::INFO);
-// #endif
+#else
+    logger::set_log_level(LogLevel::INFO);
+#endif
 
     if (argc < 2) {
         std::cerr << "Usage: ./llm <command> [options]" << std::endl;

@@ -10,6 +10,28 @@
 
 #include <float.h>
 
+struct CurandGenerator {
+    curandGenerator_t gen;
+    
+    CurandGenerator() {}
+    
+    operator curandGenerator_t() {
+        auto status = curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
+        
+        if (status != CURAND_STATUS_SUCCESS) {
+            std::puts("Failed to create cuRAND generator");
+            std::printf("Error Code: %d\n", status);
+            std::fflush(stdout);
+            std::exit(1);
+        }
+        
+        curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
+        return gen;
+    } 
+};
+
+static CurandGenerator global_curand_generator;
+
 void cleanup_cublas();
 
 struct cublas_handle {
@@ -124,16 +146,7 @@ void kernel::matrix::store_from(const ::matrix& matrix, float* host_data) {
 void kernel::matrix::randomize(::matrix& matrix,
                                const float min,
                                const float max) {
-    static curandGenerator_t gen;
-    static bool generator_initialized = false;
-
-    if (!generator_initialized) {
-        curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
-        curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
-        generator_initialized = true;
-    }
-
-    curandGenerateUniform(gen, matrix.data,
+    curandGenerateUniform(global_curand_generator, matrix.data,
                           matrix.buffer_size() / sizeof(float));
     const auto range = max - min;
 

@@ -44,6 +44,9 @@ struct matrix {
 
     size_t buffer_size() const;
     void randomize(float min = -1, float max = 1);
+    void leaky_kaiming_randomize();
+    void xavier_randomize();
+    void zero();
 
     float* data_ptr() { return data; }
     const float* data_ptr() const { return data; }
