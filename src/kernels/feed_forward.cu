@@ -1,8 +1,9 @@
-#include "kernels/feed_forward.hpp"
-#include "kernels/optimizer.hpp"
+#include "feed_forward.hpp"
+
+#include <kernels/matrix_device_kernels.cuh>
+#include <kernels/optimizer.hpp>
 
 #include <cublas_v2.h>
-#include <kernels/matrix_device_kernels.cuh>
 
 __global__ void kernel_add_bias(const matrix_view matrix,
                                 const const_matrix_view bias) {

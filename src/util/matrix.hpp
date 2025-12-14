@@ -119,6 +119,7 @@ struct matrix {
     float absmax() const;
     float variance() const;
     float stddev() const;
+    float sum_of_squares() const;
 
     matrix transposed() const {
         matrix transposed{ cols, rows };
@@ -151,6 +152,8 @@ struct matrix {
         std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols
                   << ", stride=" << this->stride << "\n";
     }
+    
+    void print_contents() const;
 
     [[nodiscard]] size_t size() const { return cols * rows; }
 

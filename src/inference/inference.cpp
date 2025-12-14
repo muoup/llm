@@ -141,8 +141,8 @@ InferenceModel InferenceModel::load(std::istream& in) {
 }
 
 void InferenceModel::randomize() {
-    constexpr auto min = -0.50f;
-    constexpr auto max = 0.50f;
+    constexpr auto min = -0.25f;
+    constexpr auto max = 0.25f;
 
     m_embedding_layer.randomize(min, max);
     for (auto& layer : m_layers) {
@@ -272,7 +272,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
 
     // Backprop through layers in reverse order
-    for (int i = execution_order.size() - 1; i > 0; i--) {
+    for (int i = execution_order.size() - 1; i >= 0; i--) {
         size_t node_idx = execution_order[i];
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients.back(),

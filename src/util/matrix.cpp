@@ -19,7 +19,7 @@ static constexpr size_t calculate_stride(const size_t i) {
 
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
-    if (this->buffer_size() > 0) {       
+    if (this->buffer_size() > 0) {
         this->data = kernel::matrix::allocate_buffer(this->buffer_size());
     }
 }
@@ -169,6 +169,10 @@ float matrix::variance() const {
     return kernel::matrix::variance(*this);
 }
 
+float matrix::sum_of_squares() const {
+    return kernel::matrix::sum_of_squares(*this);
+}
+
 float matrix::stddev() const {
     return std::sqrt(variance());
 }
@@ -277,4 +281,15 @@ matrix matrix::load(std::istream& in) {
     kernel::matrix::check_errors("matrix::load");
 
     return new_matrix;
+}
+
+void matrix::print_contents() const {
+    std::printf("Matrix contents (%zu x %zu):\n", rows, cols);
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
+            std::printf("%f ", get(i, j));
+        }
+        std::printf("\n");
+    }
+    std::fflush(stdout);
 }

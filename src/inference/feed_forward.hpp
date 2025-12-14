@@ -30,11 +30,9 @@ public:
         float learning_rate) override;
 
     void randomize(float min, float max) override;
-    
     void save(std::ostream& out) const override;
     static FeedForwardLayer load(std::istream& in);
-
-private:
+    
     matrix w1, b1;
     matrix w2, b2;
 };

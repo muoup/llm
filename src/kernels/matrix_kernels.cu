@@ -138,8 +138,13 @@ void kernel::matrix::randomize(::matrix& matrix,
     const auto range = max - min;
 
     matrix.add(-0.5f);
+    kernel::optimizer::wait_for_operations();
+    
     matrix.scale(range);
+    kernel::optimizer::wait_for_operations();
+    
     matrix.add(min);
+    kernel::optimizer::wait_for_operations();
 }
 
 matrix kernel::matrix::clone(const ::matrix& other) {
@@ -241,6 +246,14 @@ float kernel::matrix::sum(const ::matrix& mat) {
     return general_reduce<kernel_fadd>(mat, 0.0f);
 }
 
+__device__ float square_sum(float a, float b) {
+    return a + b * b;
+}
+
+float kernel::matrix::sum_of_squares(const ::matrix& mat) {
+    return general_reduce<square_sum>(mat, 0.0f);
+}
+
 __device__ float kernel_fmaxf(float a, float b) {
     return a > b ? a : b;
 }
@@ -269,13 +282,9 @@ float kernel::matrix::absmax(const ::matrix& mat) {
     return general_reduce<individual_absmax>(mat, 0.0f);
 }
 
-__device__ float square_sum(float a, float b) {
-    return a + b * b;
-}
-
 float kernel::matrix::variance(const ::matrix& mat) {
     float sum = kernel::matrix::sum(mat);
-    float sum_of_squares = general_reduce<square_sum>(mat, 0.0f);
+    float sum_of_squares = kernel::matrix::sum_of_squares(mat);
 
     return (sum_of_squares / (mat.rows * mat.cols))
            - (sum * sum) / (mat.rows * mat.cols * mat.rows * mat.cols);

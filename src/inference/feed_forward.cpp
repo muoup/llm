@@ -1,9 +1,9 @@
 #include "feed_forward.hpp"
 
 #include <iostream>
+#include <cmath>
 
 #include <inference/network_node.hpp>
-
 #include <kernels/feed_forward.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
@@ -61,7 +61,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     float learning_rate) {
     const matrix& layer_input = inputs[0];
     const matrix& activation_input = result.outputs[1];
-    const matrix& activation_output = result.outputs[2];
+    matrix activation_output = result.outputs[2].clone();
     const matrix& post_layer_gradient = gradients[0];
     
     kernel::optimizer::wait_for_operations();
@@ -83,6 +83,12 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
     kernel::optimizer::wait_for_operations();
+    
+    // std::cout << "  FF Layer Gradients:\n";
+    // std::cout << "    w1_gradient norm: " << std::sqrt(w1_gradient.sum_of_squares()) << "\n";
+    // std::cout << "    b1_gradient norm: " << std::sqrt(b1_gradient.sum_of_squares()) << "\n";
+    // std::cout << "    w2_gradient norm: " << std::sqrt(w2_gradient.sum_of_squares()) << "\n";
+    // std::cout << "    b2_gradient norm: " << std::sqrt(b2_gradient.sum_of_squares()) << "\n";
 
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);

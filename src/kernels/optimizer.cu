@@ -46,7 +46,9 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
         (gradient.rows + threads_per_block.x - 1) / threads_per_block.x,
         (gradient.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    ::regularize_gradient<<<blocks, threads_per_block>>>(gradient, parameters);
+    norm_clip(gradient);
+    wait_for_operations();
+    regularize_gradient<<<blocks, threads_per_block>>>(gradient, parameters);
     kernel::matrix::check_errors("After regularize_gradient");
 }
 
@@ -60,8 +62,8 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
     dim3 blocks((adjust.rows + threads_per_block.x - 1) / threads_per_block.x,
                 (adjust.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel::optimizer::norm_clip(gradient);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::norm_clip(gradient);
+    // kernel::optimizer::wait_for_operations();
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
     kernel::matrix::check_errors("After adjust_parameter_matrix");
 }

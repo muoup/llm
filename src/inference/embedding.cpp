@@ -42,6 +42,9 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
         kernel::optimizer::wait_for_operations();
     }
     
+    // std::cout << "  Embedding Layer Gradients:\n";
+    // std::cout << "    embedding_gradient norm: " << std::sqrt(embedding_gradient.sum_of_squares()) << "\n";
+
     kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient, learning_rate);
     kernel::optimizer::wait_for_operations();
 }
