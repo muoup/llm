@@ -5,8 +5,8 @@
 #include <inference/network_node.hpp>
 
 #include <kernels/feed_forward.hpp>
-#include <kernels/optimizer.hpp>
 #include <kernels/matrix_kernels.hpp>
+#include <kernels/optimizer.hpp>
 
 NodeType FeedForwardLayer::getType() const {
     return NodeType::FeedForward;
@@ -35,19 +35,21 @@ ForwardingResult FeedForwardLayer::forward(
     const matrix& input = inputs[0];
 
     matrix activation_input = input.cross_multiplied(w1);
+    kernel::optimizer::wait_for_operations();
     kernel::feed_forward::add_bias(activation_input, b1);
+    kernel::optimizer::wait_for_operations();
 
     matrix activation_output
-        = kernel::feed_forward::relu_activation(activation_input);
-    
+        = kernel::feed_forward::leaky_relu_activation(activation_input);
+    kernel::optimizer::wait_for_operations();
+
     matrix final_output = activation_output.cross_multiplied(w2);
+    kernel::optimizer::wait_for_operations();
     kernel::feed_forward::add_bias(final_output, b2);
+    kernel::optimizer::wait_for_operations();
 
-    auto vec = matrix::construct_vec(final_output, activation_input,
-                                     activation_output);
-    auto results = standardResult(std::move(vec));
-
-    return results;
+    return standardResult(matrix::construct_vec(final_output, activation_input,
+                                                activation_output));
 }
 
 std::vector<matrix> FeedForwardLayer::backpropogate(
@@ -61,25 +63,27 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const matrix& post_layer_gradient = gradients[0];
 
     matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
-    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
-
     matrix w2_gradient
         = activation_output.t_cross_multiplied(post_layer_gradient);
-    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
-    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);
-
     const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
-    matrix z1_gradient = kernel::feed_forward::relu_activation_backprop(
+    kernel::optimizer::wait_for_operations();
+    matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
         activation_input, a1_gradient);
-
+    kernel::optimizer::wait_for_operations();
     matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
-    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
-
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
+    auto input_gradient = z1_gradient.cross_t_multiplied(w1);
+
+    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
+    kernel::optimizer::wait_for_operations();
+
+    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
+    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);
+    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate);
 
-    auto input_gradient = z1_gradient.cross_t_multiplied(w1);
+    kernel::optimizer::norm_clip(input_gradient);
     return matrix::construct_vec(input_gradient);
 }
 
@@ -92,7 +96,7 @@ void FeedForwardLayer::save(std::ostream& out) const {
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
     kernel::matrix::check_errors("FeedForwardLayer Load - Start");
-    
+
     FeedForwardLayer layer(0, 0);
     auto matrix = matrix::load(in);
     kernel::matrix::check_errors("FeedForwardLayer Load - w1 pre-move");
@@ -104,7 +108,6 @@ FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
     kernel::matrix::check_errors("FeedForwardLayer Load - w2");
     layer.b2 = matrix::load(in);
     kernel::matrix::check_errors("FeedForwardLayer Load - b2");
-    
 
     return layer;
 }

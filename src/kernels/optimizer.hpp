@@ -12,4 +12,6 @@ void adjust_parameter_matrix(::matrix& adjust,
                              ::matrix& gradient,
                              float learning_rate);
 
+void wait_for_operations();
+
 }  // namespace kernel::optimizer

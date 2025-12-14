@@ -1,6 +1,7 @@
 #include "logit_layer.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
+#include <kernels/optimizer.hpp>
 
 // for (size_t i = 0; i < predictions.rows; ++i) {
 //         for (size_t j = 0; j < predictions.cols; ++j) {
@@ -30,7 +31,7 @@ static __global__ void compute_loss_gradient_kernel(
     const token_id_t actual_token = actual[row + 1];
 
     float pred_value = kernel::matrix::device_get(predictions, row, col);
-    float delta_loss = pred_value - (col == actual_token ? 1.0f : 0.0f);
+    float delta_loss = pred_value - (col == actual[row + 1] ? 1.0f : 0.0f);
 
     kernel::matrix::device_set(loss_gradient, row, col, delta_loss);
     kernel::matrix::device_offset_elem_atomic(bias_gradient, 0, col,
@@ -47,9 +48,10 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     size_t vocab_size) {
     ::matrix logit_loss_gradient(predictions.rows, predictions.cols);
     ::matrix logit_bias_gradient(1, vocab_size);
-    float* average_loss;
-    cudaMalloc(&average_loss, sizeof(float));
-    cudaMemset(average_loss, 0, sizeof(float));
+    
+    float* device_average_loss;
+    cudaMalloc(&device_average_loss, sizeof(float));
+    cudaMemset(device_average_loss, 0, sizeof(float));
 
     token_id_t* d_actual;
     cudaMalloc(&d_actual, actual.size() * sizeof(token_id_t));
@@ -62,11 +64,12 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
 
     compute_loss_gradient_kernel<<<grid_size, block_size>>>(
         d_actual, predictions, logit_loss_gradient, logit_bias_gradient,
-        average_loss);
+        device_average_loss);
+    kernel::optimizer::wait_for_operations();
 
     float host_loss;
-    cudaMemcpy(&host_loss, average_loss, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(average_loss);
+    cudaMemcpy(&host_loss, device_average_loss, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaFree(device_average_loss);
     cudaFree(d_actual);
 
     return LossResult{

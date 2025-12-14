@@ -1,4 +1,5 @@
 #include "kernels/feed_forward.hpp"
+#include "kernels/optimizer.hpp"
 
 #include <cublas_v2.h>
 #include <kernels/matrix_device_kernels.cuh>
@@ -28,10 +29,12 @@ __global__ void sum_columns_kernel(const const_matrix_view base,
 
     if (col < base.cols) {
         float sum = 0.0f;
+
         for (int row = 0; row < base.rows; ++row) {
             sum += kernel::matrix::device_get(base, row, col);
         }
-        kernel::matrix::device_offset_elem(result, 0, col, sum);
+
+        kernel::matrix::device_set(result, 0, col, sum);
     }
 }
 
@@ -49,7 +52,7 @@ __device__ float leaky_relu(float x) {
     return x > 0 ? x : x * 0.01f;
 }
 
-matrix kernel::feed_forward::relu_activation(const ::matrix& z1) {
+matrix kernel::feed_forward::leaky_relu_activation(const ::matrix& z1) {
     return kernel::matrix::map_matrix<leaky_relu>(z1);
 }
 
@@ -57,7 +60,7 @@ __device__ float leaky_relu_derivative(float x) {
     return x > 0 ? 1.0f : 0.01f;
 }
 
-matrix kernel::feed_forward::relu_activation_backprop(
+matrix kernel::feed_forward::leaky_relu_activation_backprop(
     const ::matrix& activation_input,
     const ::matrix& a1_gradient) {
     ::matrix z1_mapped

@@ -61,6 +61,12 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
                 (adjust.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel::optimizer::norm_clip(gradient);
+    kernel::optimizer::wait_for_operations();
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
     kernel::matrix::check_errors("After adjust_parameter_matrix");
+}
+
+void kernel::optimizer::wait_for_operations() {
+    cudaDeviceSynchronize();
+    kernel::matrix::check_errors("After wait_for_operations in optimizer");
 }

@@ -75,27 +75,25 @@ void kernel::matrix::free_buffer(float* data) {
     cudaFree(data);
 }
 
-static __global__ void global_set(float* data,
-                                  const size_t stride,
+static __global__ void global_set(const matrix_view data,
                                   const size_t row,
                                   const size_t col,
                                   const float value) {
-    kernel::matrix::device_set(data, stride, row, col, value);
+    kernel::matrix::device_set(data, row, col, value);
 }
 
 void kernel::matrix::set(::matrix& matrix,
                          const size_t row,
                          const size_t col,
                          const float value) {
-    global_set<<<1, 1>>>(matrix.data, matrix.stride, row, col, value);
+    global_set<<<1, 1>>>(matrix, row, col, value);
 }
 
-static __global__ void global_get(const float* data,
-                                  const size_t stride,
-                                  const size_t row,
-                                  const size_t col,
+static __global__ void global_get(const const_matrix_view data,
+                                  size_t row,
+                                  size_t col,
                                   float* result) {
-    *result = kernel::matrix::device_get(data, stride, row, col);
+    *result = kernel::matrix::device_get(data, row, col);
 }
 
 float kernel::matrix::get(const ::matrix& matrix,
@@ -103,7 +101,7 @@ float kernel::matrix::get(const ::matrix& matrix,
                           const size_t col) {
     float* storage;
     cudaMalloc(&storage, sizeof(float));
-    global_get<<<1, 1>>>(matrix.data, matrix.stride, row, col, storage);
+    global_get<<<1, 1>>>(matrix, row, col, storage);
     float value;
     cudaMemcpy(&value, storage, sizeof(float), cudaMemcpyDeviceToHost);
     cudaFree(storage);
@@ -246,7 +244,7 @@ __device__ float kernel_fmaxf(float a, float b) {
 }
 
 float kernel::matrix::max(const ::matrix& mat) {
-    return general_reduce<kernel_fadd>(mat, FLT_MIN);
+    return general_reduce<kernel_fmaxf>(mat, FLT_MIN);
 }
 
 __device__ float kernel_fminf(float a, float b) {
@@ -347,7 +345,8 @@ void kernel::matrix::set_row_vector(::matrix& mat,
     const size_t blocks
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    kernel_set_row_vector<<<blocks, threads_per_block>>>(mat, mat_row, vec, vec_row);
+    kernel_set_row_vector<<<blocks, threads_per_block>>>(mat, mat_row, vec,
+                                                         vec_row);
 }
 
 static __global__ void kernel_get_row_vector(const float* data,
@@ -459,32 +458,24 @@ static __global__ void get_horizontal_slice_kernel(const const_matrix_view data,
     return slice;
 }
 
-static __global__ void matrix_add_matrix(float* data,
-                                         const size_t stride,
-                                         const size_t rows,
-                                         const size_t cols,
-                                         const float* offset_data,
-                                         const size_t offset_stride) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+static __global__ void matrix_add_matrix(const matrix_view data,
+                                         const const_matrix_view offset) {
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        float value
-            = kernel::matrix::device_get(offset_data, offset_stride, row, col);
-        kernel::matrix::device_offset_elem(data, stride, row, col, value);
+    if (row < data.rows && col < data.cols) {
+        float value = kernel::matrix::device_get(offset, row, col);
+        kernel::matrix::device_offset_elem(data, row, col, value);
     }
 }
 
 void kernel::matrix::add(::matrix& mat, const ::matrix& offset) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    matrix_add_matrix<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, offset.data, offset.stride);
+    matrix_add_matrix<<<blocks, threads_per_block>>>(mat, offset);
 }
 
 static __global__ void kernel_add_scaled(const matrix_view data,
@@ -510,29 +501,23 @@ void kernel::matrix::add_scaled(::matrix& mat,
     kernel_add_scaled<<<blocks, threads_per_block>>>(mat, other, factor);
 }
 
-static __global__ void kernel_add_value(float* data,
-                                        const size_t stride,
-                                        const size_t rows,
-                                        const size_t cols,
+static __global__ void kernel_add_value(const matrix_view data,
                                         const float value) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] += value;
+    if (row < data.rows && col < data.cols) {
+        kernel::matrix::device_offset_elem(data, row, col, value);
     }
 }
 
 void kernel::matrix::add(::matrix& mat, float value) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_add_value<<<blocks, threads_per_block>>>(mat.data, mat.stride,
-                                                    mat.rows, mat.cols, value);
+    kernel_add_value<<<blocks, threads_per_block>>>(mat, value);
 }
 
 __global__ void kernel_softmax(const matrix_view data) {
@@ -611,7 +596,7 @@ static __global__ void kernel_backprop_softmax(
     return softmax_gradient;
 }
 
-void __global__ kernel_mask_upper_triangular(const matrix_view data,
+void __global__ kernel_mask_upper_triangle(const matrix_view data,
                                              const float mask_value) {
     const size_t row = data.rows;
     const size_t col = data.cols;
@@ -623,13 +608,13 @@ void __global__ kernel_mask_upper_triangular(const matrix_view data,
     }
 }
 
-void kernel::matrix::mask_upper_triangular(::matrix& mat,
+void kernel::matrix::mask_upper_triangle(::matrix& mat,
                                            const float mask_value) {
     const size_t threads_per_block = 256;
     const dim3 blocks((mat.rows + threads_per_block - 1) / threads_per_block,
                       (mat.cols + threads_per_block - 1) / threads_per_block);
 
-    kernel_mask_upper_triangular<<<blocks, threads_per_block>>>(mat,
+    kernel_mask_upper_triangle<<<blocks, threads_per_block>>>(mat,
                                                                 mask_value);
 }
 
@@ -711,32 +696,24 @@ matrix kernel::matrix::t_cross_multiplied(const ::matrix& a,
     return result;
 }
 
-__global__ void element_wise_multiply_kernel(float* a_data,
-                                             const size_t a_stride,
-                                             const float* b_data,
-                                             const size_t b_stride,
-                                             const size_t rows,
-                                             const size_t cols) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+__global__ void element_wise_multiply_kernel(matrix_view a_data,
+                                             const const_matrix_view b_data) {
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        float val_a = a_data[row + col * a_stride];
-        float val_b = b_data[row + col * b_stride];
-        a_data[row + col * a_stride] = val_a * val_b;
+    if (row < a_data.rows && col < a_data.cols) {
+        float val_a = kernel::matrix::device_get(a_data, row, col);
+        float val_b = kernel::matrix::device_get(b_data, row, col);
+        kernel::matrix::device_set(a_data, row, col, val_a * val_b);
     }
 }
 
 void kernel::matrix::element_wise_multiply(::matrix& a, const ::matrix& b) {
-    const size_t total_size = a.rows * a.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks((a.rows + threads_per_block.x - 1) / threads_per_block.x,
+                      (a.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    element_wise_multiply_kernel<<<blocks, threads_per_block>>>(
-        a.data, a.stride, b.data, b.stride, a.rows, a.cols);
+    element_wise_multiply_kernel<<<blocks, threads_per_block>>>(a, b);
 }
 
 __global__ void compare(const float* a,

@@ -49,7 +49,7 @@ void scale(::matrix& mat, float factor);
 void softmax(::matrix& mat);
 ::matrix backprop_softmax(const ::matrix& output, const ::matrix& gradient);
 
-void mask_upper_triangular(::matrix& mat, const float mask_value);
+void mask_upper_triangle(::matrix& mat, const float mask_value);
 
 ::matrix dot_product(const ::matrix& a, const ::matrix& b);
 ::matrix cross_multiplied(const ::matrix& a, const ::matrix& b);

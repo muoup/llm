@@ -108,7 +108,7 @@ int handle_train(int argc, char* argv[]) {
                   << ". Iterating over rows..." << std::endl;
         size_t n_rows = dataset->size();
         
-        constexpr float starting_learning_rate = 0.005f;
+        constexpr float starting_learning_rate = 0.0005f;
         float learning_rate = 0.0f;
         
         float previous_loss1 = 100.0f;
@@ -117,9 +117,12 @@ int handle_train(int argc, char* argv[]) {
         dataset->enumerate(
             [&](size_t i, std::string_view row) {
                 auto tokens = encode(_tokenizer, row);
-                const auto truncated_input
-                    = std::span{ tokens.begin(), tokens.end() - 1 };
-                float loss = model.train_on(truncated_input, tokens, learning_rate);
+                if (tokens.size() < 2) {
+                    return;
+                }
+                const auto input_tokens = std::span{ tokens.begin(), tokens.end() - 1 };
+                const auto target_tokens = std::span{ tokens.begin() + 1, tokens.end() };
+                float loss = model.train_on(input_tokens, target_tokens, learning_rate);
 
                 std::cout << "Row " << i << "/" << n_rows
                           << " processed. Loss: " << loss << std::endl;

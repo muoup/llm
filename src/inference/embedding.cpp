@@ -22,7 +22,9 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
             output, i, m_embeddings, tokens[i]);
     }
 
+    kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
+    kernel::optimizer::wait_for_operations();
     return output;
 }
 
@@ -34,9 +36,11 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
         kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t);
+        kernel::optimizer::wait_for_operations();
     }
     
     kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient, learning_rate);
+    kernel::optimizer::wait_for_operations();
 }
 
 void EmbeddingLayer::save(std::ostream& out) const {

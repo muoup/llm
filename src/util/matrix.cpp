@@ -202,7 +202,7 @@ matrix& matrix::softmax() {
 }
 
 matrix& matrix::mask_upper_triangular(const float mask_value) {
-    kernel::matrix::mask_upper_triangular(*this, mask_value);
+    kernel::matrix::mask_upper_triangle(*this, mask_value);
     return *this;
 }
 
@@ -213,7 +213,7 @@ float matrix::dot_product(const matrix& other) const {
     float result = 0.0f;
     for (size_t row = 0; row < this->rows; ++row) {
         for (size_t col = 0; col < this->cols; ++col) {
-            result += get(row, col) + other.get(row, col);
+            result += get(row, col) * other.get(row, col);
         }
     }
 
