@@ -139,10 +139,10 @@ void kernel::matrix::randomize(::matrix& matrix,
 
     matrix.add(-0.5f);
     kernel::optimizer::wait_for_operations();
-    
+
     matrix.scale(range);
     kernel::optimizer::wait_for_operations();
-    
+
     matrix.add(min);
     kernel::optimizer::wait_for_operations();
 }
@@ -184,27 +184,19 @@ struct reduction_mutex {
     float result;
 };
 
-// 'matrix_reduce' is not really used in any hot paths as of right now, so the
-// implementation will be simplified down to 1 thread per row, and some locking
-// mechanism to map the partial reudction to the result. A more optimized
-// version could use shared memory and parallel reduction within blocks, but
-// that is more complex to implement.
 template <__device__ float (*reducer)(float, float)>
-static __global__ void matrix_reduce(const float* data,
-                                     const std::uint64_t stride,
-                                     const std::uint64_t rows,
-                                     const std::uint64_t cols,
+static __global__ void matrix_reduce(const const_matrix_view data,
                                      float acc,
                                      reduction_mutex* result_mutex) {
     float partial_reduction = acc;
     std::uint64_t col = blockIdx.x;
 
-    if (col >= cols) {
+    if (col >= data.cols) {
         return;
     }
 
-    for (std::uint64_t row = 0; row < rows; ++row) {
-        float val = kernel::matrix::device_get(data, stride, row, col);
+    for (std::uint64_t row = 0; row < data.rows; ++row) {
+        float val = kernel::matrix::device_get(data, row, col);
         partial_reduction = reducer(partial_reduction, val);
     }
 
@@ -229,8 +221,8 @@ float general_reduce(const ::matrix& mat, float acc) {
     const size_t blocks = mat.cols;
     const size_t threads_per_block = 1;
 
-    (matrix_reduce<reducer>)<<<blocks, threads_per_block>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, acc, d_result);
+    (matrix_reduce<reducer>)<<<blocks, threads_per_block>>>(mat, acc, d_result);
+    cudaDeviceSynchronize();
 
     cudaMemcpy(&host_reference, d_result, sizeof(reduction_mutex),
                cudaMemcpyDeviceToHost);
@@ -608,7 +600,7 @@ static __global__ void kernel_backprop_softmax(
 }
 
 void __global__ kernel_mask_upper_triangle(const matrix_view data,
-                                             const float mask_value) {
+                                           const float mask_value) {
     const size_t row = data.rows;
     const size_t col = data.cols;
 
@@ -620,13 +612,12 @@ void __global__ kernel_mask_upper_triangle(const matrix_view data,
 }
 
 void kernel::matrix::mask_upper_triangle(::matrix& mat,
-                                           const float mask_value) {
+                                         const float mask_value) {
     const size_t threads_per_block = 256;
     const dim3 blocks((mat.rows + threads_per_block - 1) / threads_per_block,
                       (mat.cols + threads_per_block - 1) / threads_per_block);
 
-    kernel_mask_upper_triangle<<<blocks, threads_per_block>>>(mat,
-                                                                mask_value);
+    kernel_mask_upper_triangle<<<blocks, threads_per_block>>>(mat, mask_value);
 }
 
 __global__ void matrixDotProductKernel(float* A,

@@ -7,6 +7,7 @@
 #include <kernels/feed_forward.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
+#include <util/logger.hpp>
 
 NodeType FeedForwardLayer::getType() const {
     return NodeType::FeedForward;
@@ -39,7 +40,7 @@ ForwardingResult FeedForwardLayer::forward(
     
     kernel::feed_forward::add_bias(activation_input, b1);
     kernel::optimizer::wait_for_operations();
-
+    
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
     kernel::optimizer::wait_for_operations();
@@ -49,7 +50,17 @@ ForwardingResult FeedForwardLayer::forward(
     
     kernel::feed_forward::add_bias(final_output, b2);
     kernel::optimizer::wait_for_operations();
-
+    
+    logger::log(LogLevel::DEBUG, "  FF Layer Forward:");
+    logger::log(LogLevel::DEBUG, "    input norm: %f",
+                input.norm());
+    logger::log(LogLevel::DEBUG, "    activation_input norm: %f",
+                activation_input.norm());
+    logger::log(LogLevel::DEBUG, "    activation_output norm: %f",
+                activation_output.norm());
+    logger::log(LogLevel::DEBUG, "    final_output norm: %f",
+                final_output.norm());
+    
     return standardResult(matrix::construct_vec(final_output, activation_input,
                                                 activation_output));
 }
@@ -84,11 +95,11 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
     kernel::optimizer::wait_for_operations();
     
-    // std::cout << "  FF Layer Gradients:\n";
-    // std::cout << "    w1_gradient norm: " << std::sqrt(w1_gradient.sum_of_squares()) << "\n";
-    // std::cout << "    b1_gradient norm: " << std::sqrt(b1_gradient.sum_of_squares()) << "\n";
-    // std::cout << "    w2_gradient norm: " << std::sqrt(w2_gradient.sum_of_squares()) << "\n";
-    // std::cout << "    b2_gradient norm: " << std::sqrt(b2_gradient.sum_of_squares()) << "\n";
+    logger::log(LogLevel::DEBUG, "  FF Layer Gradients:");
+    logger::log(LogLevel::DEBUG, "    w1_gradient norm: %f", w1_gradient.norm());
+    logger::log(LogLevel::DEBUG, "    b1_gradient norm: %f", b1_gradient.norm());
+    logger::log(LogLevel::DEBUG, "    w2_gradient norm: %f", w2_gradient.norm());
+    logger::log(LogLevel::DEBUG, "    b2_gradient norm: %f", b2_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);

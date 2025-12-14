@@ -5,6 +5,8 @@
 #include <kernels/embedding_layer.hpp>
 
 #include <cassert>
+#include <cmath>
+#include "util/logger.hpp"
 
 size_t EmbeddingLayer::parameterCount() const {
     return m_embeddings.size();
@@ -23,9 +25,15 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
             output, i, m_embeddings, tokens[i]);
         kernel::optimizer::wait_for_operations();
     }
-
+    
+    logger::log(LogLevel::DEBUG, "  Embedding Layer Forward:");
+    logger::log(LogLevel::DEBUG, "    output norm pre pos encoding: %f", output.norm());
+    
+    kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
     kernel::optimizer::wait_for_operations();
+    
+    logger::log(LogLevel::DEBUG, "    output norm: %f", output.norm());
     
     return output;
 }
@@ -42,8 +50,8 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
         kernel::optimizer::wait_for_operations();
     }
     
-    // std::cout << "  Embedding Layer Gradients:\n";
-    // std::cout << "    embedding_gradient norm: " << std::sqrt(embedding_gradient.sum_of_squares()) << "\n";
+    logger::log(LogLevel::DEBUG, "  Embedding Layer Gradients:");
+    logger::log(LogLevel::DEBUG, "    embedding_gradient norm: %f", embedding_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient, learning_rate);
     kernel::optimizer::wait_for_operations();

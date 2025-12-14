@@ -5,6 +5,9 @@
 #include <kernels/layer_norm.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
+#include <util/logger.hpp>
+
+#include <cmath>
 
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
                      size_t dimensions,
@@ -23,6 +26,7 @@ size_t LayerNorm::parameterCount() const {
 void LayerNorm::randomize(float min, float max) {
     gamma.randomize(min, max);
     beta.randomize(min, max);
+    inner_node->randomize(min, max);
 }
 
 NodeType LayerNorm::getType() const {
@@ -44,12 +48,25 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
 
     auto inner_node_outputs
         = inner_node->forward(std::span(&results.normalized, 1));
-    matrix final_output = inner_node_outputs.outputs[0].clone();
+    matrix pre_residual_connection = inner_node_outputs.outputs[0].clone();
+    inner_node_outputs.outputs[0].add(input);
 
-    final_output.add(input);  // Residual connection
+    logger::log(LogLevel::DEBUG, "  LayerNorm Forward:");
+    logger::log(LogLevel::DEBUG, "    input norm: %f",
+                input.norm());
+    logger::log(LogLevel::DEBUG, "    normalized norm: %f",
+                results.normalized.norm());
+    logger::log(LogLevel::DEBUG, "    mean norm: %f",
+                results.mean.norm());
+    logger::log(LogLevel::DEBUG, "    inv_variance norm: %f",
+                results.inv_variance.norm());
+    logger::log(LogLevel::DEBUG, "    pre_residual_connection norm: %f",
+                pre_residual_connection.norm());
+    logger::log(LogLevel::DEBUG, "    post_residual_connection norm: %f",
+                inner_node_outputs.outputs[0].norm());
 
     std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
-    return_vec.emplace_back(std::move(final_output));
+    return_vec.emplace_back(std::move(pre_residual_connection));
     return_vec.emplace_back(std::move(results.normalized));
     return_vec.emplace_back(std::move(results.mean));
     return_vec.emplace_back(std::move(results.inv_variance));
@@ -73,14 +90,36 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         learning_rate);
     matrix& grad_normalized = inner_backprop_outputs[0];
 
+    logger::log(LogLevel::DEBUG, "  LayerNorm Inputs: ");
+    logger::log(LogLevel::DEBUG, "    layer_input norm: %f",
+                layer_input.norm());
+    logger::log(LogLevel::DEBUG, "    normalized_input norm: %f",
+                normalized_input.norm());
+    logger::log(LogLevel::DEBUG, "    mean norm: %f",
+                mean.norm());
+    logger::log(LogLevel::DEBUG, "    inv_variance norm: %f",
+                inv_variance.norm());
+    logger::log(LogLevel::DEBUG, "    grad_normalized norm: %f",
+                grad_normalized.norm());
+
     kernel::layer_norm::LayerNormGradients results
         = kernel::layer_norm::layer_normalization_backward(
             layer_input, gamma, beta, mean, inv_variance, grad_normalized,
             epsilon);
 
-    kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma, learning_rate);
+    logger::log(LogLevel::DEBUG, "  LayerNorm Layer Gradients:");
+    logger::log(LogLevel::DEBUG, "    grad_gamma norm: %f",
+                results.grad_gamma.norm());
+    logger::log(LogLevel::DEBUG, "    grad_beta norm: %f",
+                results.grad_beta.norm());
+    logger::log(LogLevel::DEBUG, "    grad_input norm: %f",
+                results.grad_input.norm());
+
+    kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,
+                                               learning_rate);
     kernel::matrix::check_errors("pre adjust beta");
-    kernel::optimizer::adjust_parameter_matrix(beta, results.grad_beta, learning_rate);
+    kernel::optimizer::adjust_parameter_matrix(beta, results.grad_beta,
+                                               learning_rate);
     kernel::matrix::check_errors("post adjust beta");
 
     // Add the gradient from the residual path

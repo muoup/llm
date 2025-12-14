@@ -8,7 +8,6 @@
 
 #ifdef MATRIX_CHECKS
 #include <sstream>
-#include "../util/assert.hpp"
 #endif
 
 #ifdef MATRIX_CHECKS
@@ -119,7 +118,7 @@ struct matrix {
     float absmax() const;
     float variance() const;
     float stddev() const;
-    float sum_of_squares() const;
+    float norm() const;
 
     matrix transposed() const {
         matrix transposed{ cols, rows };

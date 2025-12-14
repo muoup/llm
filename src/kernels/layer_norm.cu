@@ -1,5 +1,7 @@
 #include <cuda_runtime_api.h>
+#include "kernels/optimizer.hpp"
 #include "layer_norm.hpp"
+#include "util/logger.hpp"
 
 #include <inference/layer_normalize.hpp>
 #include <kernels/matrix_device_kernels.cuh>
@@ -54,10 +56,10 @@ __global__ void row_mean(const const_matrix_view input,
     *sum /= static_cast<float>(input.cols);
 }
 
-__global__ void row_variance(const const_matrix_view input,
-                             const const_matrix_view mean,
-                             const matrix_view inv_variance,
-                             float epsilon) {
+__global__ void row_inv_variance(const const_matrix_view input,
+                                 const const_matrix_view mean,
+                                 const matrix_view inv_variance,
+                                 float epsilon) {
     size_t row_idx = blockIdx.x;
 
     float row_mean = kernel::matrix::device_get(mean, row_idx, 0);
@@ -69,6 +71,8 @@ __global__ void row_variance(const const_matrix_view input,
     }
 
     variance /= static_cast<float>(input.cols);
+    // std::printf("Mean: %f | Variance: %f\n", row_mean, variance);
+    
     kernel::matrix::device_set(inv_variance, row_idx, 0,
                                1.0f / sqrtf(variance + epsilon));
 }
@@ -78,20 +82,21 @@ __global__ void normalize_and_scale(const const_matrix_view input,
                                     const const_matrix_view inv_variance,
                                     const const_matrix_view gamma,
                                     const const_matrix_view beta,
-                                    matrix_view output) {
-    size_t row = blockIdx.y * blockDim.y + threadIdx.y;
-    size_t col = blockIdx.x * blockDim.x + threadIdx.x;
-                                        
-    if (col < output.cols || row < output.rows) {
+                                    matrix_view normalized_input) {
+    const size_t row = blockIdx.y * blockDim.y + threadIdx.y;
+    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (col < normalized_input.cols || row < normalized_input.rows) {
         float input_val = kernel::matrix::device_get(input, row, col);
-        float inv_variance_val = kernel::matrix::device_get(inv_variance, row, 0);
+        float inv_variance_val
+            = kernel::matrix::device_get(inv_variance, row, 0);
         float gamma_val = kernel::matrix::device_get(gamma, 0, col);
         float beta_val = kernel::matrix::device_get(beta, 0, col);
         float row_mean = kernel::matrix::device_get(mean, row, 0);
-        
+
         float normalized = (input_val - row_mean) * inv_variance_val;
-        float scaled = normalized * gamma_val +  beta_val;
-        kernel::matrix::device_set(output, row, col, scaled);
+        float scaled = normalized * gamma_val + beta_val;
+        kernel::matrix::device_set(normalized_input, row, col, scaled);
     }
 }
 
@@ -105,14 +110,19 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     ::matrix inv_variance(input.rows, 1);
 
     row_mean<<<input.rows, 1>>>(input, mean);
-    row_variance<<<input.rows, 1>>>(input, mean, inv_variance, epsilon);
+    kernel::optimizer::wait_for_operations();
+
+    row_inv_variance<<<input.rows, 1>>>(input, mean, inv_variance, epsilon);
+    kernel::optimizer::wait_for_operations();
 
     const dim3 threads_per_block(16, 16);
-    const dim3 blocks((input.cols + threads_per_block.x - 1) / threads_per_block.x,
-                      (input.rows + threads_per_block.y - 1) / threads_per_block.y);
-    
+    const dim3 blocks(
+        (input.cols + threads_per_block.x - 1) / threads_per_block.x,
+        (input.rows + threads_per_block.y - 1) / threads_per_block.y);
+
     normalize_and_scale<<<blocks, threads_per_block>>>(
         input, mean, inv_variance, gamma, beta, normalized_input);
+    kernel::optimizer::wait_for_operations();
 
     return { .normalized = std::move(normalized_input),
              .mean = std::move(mean),
@@ -154,14 +164,15 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
 //         }
 // }
 
-__global__ void layer_norm_backward_kernel(const const_matrix_view mean,
-                                           const const_matrix_view gamma,
-                                           const const_matrix_view inv_variance,
-                                           const const_matrix_view layer_input,
-                                           const const_matrix_view grad_normalized,
-                                           matrix_view grad_beta,
-                                           matrix_view grad_gamma,
-                                           matrix_view grad_input) {
+__global__ void layer_norm_backward_kernel(
+    const const_matrix_view mean,
+    const const_matrix_view gamma,
+    const const_matrix_view inv_variance,
+    const const_matrix_view layer_input,
+    const const_matrix_view grad_normalized,
+    matrix_view grad_beta,
+    matrix_view grad_gamma,
+    matrix_view grad_input) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row >= layer_input.rows) {
@@ -177,7 +188,8 @@ __global__ void layer_norm_backward_kernel(const const_matrix_view mean,
     float d_norm_dot_x_norm = 0.0f;
 
     for (size_t col = 0; col < layer_input.cols; col++) {
-        float grad_norm_val = kernel::matrix::device_get(grad_normalized, row, col);
+        float grad_norm_val
+            = kernel::matrix::device_get(grad_normalized, row, col);
         float layer_input_val
             = kernel::matrix::device_get(layer_input, row, col);
         float normalized_val = (layer_input_val - row_mean) * row_inv_var;
@@ -196,7 +208,8 @@ __global__ void layer_norm_backward_kernel(const const_matrix_view mean,
     for (size_t col = 0; col < layer_input.cols; col++) {
         float layer_input_val
             = kernel::matrix::device_get(layer_input, row, col);
-        float grad_norm_val = kernel::matrix::device_get(grad_normalized, row, col);
+        float grad_norm_val
+            = kernel::matrix::device_get(grad_normalized, row, col);
         float gamma_val = kernel::matrix::device_get(gamma, 0, col);
 
         float normalized_val = (layer_input_val - row_mean) * row_inv_var;
@@ -211,13 +224,14 @@ __global__ void layer_norm_backward_kernel(const const_matrix_view mean,
 }
 
 kernel::layer_norm::LayerNormGradients
-kernel::layer_norm::layer_normalization_backward(const ::matrix& layer_input,
-                                                 const ::matrix& gamma,
-                                                 const ::matrix& beta,
-                                                 const ::matrix& mean,
-                                                 const ::matrix& inv_variance,
-                                                 const ::matrix& grad_normalized,
-                                                 float epsilon) {
+kernel::layer_norm::layer_normalization_backward(
+    const ::matrix& layer_input,
+    const ::matrix& gamma,
+    const ::matrix& beta,
+    const ::matrix& mean,
+    const ::matrix& inv_variance,
+    const ::matrix& grad_normalized,
+    float epsilon) {
     ::matrix grad_input(layer_input.rows, layer_input.cols);
     ::matrix grad_gamma(gamma.rows, gamma.cols);
     ::matrix grad_beta(beta.rows, beta.cols);

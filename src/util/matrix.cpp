@@ -169,8 +169,8 @@ float matrix::variance() const {
     return kernel::matrix::variance(*this);
 }
 
-float matrix::sum_of_squares() const {
-    return kernel::matrix::sum_of_squares(*this);
+float matrix::norm() const {
+    return std::sqrt(kernel::matrix::sum_of_squares(*this)) / static_cast<float>(rows * cols);
 }
 
 float matrix::stddev() const {

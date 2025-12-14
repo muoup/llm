@@ -10,14 +10,21 @@
 #include <kernels/feed_forward.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <util/matrix.hpp>
+#include <util/logger.hpp>
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
+// #ifndef MATRIX_CHECKS
+    logger::set_log_level(LogLevel::DEBUG);
+// #else
+    // logger::set_log_level(LogLevel::INFO);
+// #endif
+
     if (argc < 2) {
         std::cerr << "Usage: ./llm <command> [options]" << std::endl;
-        std::cerr << "Commands: train-tokenizer, train, predict" <<
-        std::endl; return 1;
+        std::cerr << "Commands: train-tokenizer, train, predict" << std::endl;
+        return 1;
     }
 
     using CommandHandler = std::function<int(int, char*[])>;

@@ -2,10 +2,11 @@
 
 #include <cmath>
 
+#include <tokenizer/token.hpp>
 #include <kernels/feed_forward.hpp>
 #include <kernels/logit_layer.hpp>
 #include <kernels/optimizer.hpp>
-#include <tokenizer/token.hpp>
+#include <util/logger.hpp>
 
 LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
     : dimensions(dimensions),
@@ -52,9 +53,9 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(logit_weight_gradient, w);
     kernel::optimizer::wait_for_operations();
 
-    // std::cout << "  Logit Layer Gradients:\n";
-    // std::cout << "    logit_weight_gradient norm: " << std::sqrt(logit_weight_gradient.sum_of_squares()) << "\n";
-    // std::cout << "    logit_bias_gradient norm: " << std::sqrt(loss_result.logit_bias_gradient.sum_of_squares()) << "\n";
+    logger::log(LogLevel::DEBUG, "  Logit Layer Gradients:");
+    logger::log(LogLevel::DEBUG, "    logit_weight_gradient norm: %f", logit_weight_gradient.norm());
+    logger::log(LogLevel::DEBUG, "    logit_bias_gradient norm: %f", loss_result.logit_bias_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(
         b, loss_result.logit_bias_gradient, learning_rate);
