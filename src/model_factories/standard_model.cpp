@@ -14,7 +14,7 @@ InferenceModel minimal_model(size_t vocab_size) {
 
     model.add_connection(0, 1);
     
-    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1);
+    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1, true);
     // model.add_layer(std::move(attn_layer));
     model.add_layer(std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
  
@@ -40,7 +40,7 @@ InferenceModel standard_attention_model(size_t dimensions,
 
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer
-            = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+            = std::make_unique<AttentionLayer>(dimensions, attention_heads, i == 0);
         auto attn_block
             = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
         size_t attn_block_idx = model.add_layer(std::move(attn_block));
@@ -111,7 +111,7 @@ InferenceModel standard_recursive_model(size_t dimensions,
 
     InferenceModel model(dimensions, vocab_size);
     auto attn_layer
-        = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+        = std::make_unique<AttentionLayer>(dimensions, attention_heads, true);
     size_t attn = model.add_layer(
         std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
 
@@ -125,7 +125,7 @@ InferenceModel standard_recursive_model(size_t dimensions,
     std::vector<std::unique_ptr<INode>> loop;
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer
-            = std::make_unique<AttentionLayer>(dimensions, attention_heads);
+            = std::make_unique<AttentionLayer>(dimensions, attention_heads, false);
         loop.emplace_back(
             std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
 

@@ -9,6 +9,12 @@ enum class LogLevel {
     ERROR
 };
 
+#ifdef MATRIX_CHECKS
+#define LOG_DEBUG(...) LOG_DEBUG(__VA_ARGS__)
+#else
+#define LOG_DEBUG(...) do {} while(0)
+#endif
+
 namespace logger {
 
 void log(LogLevel level, const char* format, ...);

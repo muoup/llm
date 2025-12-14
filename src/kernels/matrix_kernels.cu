@@ -318,9 +318,9 @@ void kernel::matrix::scale(::matrix& mat, const float factor) {
 }
 
 static __global__ void kernel_transfer_row(const matrix_view dest,
-                                           size_t src_row,
+                                           size_t dest_row,
                                            const const_matrix_view src,
-                                           size_t dest_row) {
+                                           size_t src_row) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < src.cols && col < src.cols) {

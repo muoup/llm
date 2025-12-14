@@ -3,14 +3,15 @@
 #include <map>
 #include <fstream>
 
-// ---[ Helper Functions ]---
-
 struct pair_frequency_t {
     combo_token_t combo;
     size_t frequency;
 };
 
-// Gets the most frequent pair of adjacent tokens in a sequence
+constexpr token_id_t CHAR_START_RANGE = 32;
+constexpr token_id_t CHAR_END_RANGE = 126;
+constexpr token_id_t SUPPORTED_CHAR_COUNT = CHAR_END_RANGE - CHAR_START_RANGE;
+
 static pair_frequency_t get_most_frequent_pair(const std::span<const token_id_t> tokens) {
     if (tokens.size() < 2) {
         return {0, 0};
@@ -34,7 +35,6 @@ static pair_frequency_t get_most_frequent_pair(const std::span<const token_id_t>
     return { .combo = best_pair, .frequency = max_freq };
 }
 
-// Replaces all occurrences of a pair with a new token
 static void replace_pair(std::vector<token_id_t>& tokens, const combo_token_t& pair, token_id_t new_token) {
     if (tokens.size() < 2) {
         return;
@@ -55,19 +55,15 @@ static void replace_pair(std::vector<token_id_t>& tokens, const combo_token_t& p
     tokens = std::move(new_tokens);
 }
 
-// ---[ Public Function Implementations ]---
-
 tokenizer::tokenizer() {
-    // Initialize with all single-byte tokens
-    token_map.reserve(256);
+    token_map.reserve(SUPPORTED_CHAR_COUNT);
  
-    for (int i = 0; i < 256; ++i) {
-        token_map.push_back({std::string(1, static_cast<char>(i))});
+    for (int i = CHAR_START_RANGE; i < CHAR_END_RANGE; ++i) {
+        token_map.emplace_back(std::string(1, static_cast<char>(i)));
     }
 }
 
 void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t max_vocab_size, size_t minimum_frequency) {
-    // 1. Initialize the corpus as a sequence of raw byte tokens
     auto tokens = encode(tokenizer, corpus); 
     
     while (tokenizer.token_map.size() < max_vocab_size) {
@@ -91,16 +87,21 @@ void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t max_v
 }
 
 std::vector<token_id_t> encode(const tokenizer& tokenizer, std::string_view text) {
-    // 1. Convert text to a sequence of raw byte tokens
     std::vector<token_id_t> tokens;
     tokens.reserve(text.size());
+    
     for (char c : text) {
-        tokens.push_back(static_cast<unsigned char>(c));
+        if (c < CHAR_START_RANGE || c > CHAR_END_RANGE) {
+            continue; // Skip non-printable characters
+        }
+        
+        tokens.push_back(static_cast<unsigned char>(c - CHAR_START_RANGE));
     }
 
-    // 2. Apply all learned merges in order
-    for (const auto& merge : tokenizer.merges) {
-        token_id_t new_token_id = 256 + (&merge - &tokenizer.merges[0]);
+    for (size_t merge_id = 0; merge_id < tokenizer.merges.size(); ++merge_id) {
+        const combo_token_t& merge = tokenizer.merges[merge_id];
+        
+        token_id_t new_token_id = SUPPORTED_CHAR_COUNT + merge_id;
         replace_pair(tokens, merge, new_token_id);
     }
 
@@ -121,17 +122,14 @@ void save_tokenizer(const tokenizer& tokenizer, const std::string& path) {
     std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) return;
 
-    // Write magic number and version
     uint32_t magic = 0x67676d6c; // "ggml" in hex
     uint32_t version = 1;
     file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
     file.write(reinterpret_cast<const char*>(&version), sizeof(version));
 
-    // Write vocab size
     uint32_t vocab_size = tokenizer.token_map.size();
     file.write(reinterpret_cast<const char*>(&vocab_size), sizeof(vocab_size));
 
-    // Write tokens
     for (const auto& token : tokenizer.token_map) {
         uint32_t len = token.text.length();
         file.write(reinterpret_cast<const char*>(&len), sizeof(len));
@@ -148,7 +146,6 @@ std::optional<tokenizer> load_tokenizer(const std::string& path) {
     file.read(reinterpret_cast<char*>(&version), sizeof(version));
 
     if (magic != 0x67676d6c || version != 1) {
-        // Handle error: invalid file format
         return std::nullopt;
     }
 
@@ -158,7 +155,7 @@ std::optional<tokenizer> load_tokenizer(const std::string& path) {
 
     tokenizer.token_map.clear();
     tokenizer.token_map.reserve(vocab_size);
-    tokenizer.merges.clear(); // Merges will be rebuilt if needed, but are not saved directly
+    tokenizer.merges.clear(); 
 
     for (uint32_t i = 0; i < vocab_size; ++i) {
         uint32_t len;
@@ -168,20 +165,19 @@ std::optional<tokenizer> load_tokenizer(const std::string& path) {
         tokenizer.token_map.push_back({text});
     }
     
-    // Rebuild merges from the loaded vocabulary
     std::map<std::string, token_id_t> token_to_id;
     for(token_id_t i = 0; i < tokenizer.token_map.size(); ++i) {
         token_to_id[tokenizer.token_map[i].text] = i;
     }
 
-    for (token_id_t i = 256; i < tokenizer.token_map.size(); ++i) {
+    for (token_id_t i = SUPPORTED_CHAR_COUNT; i < tokenizer.token_map.size(); ++i) {
         const std::string& text = tokenizer.token_map[i].text;
         for (size_t j = 1; j < text.length(); ++j) {
             std::string s1 = text.substr(0, j);
             std::string s2 = text.substr(j);
             if (token_to_id.count(s1) && token_to_id.count(s2)) {
                 tokenizer.merges.push_back({token_to_id[s1], token_to_id[s2]});
-                break; // Found the pair
+                break; 
             }
         }
     }

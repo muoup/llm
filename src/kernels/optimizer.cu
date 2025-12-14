@@ -70,5 +70,4 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
 
 void kernel::optimizer::wait_for_operations() {
     cudaDeviceSynchronize();
-    kernel::matrix::check_errors("After wait_for_operations in optimizer");
 }

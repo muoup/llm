@@ -30,7 +30,7 @@ build/llm train \
     --tokenizer ".models/overfit.tok" \
     --output-model ".models/overfit.lm" \
     --dataset-type overfit \
-    -n 10000
+    -n 1000
     
 if [ $? -ne 0 ]; then
     echo "Model training failed"

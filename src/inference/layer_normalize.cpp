@@ -7,8 +7,6 @@
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
 
-#include <cmath>
-
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
                      size_t dimensions,
                      float epsilon)
@@ -51,18 +49,18 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
     matrix pre_residual_connection = inner_node_outputs.outputs[0].clone();
     inner_node_outputs.outputs[0].add(input);
 
-    logger::log(LogLevel::DEBUG, "  LayerNorm Forward:");
-    logger::log(LogLevel::DEBUG, "    input norm: %f",
+    LOG_DEBUG("  LayerNorm Forward:");
+    LOG_DEBUG("    input norm: %f",
                 input.norm());
-    logger::log(LogLevel::DEBUG, "    normalized norm: %f",
+    LOG_DEBUG("    normalized norm: %f",
                 results.normalized.norm());
-    logger::log(LogLevel::DEBUG, "    mean norm: %f",
+    LOG_DEBUG("    mean norm: %f",
                 results.mean.norm());
-    logger::log(LogLevel::DEBUG, "    inv_variance norm: %f",
+    LOG_DEBUG("    inv_variance norm: %f",
                 results.inv_variance.norm());
-    logger::log(LogLevel::DEBUG, "    pre_residual_connection norm: %f",
+    LOG_DEBUG("    pre_residual_connection norm: %f",
                 pre_residual_connection.norm());
-    logger::log(LogLevel::DEBUG, "    post_residual_connection norm: %f",
+    LOG_DEBUG("    post_residual_connection norm: %f",
                 inner_node_outputs.outputs[0].norm());
 
     std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
@@ -90,16 +88,16 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         learning_rate);
     matrix& grad_normalized = inner_backprop_outputs[0];
 
-    logger::log(LogLevel::DEBUG, "  LayerNorm Inputs: ");
-    logger::log(LogLevel::DEBUG, "    layer_input norm: %f",
+    LOG_DEBUG("  LayerNorm Inputs: ");
+    LOG_DEBUG("    layer_input norm: %f",
                 layer_input.norm());
-    logger::log(LogLevel::DEBUG, "    normalized_input norm: %f",
+    LOG_DEBUG("    normalized_input norm: %f",
                 normalized_input.norm());
-    logger::log(LogLevel::DEBUG, "    mean norm: %f",
+    LOG_DEBUG("    mean norm: %f",
                 mean.norm());
-    logger::log(LogLevel::DEBUG, "    inv_variance norm: %f",
+    LOG_DEBUG("    inv_variance norm: %f",
                 inv_variance.norm());
-    logger::log(LogLevel::DEBUG, "    grad_normalized norm: %f",
+    LOG_DEBUG("    grad_normalized norm: %f",
                 grad_normalized.norm());
 
     kernel::layer_norm::LayerNormGradients results
@@ -107,12 +105,12 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
             layer_input, gamma, beta, mean, inv_variance, grad_normalized,
             epsilon);
 
-    logger::log(LogLevel::DEBUG, "  LayerNorm Layer Gradients:");
-    logger::log(LogLevel::DEBUG, "    grad_gamma norm: %f",
+    LOG_DEBUG("  LayerNorm Layer Gradients:");
+    LOG_DEBUG("    grad_gamma norm: %f",
                 results.grad_gamma.norm());
-    logger::log(LogLevel::DEBUG, "    grad_beta norm: %f",
+    LOG_DEBUG("    grad_beta norm: %f",
                 results.grad_beta.norm());
-    logger::log(LogLevel::DEBUG, "    grad_input norm: %f",
+    LOG_DEBUG("    grad_input norm: %f",
                 results.grad_input.norm());
 
     kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,

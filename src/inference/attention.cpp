@@ -12,10 +12,13 @@ NodeType AttentionLayer::getType() const {
     return NodeType::Attention;
 }
 
-AttentionLayer::AttentionLayer(size_t dimensions, size_t head_count)
+AttentionLayer::AttentionLayer(size_t dimensions,
+                               size_t head_count,
+                               bool masked)
     : dimensions(dimensions),
       head_size(dimensions / head_count),
       head_count(head_count),
+      masked(masked),
       wo(matrix(head_size * head_count, dimensions)) {
     for (size_t i = 0; i < head_count; ++i) {
         heads.emplace_back(AttentionHead{
@@ -65,12 +68,16 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         matrix scores = q.cross_t_multiplied(k);
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         kernel::optimizer::wait_for_operations();
-        
+
         scores.scale(scale);
 
         // Mask & Softmax
-        scores.mask_upper_triangular();
-        kernel::optimizer::wait_for_operations();
+
+        if (masked) {
+            scores.mask_upper_triangular();
+            kernel::optimizer::wait_for_operations();
+        }
+
         scores.softmax();
         kernel::optimizer::wait_for_operations();
 
@@ -80,17 +87,16 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
 
         matrix& concatenated_heads = returns[1];
         concatenated_heads.set_horizontal_slice(h * head_size, weighted_sum);
-        
-        logger::log(LogLevel::DEBUG, "  Attention Head %zu Forward:", h);
-        logger::log(LogLevel::DEBUG, "    wq norm: %f", head.wq.norm());
-        logger::log(LogLevel::DEBUG, "    wk norm: %f", head.wk.norm());
-        logger::log(LogLevel::DEBUG, "    wv norm: %f", head.wv.norm());
-        logger::log(LogLevel::DEBUG, "    q norm: %f", q.norm());
-        logger::log(LogLevel::DEBUG, "    k norm: %f", k.norm());
-        logger::log(LogLevel::DEBUG, "    v norm: %f", v.norm());
-        logger::log(LogLevel::DEBUG, "    scores norm: %f", scores.norm());
-        logger::log(LogLevel::DEBUG, "    weighted_sum norm: %f",
-                    weighted_sum.norm());
+
+        LOG_DEBUG("  Attention Head %zu Forward:", h);
+        LOG_DEBUG("    wq norm: %f", head.wq.norm());
+        LOG_DEBUG("    wk norm: %f", head.wk.norm());
+        LOG_DEBUG("    wv norm: %f", head.wv.norm());
+        LOG_DEBUG("    q norm: %f", q.norm());
+        LOG_DEBUG("    k norm: %f", k.norm());
+        LOG_DEBUG("    v norm: %f", v.norm());
+        LOG_DEBUG("    scores norm: %f", scores.norm());
+        LOG_DEBUG("    weighted_sum norm: %f", weighted_sum.norm());
 
         // returns is not modified, so the output reference will remain valid
         // until this point
@@ -99,21 +105,18 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         returns.emplace_back(std::move(v));
         returns.emplace_back(std::move(scores));
     }
-    
+
     kernel::optimizer::wait_for_operations();
 
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];
 
     final_output = concatenated_heads.cross_multiplied(wo);
-    
-    logger::log(LogLevel::DEBUG, "  Attention Layer Forward:");
-    logger::log(LogLevel::DEBUG, "    input norm: %f",
-                input.norm());
-    logger::log(LogLevel::DEBUG, "    concatenated_heads norm: %f",
-                concatenated_heads.norm());
-    logger::log(LogLevel::DEBUG, "    final_output norm: %f",
-                final_output.norm());
+
+    LOG_DEBUG("  Attention Layer Forward:");
+    LOG_DEBUG("    input norm: %f", input.norm());
+    LOG_DEBUG("    concatenated_heads norm: %f", concatenated_heads.norm());
+    LOG_DEBUG("    final_output norm: %f", final_output.norm());
 
     // Expected returns layout:
     // [0] -> concatenated heads
@@ -141,11 +144,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
     const matrix& layer_output = result.outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
-    logger::log(LogLevel::DEBUG, "  Attention Layer Backpropagation:");
-    logger::log(LogLevel::DEBUG, "    layer_output norm: %f",
-                layer_output.norm());
-    logger::log(LogLevel::DEBUG, "    post_layer_gradient norm: %f",
-                post_layer_gradient.norm());
+    LOG_DEBUG("  Attention Layer Backpropagation:");
+    LOG_DEBUG("    layer_output norm: %f", layer_output.norm());
+    LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
     matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
     matrix attention_concat_gradient
@@ -192,17 +193,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
         kernel::optimizer::wait_for_operations();
 
-        logger::log(LogLevel::DEBUG, "  Attention Head %zu Gradients:", h);
-        logger::log(LogLevel::DEBUG, "    scores_gradient norm: %f",
-                    scores_gradient.norm());
-        logger::log(LogLevel::DEBUG, "    pre_softmax_gradient norm: %f",
-                    pre_softmax_gradient.norm());
-        logger::log(LogLevel::DEBUG, "    wq_gradient norm: %f",
-                    wq_gradient.norm());
-        logger::log(LogLevel::DEBUG, "    wk_gradient norm: %f",
-                    wk_gradient.norm());
-        logger::log(LogLevel::DEBUG, "    wv_gradient norm: %f",
-                    wv_gradient.norm());
+        LOG_DEBUG("  Attention Head %zu Gradients:", h);
+        LOG_DEBUG("    scores_gradient norm: %f", scores_gradient.norm());
+        LOG_DEBUG("    pre_softmax_gradient norm: %f",
+                  pre_softmax_gradient.norm());
+        LOG_DEBUG("    wq_gradient norm: %f", wq_gradient.norm());
+        LOG_DEBUG("    wk_gradient norm: %f", wk_gradient.norm());
+        LOG_DEBUG("    wv_gradient norm: %f", wv_gradient.norm());
 
         AttentionHead& head = heads[h];
         kernel::optimizer::regularize_weight_gradient(wq_gradient, head.wq);
@@ -231,6 +228,7 @@ void AttentionLayer::save(std::ostream& out) const {
     out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
     out.write(reinterpret_cast<const char*>(&head_size), sizeof(head_size));
     out.write(reinterpret_cast<const char*>(&head_count), sizeof(head_count));
+    out.write(reinterpret_cast<const char*>(&masked), sizeof(masked));
 
     for (const auto& head : heads) {
         head.wq.save(out);
@@ -243,9 +241,12 @@ void AttentionLayer::save(std::ostream& out) const {
 
 AttentionLayer AttentionLayer::load(std::istream& in) {
     size_t dimensions, head_size, head_count;
+    bool masked;
+    
     in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     in.read(reinterpret_cast<char*>(&head_size), sizeof(head_size));
     in.read(reinterpret_cast<char*>(&head_count), sizeof(head_count));
+    in.read(reinterpret_cast<char*>(&masked), sizeof(masked));
 
     AttentionLayer layer = AttentionLayer();
     layer.dimensions = dimensions;

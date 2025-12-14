@@ -27,17 +27,17 @@ matrix LogitLayer::forward(const matrix& input) const {
     matrix logits = input.cross_multiplied(w);
     kernel::optimizer::wait_for_operations();
 
-    logger::log(LogLevel::DEBUG, "  Logit Layer Forward:");
-    logger::log(LogLevel::DEBUG, "    input norm: %f", input.norm());
+    LOG_DEBUG("  Logit Layer Forward:");
+    LOG_DEBUG("    input norm: %f", input.norm());
     
     kernel::feed_forward::add_bias(logits, b);
     kernel::optimizer::wait_for_operations();
     
-    logger::log(LogLevel::DEBUG, "    logits norm pre-softmax: %f", logits.norm());
+    LOG_DEBUG("    logits norm pre-softmax: %f", logits.norm());
 
     logits.softmax();
     
-    logger::log(LogLevel::DEBUG, "    logits norm post-softmax: %f", logits.norm());
+    LOG_DEBUG("    logits norm post-softmax: %f", logits.norm());
     
     kernel::optimizer::wait_for_operations();
     return logits;
@@ -61,9 +61,9 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(logit_weight_gradient, w);
     kernel::optimizer::wait_for_operations();
 
-    logger::log(LogLevel::DEBUG, "  Logit Layer Gradients:");
-    logger::log(LogLevel::DEBUG, "    logit_weight_gradient norm: %f", logit_weight_gradient.norm());
-    logger::log(LogLevel::DEBUG, "    logit_bias_gradient norm: %f", loss_result.logit_bias_gradient.norm());
+    LOG_DEBUG("  Logit Layer Gradients:");
+    LOG_DEBUG("    logit_weight_gradient norm: %f", logit_weight_gradient.norm());
+    LOG_DEBUG("    logit_bias_gradient norm: %f", loss_result.logit_bias_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(
         b, loss_result.logit_bias_gradient, learning_rate);

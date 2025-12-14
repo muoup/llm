@@ -51,14 +51,14 @@ ForwardingResult FeedForwardLayer::forward(
     kernel::feed_forward::add_bias(final_output, b2);
     kernel::optimizer::wait_for_operations();
     
-    logger::log(LogLevel::DEBUG, "  FF Layer Forward:");
-    logger::log(LogLevel::DEBUG, "    input norm: %f",
+    LOG_DEBUG("  FF Layer Forward:");
+    LOG_DEBUG("    input norm: %f",
                 input.norm());
-    logger::log(LogLevel::DEBUG, "    activation_input norm: %f",
+    LOG_DEBUG("    activation_input norm: %f",
                 activation_input.norm());
-    logger::log(LogLevel::DEBUG, "    activation_output norm: %f",
+    LOG_DEBUG("    activation_output norm: %f",
                 activation_output.norm());
-    logger::log(LogLevel::DEBUG, "    final_output norm: %f",
+    LOG_DEBUG("    final_output norm: %f",
                 final_output.norm());
     
     return standardResult(matrix::construct_vec(final_output, activation_input,
@@ -95,11 +95,11 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
     kernel::optimizer::wait_for_operations();
     
-    logger::log(LogLevel::DEBUG, "  FF Layer Gradients:");
-    logger::log(LogLevel::DEBUG, "    w1_gradient norm: %f", w1_gradient.norm());
-    logger::log(LogLevel::DEBUG, "    b1_gradient norm: %f", b1_gradient.norm());
-    logger::log(LogLevel::DEBUG, "    w2_gradient norm: %f", w2_gradient.norm());
-    logger::log(LogLevel::DEBUG, "    b2_gradient norm: %f", b2_gradient.norm());
+    LOG_DEBUG("  FF Layer Gradients:");
+    LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
+    LOG_DEBUG("    b1_gradient norm: %f", b1_gradient.norm());
+    LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
+    LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);

@@ -23,7 +23,7 @@ struct AttentionHead {
 
 class AttentionLayer final : public INode {
 public:
-    AttentionLayer(size_t dimensions, size_t head_count);
+    AttentionLayer(size_t dimensions, size_t head_count, bool masked);
 
     size_t parameterCount() const override;
     NodeType getType() const override;
@@ -42,9 +42,10 @@ public:
 
 private:
     AttentionLayer()
-        : dimensions(0), head_size(0), head_count(0), wo() {}
+        : dimensions(0), head_size(0), head_count(0), masked(false), wo() {}
 
     size_t dimensions, head_size, head_count;
+    bool masked;
 
     std::vector<AttentionHead> heads;
     matrix wo;

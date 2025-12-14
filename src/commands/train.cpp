@@ -1,10 +1,10 @@
 #include "train.hpp"
 
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <cmath>
 
 #include <commands/arg_parser.hpp>
 #include <inference/inference.hpp>
@@ -63,10 +63,10 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model = minimal_model(_tokenizer.vocab_size());
-            // InferenceModel model
-            //     = standard_attention_model(dimensions, _tokenizer.vocab_size(),
-            //                                num_layers, attention_heads);
+            // InferenceModel model = minimal_model(_tokenizer.vocab_size());
+            InferenceModel model
+                = standard_attention_model(dimensions, _tokenizer.vocab_size(),
+                                           num_layers, attention_heads);
             // InferenceModel model = linearized_attention_model(dimensions,
             // _tokenizer.vocab_size(), attention_heads, num_layers);
             // InferenceModel model = standard_recursive_model(dimensions,
@@ -106,31 +106,34 @@ int handle_train(int argc, char* argv[]) {
         std::cout << "Dataset loaded. Type: "
                   << (type == dataset_type::RAW ? "raw" : "row-based")
                   << ". Iterating over rows..." << std::endl;
-        size_t n_rows = dataset->size();
-        
+        size_t n_rows = specified_size.value_or(dataset->size());
+
         constexpr float starting_learning_rate = 0.0001f;
         float learning_rate = 0.0f;
-        
-        float previous_loss1 = 100.0f;
-        float previous_loss2 = 100.0f;
- 
+        float rolling_average_loss = 0.0f;
+
         dataset->enumerate(
             [&](size_t i, std::string_view row) {
                 auto tokens = encode(_tokenizer, row);
                 if (tokens.size() < 2) {
                     return;
                 }
-                const auto input_tokens = std::span{ tokens.begin(), tokens.end() - 1 };
-                const auto target_tokens = std::span{ tokens.begin() + 1, tokens.end() };
-                float loss = model.train_on(input_tokens, target_tokens, learning_rate);
+                const auto input_tokens
+                    = std::span{ tokens.begin(), tokens.end() - 1 };
+                const auto target_tokens
+                    = std::span{ tokens.begin() + 1, tokens.end() };
+                float loss = model.train_on(input_tokens, target_tokens,
+                                            learning_rate);
+                rolling_average_loss
+                    = 0.99f * rolling_average_loss + 0.01f * loss;
 
-                std::cout << "Row " << i << "/" << n_rows
-                          << " processed. Loss: " << loss << std::endl;
-                
-                previous_loss1 = previous_loss2;
-                previous_loss2 = loss;
-                          
-                learning_rate = starting_learning_rate * loss;
+                std::printf(
+                    "Row %zu / %zu processed. Loss: %.2f, Rolling Avg Loss: "
+                    "%.2f\n",
+                    i, n_rows, loss, rolling_average_loss);
+
+                learning_rate
+                    = starting_learning_rate * std::pow(0.90f, 25 - rolling_average_loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {
@@ -141,17 +144,6 @@ int handle_train(int argc, char* argv[]) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-
-    auto file = std::ifstream(data_path);
-    if (!file.is_open()) {
-        std::cerr << "Error opening data file for final encoding: " << data_path
-                  << std::endl;
-        return 1;
-    }
-    auto contents = std::string((std::istreambuf_iterator<char>(file)),
-                                std::istreambuf_iterator<char>());
-
-    auto test_tokens = encode(_tokenizer, contents);
 
     std::cout << "Training complete. Saving model to: " << output_model_path
               << std::endl;
