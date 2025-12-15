@@ -11,11 +11,12 @@
 #include <float.h>
 
 struct CurandGenerator {
-    curandGenerator_t gen;
+    curandGenerator_t gen = nullptr;
+    bool initialized = false;
 
-    CurandGenerator() {}
+    CurandGenerator() = default;
 
-    operator curandGenerator_t() {
+    void initialize() {
         auto status = curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
 
         if (status != CURAND_STATUS_SUCCESS) {
@@ -25,7 +26,23 @@ struct CurandGenerator {
             std::exit(1);
         }
 
-        curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
+        curandSetPseudoRandomGeneratorSeed(gen,
+                                           static_cast<unsigned long long>(
+                                               time(NULL)));
+        initialized = true;
+    }
+
+    ~CurandGenerator() {
+        if (initialized) {
+            curandDestroyGenerator(gen);
+        }
+    }
+
+    operator curandGenerator_t() {
+        if (!initialized) {
+            initialize();
+        }
+
         return gen;
     }
 };
@@ -629,10 +646,12 @@ void __global__ kernel_mask_upper_triangle(const matrix_view data,
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (col > row && (row < data.rows || col < data.cols)) {
-        if (col > row) {
-            kernel::matrix::device_set(data, row, col, mask_value);
-        }
+    if (row >= data.rows || col >= data.cols) {
+        return;
+    }
+
+    if (col > row) {
+        kernel::matrix::device_set(data, row, col, mask_value);
     }
 }
 

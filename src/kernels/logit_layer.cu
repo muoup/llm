@@ -28,10 +28,10 @@ static __global__ void compute_loss_gradient_kernel(
     if (row >= predictions.rows || col >= predictions.cols)
         return;
 
-    const token_id_t actual_token = actual[row + 1];
+    const token_id_t actual_token = actual[row];
 
     float pred_value = kernel::matrix::device_get(predictions, row, col);
-    float delta_loss = pred_value - (col == actual[row + 1] ? 1.0f : 0.0f);
+    float delta_loss = pred_value - (col == actual_token ? 1.0f : 0.0f);
 
     kernel::matrix::device_set(loss_gradient, row, col, delta_loss);
     kernel::matrix::device_offset_elem_atomic(bias_gradient, 0, col,
@@ -46,9 +46,13 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     const ::matrix& predictions,
     const std::span<const token_id_t> actual,
     size_t vocab_size) {
+    MATRIX_ASSERT(actual.size() == predictions.rows,
+                  "Expected actual.size() == predictions.rows (got %zu vs %zu)",
+                  actual.size(), predictions.rows);
+
     ::matrix logit_loss_gradient(predictions.rows, predictions.cols);
     ::matrix logit_bias_gradient(1, vocab_size);
-    
+
     float* device_average_loss;
     cudaMalloc(&device_average_loss, sizeof(float));
     cudaMemset(device_average_loss, 0, sizeof(float));

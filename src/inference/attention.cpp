@@ -137,17 +137,17 @@ std::vector<matrix> AttentionLayer::backpropogate(
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
     float learning_rate) {
-    constexpr float regularization_strength = 0.01f;
-
     const matrix& layer_input = inputs[0];
     const matrix& layer_output = result.outputs[0];
+    const matrix& concatenated_heads = result.outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
     LOG_DEBUG("  Attention Layer Backpropagation:");
     LOG_DEBUG("    layer_output norm: %f", layer_output.norm());
     LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
-    matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
+    matrix wo_gradient
+        = concatenated_heads.t_cross_multiplied(post_layer_gradient);
     matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
 
@@ -202,20 +202,22 @@ std::vector<matrix> AttentionLayer::backpropogate(
         kernel::optimizer::regularize_weight_gradient(wk_gradient, head.wk);
         kernel::optimizer::regularize_weight_gradient(wv_gradient, head.wv);
 
+        matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);
+        head_input_gradient.add(k_gradient.cross_t_multiplied(head.wk));
+        head_input_gradient.add(v_gradient.cross_t_multiplied(head.wv));
+        input_gradient.add(head_input_gradient);
+
         kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
                                                    learning_rate);
         kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient,
                                                    learning_rate);
         kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
                                                    learning_rate);
-
-        // Gradient of the input: sum of contributions via each projection +
-        matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);
-        head_input_gradient.add(k_gradient.cross_t_multiplied(head.wk));
-        head_input_gradient.add(v_gradient.cross_t_multiplied(head.wv));
-
-        input_gradient.add(head_input_gradient);
     }
+
+    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
+    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
+    kernel::optimizer::wait_for_operations();
 
     return matrix::construct_vec(input_gradient);
 }
@@ -248,6 +250,7 @@ AttentionLayer AttentionLayer::load(std::istream& in) {
     layer.dimensions = dimensions;
     layer.head_size = head_size;
     layer.head_count = head_count;
+    layer.masked = masked;
 
     for (size_t i = 0; i < head_count; ++i) {
         layer.heads.emplace_back(
