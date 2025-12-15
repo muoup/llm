@@ -3,6 +3,7 @@ build*/*
 datasets/*
 
 perf.*
+debug*.txt
 
 !.gitignore
 !datasets/wiki-trunc/th.txt
