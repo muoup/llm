@@ -69,9 +69,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
         kernel::optimizer::wait_for_operations();
         
-        kernel::optimizer::norm_clip(scores);
-        kernel::optimizer::wait_for_operations();
-        
         scores.scale(scale);
         kernel::optimizer::wait_for_operations();
 
