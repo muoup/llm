@@ -1,11 +1,9 @@
 #include "logit_layer.hpp"
 
-#include <cmath>
-
-#include <tokenizer/token.hpp>
 #include <kernels/feed_forward.hpp>
 #include <kernels/logit_layer.hpp>
 #include <kernels/optimizer.hpp>
+#include <tokenizer/token.hpp>
 #include <util/logger.hpp>
 
 LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
@@ -19,8 +17,8 @@ size_t LogitLayer::parameterCount() const {
 }
 
 void LogitLayer::randomize(const float min, const float max) {
-    w.randomize(min, max);
-    b.randomize(min, max);
+    w.xavier_randomize();
+    b.xavier_randomize();
 }
 
 matrix LogitLayer::forward(const matrix& input) const {
@@ -29,16 +27,16 @@ matrix LogitLayer::forward(const matrix& input) const {
 
     LOG_DEBUG("  Logit Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
-    
+
     kernel::feed_forward::add_bias(logits, b);
     kernel::optimizer::wait_for_operations();
-    
+
     LOG_DEBUG("    logits norm pre-softmax: %f", logits.norm());
 
     logits.softmax();
-    
+
     LOG_DEBUG("    logits norm post-softmax: %f", logits.norm());
-    
+
     kernel::optimizer::wait_for_operations();
     return logits;
 }
@@ -62,8 +60,10 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  Logit Layer Gradients:");
-    LOG_DEBUG("    logit_weight_gradient norm: %f", logit_weight_gradient.norm());
-    LOG_DEBUG("    logit_bias_gradient norm: %f", loss_result.logit_bias_gradient.norm());
+    LOG_DEBUG("    logit_weight_gradient norm: %f",
+              logit_weight_gradient.norm());
+    LOG_DEBUG("    logit_bias_gradient norm: %f",
+              loss_result.logit_bias_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(
         b, loss_result.logit_bias_gradient, learning_rate);

@@ -47,9 +47,9 @@ int handle_train(int argc, char* argv[]) {
     }
 
     // TODO: Get these from CLI args
-    constexpr size_t dimensions = 512;
-    constexpr size_t attention_heads = 8;
-    constexpr size_t num_layers = 1;
+    constexpr size_t dimensions = 128;
+    constexpr size_t attention_heads = 2;
+    constexpr size_t num_layers = 2;
 
     InferenceModel model = [&]() {
         if (!input_model_path.empty()) {
@@ -133,7 +133,7 @@ int handle_train(int argc, char* argv[]) {
                     i, n_rows, loss, rolling_average_loss);
 
                 learning_rate
-                    = starting_learning_rate * std::pow(0.90f, 25 - rolling_average_loss);
+                    = starting_learning_rate * std::pow(0.98f, 25 - loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

@@ -1,8 +1,8 @@
 #include "embedding.hpp"
 
+#include <kernels/embedding_layer.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
-#include <kernels/embedding_layer.hpp>
 
 #include <cassert>
 
@@ -13,7 +13,7 @@ size_t EmbeddingLayer::parameterCount() const {
 }
 
 void EmbeddingLayer::randomize(float min, float max) {
-    m_embeddings.randomize(min, max);
+    m_embeddings.xavier_randomize();
 }
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
@@ -21,20 +21,19 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     kernel::optimizer::wait_for_operations();
 
     for (size_t i = 0; i < tokens.size(); ++i) {
-        kernel::matrix::transfer_row(
-            output, i, m_embeddings, tokens[i]);
+        kernel::matrix::transfer_row(output, i, m_embeddings, tokens[i]);
         kernel::matrix::check_errors("EmbeddingLayer::forward row transfer");
     }
-    
+
     LOG_DEBUG("  Embedding Layer Forward:");
     LOG_DEBUG("    output norm pre pos encoding: %f", output.norm());
-    
+
     kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
     kernel::optimizer::wait_for_operations();
-    
+
     LOG_DEBUG("    output norm: %f", output.norm());
-    
+
     return output;
 }
 
@@ -43,17 +42,19 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    float learning_rate) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     kernel::optimizer::wait_for_operations();
-                                       
+
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t);
+        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient,
+                                       t);
         kernel::optimizer::wait_for_operations();
     }
-    
+
     LOG_DEBUG("  Embedding Layer Gradients:");
     LOG_DEBUG("    embedding_gradient norm: %f", embedding_gradient.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient, learning_rate);
+    kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient,
+                                               learning_rate);
     kernel::optimizer::wait_for_operations();
 }
 

@@ -53,12 +53,13 @@ void matrix::randomize(const float min, const float max) {
 
 void matrix::leaky_kaiming_randomize() {
     constexpr float negative_slope = 0.01f;
-    
-    float n_in = static_cast<float>(rows * cols);
-    float stddev = std::sqrt(2.0f / ((1 + negative_slope * negative_slope) * n_in));
-    
-    float bound = stddev * std::sqrt(3.0f); // Uniform bound from stddev
-    
+
+    float n_in = static_cast<float>(this->size());
+    float stddev
+        = std::sqrt(2.0f / ((1 + negative_slope) * n_in));
+        
+    float bound = stddev;
+
     kernel::matrix::randomize(*this, -bound, bound);
 }
 
@@ -66,7 +67,7 @@ void matrix::xavier_randomize() {
     float n_in = static_cast<float>(rows);
     float n_out = static_cast<float>(cols);
     float bound = std::sqrt(6.0f / (n_in + n_out));
-    
+
     kernel::matrix::randomize(*this, -bound, bound);
 }
 
@@ -184,12 +185,16 @@ matrix& matrix::element_wise_multiply(const matrix& other) {
     return *this;
 }
 
+float matrix::abssum() const {
+    return kernel::matrix::abssum(*this);
+}
+
 float matrix::variance() const {
     return kernel::matrix::variance(*this);
 }
 
 float matrix::norm() const {
-    return std::sqrt(kernel::matrix::sum_of_squares(*this)) / static_cast<float>(rows * cols);
+    return std::sqrt(kernel::matrix::sum_of_squares(*this));
 }
 
 float matrix::stddev() const {
@@ -222,6 +227,10 @@ std::string matrix::to_string(std::uint8_t precision) const {
 matrix& matrix::softmax() {
     kernel::matrix::softmax(*this);
     return *this;
+}
+
+matrix matrix::backprop_softmax(const matrix& output_gradient) const {
+    return kernel::matrix::backprop_softmax(*this, output_gradient);
 }
 
 matrix& matrix::mask_upper_triangular(const float mask_value) {
@@ -270,10 +279,6 @@ matrix matrix::t_cross_multiplied(const matrix& other) const {
 
 bool matrix::equals(const matrix& other, const float epsilon) const {
     return kernel::matrix::is_equal(*this, other, epsilon);
-}
-
-matrix matrix::backprop_softmax(const matrix& gradient) const {
-    return kernel::matrix::backprop_softmax(*this, gradient);
 }
 
 void matrix::save(std::ostream& out) const {

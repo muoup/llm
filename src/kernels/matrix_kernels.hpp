@@ -20,6 +20,7 @@ void free_buffer(float* buffer);
 
 float sum(const ::matrix& mat);
 float sum_of_squares(const ::matrix& mat);
+float abssum(const ::matrix& mat);
 float max(const ::matrix& mat);
 float min(const ::matrix& mat);
 float absmax(const ::matrix& mat);

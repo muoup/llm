@@ -66,13 +66,16 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
 
         // Attention score = Q x K^T / sqrt(d_k)
         matrix scores = q.cross_t_multiplied(k);
-        const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
+        const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
+        kernel::optimizer::wait_for_operations();
+        
+        kernel::optimizer::norm_clip(scores);
+        kernel::optimizer::wait_for_operations();
+        
+        scores.scale(scale);
         kernel::optimizer::wait_for_operations();
 
-        scores.scale(scale);
-
         // Mask & Softmax
-
         if (masked) {
             scores.mask_upper_triangular();
             kernel::optimizer::wait_for_operations();
@@ -140,8 +143,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
-    const matrix& concat_heads = result.outputs[0];
-    const matrix& layer_output = result.outputs[1];
+    const matrix& layer_output = result.outputs[0];
     const matrix& post_layer_gradient = gradients[0];
 
     LOG_DEBUG("  Attention Layer Backpropagation:");
@@ -151,9 +153,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
     matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
     matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
-
-    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
-    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
 
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
@@ -175,16 +174,16 @@ std::vector<matrix> AttentionLayer::backpropogate(
         kernel::optimizer::wait_for_operations();
 
         // Backprop through softmax
-        matrix pre_softmax_gradient = scores.backprop_softmax(scores_gradient);
+        matrix raw_scores_gradient = scores.backprop_softmax(scores_gradient);
         kernel::optimizer::wait_for_operations();
 
         // Backprop through scaling
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
-        pre_softmax_gradient.scale(scale);
+        raw_scores_gradient.scale(scale);
         kernel::optimizer::wait_for_operations();
 
-        matrix q_gradient = pre_softmax_gradient.cross_multiplied(k);
-        matrix k_gradient = pre_softmax_gradient.t_cross_multiplied(q);
+        matrix q_gradient = raw_scores_gradient.cross_multiplied(k);
+        matrix k_gradient = raw_scores_gradient.t_cross_multiplied(q);
         kernel::optimizer::wait_for_operations();
 
         // Backprop through Q, K, V projections to their weight matrices
@@ -195,8 +194,8 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
         LOG_DEBUG("  Attention Head %zu Gradients:", h);
         LOG_DEBUG("    scores_gradient norm: %f", scores_gradient.norm());
-        LOG_DEBUG("    pre_softmax_gradient norm: %f",
-                  pre_softmax_gradient.norm());
+        LOG_DEBUG("    raw_scores_gradient norm: %f",
+                  raw_scores_gradient.norm());
         LOG_DEBUG("    wq_gradient norm: %f", wq_gradient.norm());
         LOG_DEBUG("    wk_gradient norm: %f", wk_gradient.norm());
         LOG_DEBUG("    wv_gradient norm: %f", wv_gradient.norm());
@@ -242,7 +241,7 @@ void AttentionLayer::save(std::ostream& out) const {
 AttentionLayer AttentionLayer::load(std::istream& in) {
     size_t dimensions, head_size, head_count;
     bool masked;
-    
+
     in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     in.read(reinterpret_cast<char*>(&head_size), sizeof(head_size));
     in.read(reinterpret_cast<char*>(&head_count), sizeof(head_count));

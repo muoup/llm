@@ -1,7 +1,6 @@
 #include "feed_forward.hpp"
 
 #include <iostream>
-#include <cmath>
 
 #include <inference/network_node.hpp>
 #include <kernels/feed_forward.hpp>

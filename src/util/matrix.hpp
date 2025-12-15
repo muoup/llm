@@ -73,6 +73,8 @@ struct matrix {
                                 const size_t slice_cols) const;
 
     matrix& softmax();
+    matrix backprop_softmax(const matrix& output_gradient) const;
+    
     matrix& mask_upper_triangular(float mask_value
                                   = -std::numeric_limits<float>::infinity());
     matrix& normalize() {
@@ -86,8 +88,6 @@ struct matrix {
     matrix cross_multiplied(const matrix& other) const;
     matrix t_cross_multiplied(const matrix& other) const;
     matrix cross_t_multiplied(const matrix& other) const;
-
-    matrix backprop_softmax(const matrix& gradient) const;
 
     matrix& element_wise_multiply(const matrix& other);
 
@@ -119,6 +119,7 @@ struct matrix {
     float min() const;
     float max() const;
     float absmax() const;
+    float abssum() const;
     float variance() const;
     float stddev() const;
     float norm() const;

@@ -235,10 +235,11 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
 
     logits.scale(temperature);
     logits.softmax();
-
-    // Find the index of the maximum logit
+    
+    constexpr float min_prob = 0.3f;
+    
     const size_t last_row = logits.rows - 1;
-    float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+    float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * (1.0f - min_prob * 2) + min_prob;
 
     for (size_t i = 0; i < logits.cols; ++i) {
         random -= logits.get(last_row, i);

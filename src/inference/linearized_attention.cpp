@@ -129,8 +129,9 @@ std::vector<matrix> LinearizedAttention::backpropogate(
             = q_gradient.t_cross_multiplied(attention_gradient);
 
         // Backprop through softmax
-        matrix pre_softmax_gradient = scores.backprop_softmax(weights_gradient);
-
+        matrix pre_softmax_gradient; //scores.backprop_softmax(weights_gradient);
+        throw std::runtime_error("Linearized attention backprop softmax not implemented.");
+        
         // Backprop through scaling
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         pre_softmax_gradient.scale(scale);

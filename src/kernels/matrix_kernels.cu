@@ -12,22 +12,22 @@
 
 struct CurandGenerator {
     curandGenerator_t gen;
-    
+
     CurandGenerator() {}
-    
+
     operator curandGenerator_t() {
         auto status = curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
-        
+
         if (status != CURAND_STATUS_SUCCESS) {
             std::puts("Failed to create cuRAND generator");
             std::printf("Error Code: %d\n", status);
             std::fflush(stdout);
             std::exit(1);
         }
-        
+
         curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
         return gen;
-    } 
+    }
 };
 
 static CurandGenerator global_curand_generator;
@@ -249,6 +249,14 @@ __device__ float kernel_fadd(float a, float b) {
 
 float kernel::matrix::sum(const ::matrix& mat) {
     return general_reduce<kernel_fadd>(mat, 0.0f);
+}
+
+__device__ float abs_sum(float a, float b) {
+    return a + (b < 0 ? -b : b);
+}
+
+float kernel::matrix::abssum(const ::matrix& mat) {
+    return general_reduce<abs_sum>(mat, 0.0f);
 }
 
 __device__ float square_sum(float a, float b) {
@@ -537,15 +545,13 @@ void kernel::matrix::add(::matrix& mat, float value) {
 }
 
 __global__ void kernel_softmax(const matrix_view data) {
-    const size_t row = blockIdx.x;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < data.rows) {
         // Find max value for numerical stability
-        float max_val = kernel::matrix::device_get(
-            data, row, 0);  // data[row + 0 * stride];
+        float max_val = kernel::matrix::device_get(data, row, 0);
         for (size_t j = 1; j < data.cols; ++j) {
-            const float val = kernel::matrix::device_get(
-                data, row, j);  // data[row + j * stride];
+            const float val = kernel::matrix::device_get(data, row, j);
             if (val > max_val) {
                 max_val = val;
             }
@@ -562,49 +568,55 @@ __global__ void kernel_softmax(const matrix_view data) {
 
         // Normalize to get probabilities
         for (size_t j = 0; j < data.cols; ++j) {
-            const float val = kernel::matrix::device_get(data, row, j);  //
+            const float val = kernel::matrix::device_get(data, row, j);
             kernel::matrix::device_set(data, row, j, val / sum_exp);
         }
     }
 }
 
 void kernel::matrix::softmax(::matrix& mat) {
-    const size_t threads_per_block = 1;
-    const size_t blocks = mat.rows;
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (mat.rows + threads_per_block - 1) / threads_per_block;
 
     kernel_softmax<<<blocks, threads_per_block>>>(mat);
 }
 
 static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
-    const const_matrix_view gradient,
+    const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-    const size_t row = blockIdx.x;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < softmax_output.rows) {
         float s_dot = 0.0f;
 
         for (size_t col = 0; col < softmax_gradient.cols; ++col) {
             float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(gradient, row, col);
+            float g_j = kernel::matrix::device_get(output_gradient, row, col);
             s_dot += s_j * g_j;
         }
 
         for (size_t col = 0; col < softmax_gradient.cols; ++col) {
             float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(gradient, row, col);
+            float g_j = kernel::matrix::device_get(output_gradient, row, col);
             kernel::matrix::device_set(softmax_gradient, row, col,
                                        s_j * (g_j - s_dot));
+
+            // std::printf("s_j=%f, g_j=%f, s_dot=%f, grad=%f\n", s_j, g_j,
+            // s_dot,
+            //             s_j * (g_j - s_dot));
         }
     }
 }
 
 ::matrix kernel::matrix::backprop_softmax(const ::matrix& output,
                                           const ::matrix& gradient) {
-    ::matrix softmax_gradient({ gradient.rows, gradient.cols });
+    ::matrix softmax_gradient(gradient.rows, gradient.cols);
 
-    const size_t threads_per_block = 1;
-    const size_t blocks = gradient.rows;
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (gradient.rows + threads_per_block - 1) / threads_per_block;
 
     kernel_backprop_softmax<<<blocks, threads_per_block>>>(output, gradient,
                                                            softmax_gradient);
@@ -614,8 +626,8 @@ static __global__ void kernel_backprop_softmax(
 
 void __global__ kernel_mask_upper_triangle(const matrix_view data,
                                            const float mask_value) {
-    const size_t row = data.rows;
-    const size_t col = data.cols;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (col > row && (row < data.rows || col < data.cols)) {
         if (col > row) {
