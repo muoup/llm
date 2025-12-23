@@ -234,7 +234,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
     matrix& logits = results.back().outputs[0];
     
     // constexpr float min_prob = 0.75f;
-    constexpr size_t top_n = 5;
+    constexpr size_t top_n = 10;
 
     const size_t last_row = logits.rows - 1;
 

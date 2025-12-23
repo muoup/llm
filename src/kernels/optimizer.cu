@@ -6,13 +6,13 @@
 
 void kernel::optimizer::norm_clip(::matrix& gradient) {
     constexpr auto max_magnitude = 5.0f;
-    const auto max = gradient.absmax();
+    const auto mag = kernel::matrix::sum_of_squares(gradient) / gradient.size();
     kernel::matrix::check_errors("After absmax in norm_clip");
 
-    if (max > max_magnitude) {
-        float goal_magnitude = max_magnitude + (max_magnitude - max) / 2;
-        float factor = goal_magnitude / max;
-        gradient.scale(factor);
+    if (mag > max_magnitude * max_magnitude) {
+        const float scale = sqrtf((max_magnitude * max_magnitude) / mag);
+        kernel::matrix::scale(gradient, scale);
+        kernel::matrix::check_errors("After scaling in norm_clip");
     }
 }
 
