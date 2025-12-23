@@ -233,9 +233,6 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
 
     const size_t last_row = logits.rows - 1;
 
-    std::vector<std::pair<float, token_id_t>> candidates;
-    candidates.reserve(logits.cols);
-
     if (temperature <= 0.0f) {
         // Greedy sampling
         token_id_t best_token = 0;
@@ -249,6 +246,8 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
         }
         return best_token;
     }
+    
+    std::priority_queue<std::pair<float, token_id_t>> candidates;
 
     // Find max logit for numerical stability in softmax
     float max_logit = -std::numeric_limits<float>::infinity();
@@ -259,47 +258,41 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
     float sum_exp = 0.0f;
     for (size_t i = 0; i < logits.cols; ++i) {
         float p = std::exp((logits.get(last_row, i) - max_logit) / temperature);
-        candidates.emplace_back(p, static_cast<token_id_t>(i));
+        candidates.emplace(p, static_cast<token_id_t>(i));
         sum_exp += p;
     }
-
-    for (auto& c : candidates) {
-        c.first /= sum_exp;
-    }
-
-    // Sort candidates by probability descending
-    std::sort(candidates.begin(), candidates.end(),
-              [](const auto& a, const auto& b) { return a.first > b.first; });
+    
+    std::vector<std::pair<float, token_id_t>> candidate_vec;
 
     // Top-p (nucleus) sampling
     constexpr float top_p = 0.9f;
     float cumulative_prob = 0.0f;
     size_t cutoff = 0;
     for (size_t i = 0; i < candidates.size(); ++i) {
-        cumulative_prob += candidates[i].first;
+        auto pair = std::move(candidates.top());
+        candidates.pop();
+        cumulative_prob += pair.first / sum_exp;
+        
+        candidate_vec.emplace_back(std::move(pair));
+        
         cutoff = i + 1;
         if (cumulative_prob >= top_p) {
+            cumulative_prob -= pair.first / sum_exp;
             break;
         }
     }
 
-    // Re-sample from the truncated distribution
-    float top_p_sum = 0.0f;
-    for (size_t i = 0; i < cutoff; ++i) {
-        top_p_sum += candidates[i].first;
-    }
-
     float r = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
-              * top_p_sum;
+              * cumulative_prob;
     float current_sum = 0.0f;
-    for (size_t i = 0; i < cutoff; ++i) {
-        current_sum += candidates[i].first;
+    for (auto &[prob, tok] : candidate_vec) {
+        current_sum += prob;
         if (r <= current_sum) {
-            return candidates[i].second;
+            return tok;
         }
     }
 
-    return candidates[0].second;
+    return candidate_vec.back().second;
 }
 
 float InferenceModel::train_on(const std::span<const token_id_t> tokens,
