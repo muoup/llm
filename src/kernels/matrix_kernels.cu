@@ -638,9 +638,9 @@ void __global__ kernel_mask_upper_triangle(const matrix_view data,
 
 void kernel::matrix::mask_upper_triangle(::matrix& mat,
                                          const float mask_value) {
-    const size_t threads_per_block = 256;
-    const dim3 blocks((mat.rows + threads_per_block - 1) / threads_per_block,
-                      (mat.cols + threads_per_block - 1) / threads_per_block);
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+                      (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_mask_upper_triangle<<<blocks, threads_per_block>>>(mat, mask_value);
 }
