@@ -5,4 +5,7 @@ datasets/*
 perf.*
 
 !.gitignore
-!datasets/wiki-trunc/th.txt
+
+web-frontend/node_modules/
+web-frontend/dist/
+web-frontend/npm-debug.log*
