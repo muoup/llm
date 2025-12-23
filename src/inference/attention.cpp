@@ -190,7 +190,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
         LOG_DEBUG("  Attention Head %zu Gradients:", h);
         LOG_DEBUG("    scores_gradient norm: %f", scores_gradient.norm());
-        LOG_DEBUG("    raw_scores_gradient norm: %f",
+        LOG_DEBUG("    raw_scores_gradient norm: %.10e",
                   raw_scores_gradient.norm());
         LOG_DEBUG("    wq_gradient norm: %f", wq_gradient.norm());
         LOG_DEBUG("    wk_gradient norm: %f", wk_gradient.norm());

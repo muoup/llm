@@ -57,8 +57,6 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
                 results.mean.norm());
     LOG_DEBUG("    inv_variance norm: %f",
                 results.inv_variance.norm());
-    LOG_DEBUG("    pre_residual_connection norm: %f",
-                pre_residual_connection.norm());
     LOG_DEBUG("    post_residual_connection norm: %f",
                 inner_node_outputs.outputs[0].norm());
 
