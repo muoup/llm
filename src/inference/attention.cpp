@@ -68,7 +68,7 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         matrix scores = q.cross_t_multiplied(k);
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
         kernel::optimizer::wait_for_operations();
-        
+
         scores.scale(scale);
         kernel::optimizer::wait_for_operations();
 
@@ -215,6 +215,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
         input_gradient.add(head_input_gradient);
     }
+
+    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
+    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
 
     return matrix::construct_vec(input_gradient);
 }

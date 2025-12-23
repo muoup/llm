@@ -150,9 +150,6 @@ void kernel::matrix::randomize(::matrix& matrix,
                           matrix.buffer_size() / sizeof(float));
     const auto range = max - min;
 
-    matrix.add(-0.5f);
-    kernel::optimizer::wait_for_operations();
-
     matrix.scale(range);
     kernel::optimizer::wait_for_operations();
 
