@@ -49,8 +49,8 @@ int handle_train(int argc, char* argv[]) {
 
     // TODO: Get these from CLI args
     constexpr size_t dimensions = 128;
-    constexpr size_t attention_heads = 2;
-    constexpr size_t num_layers = 2;
+    constexpr size_t attention_heads = 4;
+    constexpr size_t num_layers = 4;
 
     InferenceModel model = [&]() {
         if (!input_model_path.empty()) {
@@ -64,15 +64,10 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model = minimal_model(_tokenizer.vocab_size());
-            // InferenceModel model
-            //     = standard_attention_model(dimensions,
-            //     _tokenizer.vocab_size(),
-            //                                num_layers, attention_heads);
-            // InferenceModel model = linearized_attention_model(dimensions,
-            // _tokenizer.vocab_size(), attention_heads, num_layers);
-            // InferenceModel model = standard_recursive_model(dimensions,
-            // _tokenizer.vocab_size(), attention_heads, num_layers, 10);
+            InferenceModel model
+                = standard_attention_model(dimensions,
+                                           _tokenizer.vocab_size(),
+                                           num_layers, attention_heads);
             model.randomize();
 
             std::cout << "New model created. Parameter count: "
@@ -107,8 +102,7 @@ int handle_train(int argc, char* argv[]) {
                   << (type == dataset_type::RAW ? "raw" : "row-based")
                   << ". Iterating over rows..." << std::endl;
 
-        constexpr float starting_learning_rate = 0.0001f;
-        float learning_rate = 0.0f;
+        constexpr float learning_rate = 0.0001f;
         float rolling_average_loss = 0.0f;
 
         const size_t n_rows = dataset->size();
@@ -131,8 +125,7 @@ int handle_train(int argc, char* argv[]) {
                 rolling_average_loss = loss;
             
             rolling_average_loss
-                = (ROLLING_AVG_WINDOW - 1) / 100.0f * rolling_average_loss
-                  + (1.0f / ROLLING_AVG_WINDOW) * loss;
+                = ((ROLLING_AVG_WINDOW - 1) * rolling_average_loss + loss) / ROLLING_AVG_WINDOW;
             
 
             if (i % 100 == 0) {
@@ -144,9 +137,6 @@ int handle_train(int argc, char* argv[]) {
                     i, n_rows, rolling_average_loss, as_percentage);
                 std::fflush(stdout);
             }
-
-            learning_rate = starting_learning_rate
-                            * std::pow(0.95f, 25 - rolling_average_loss);
         });
     } catch (const std::out_of_range& e) {
         std::cerr << "Out of range error during training: " << e.what()

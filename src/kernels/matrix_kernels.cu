@@ -631,10 +631,8 @@ void __global__ kernel_mask_upper_triangle(const matrix_view data,
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (col > row && (row < data.rows || col < data.cols)) {
-        if (col > row) {
-            kernel::matrix::device_set(data, row, col, mask_value);
-        }
+    if (row < data.rows && col < data.cols && col > row) {
+        kernel::matrix::device_set(data, row, col, mask_value);
     }
 }
 

@@ -31,13 +31,8 @@ matrix LogitLayer::forward(const matrix& input) const {
     kernel::feed_forward::add_bias(logits, b);
     kernel::optimizer::wait_for_operations();
 
-    LOG_DEBUG("    logits norm pre-softmax: %f", logits.norm());
+    LOG_DEBUG("    logits norm: %f", logits.norm());
 
-    logits.softmax();
-
-    LOG_DEBUG("    logits norm post-softmax: %f", logits.norm());
-
-    kernel::optimizer::wait_for_operations();
     return logits;
 }
 

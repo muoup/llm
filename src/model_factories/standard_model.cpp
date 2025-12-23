@@ -41,7 +41,7 @@ InferenceModel standard_attention_model(size_t dimensions,
 
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer
-            = std::make_unique<AttentionLayer>(dimensions, attention_heads, i == 0);
+            = std::make_unique<AttentionLayer>(dimensions, attention_heads, true);
         auto attn_block
             = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
         size_t attn_block_idx = model.add_layer(std::move(attn_block));

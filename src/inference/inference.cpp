@@ -1,6 +1,7 @@
 #include "inference.hpp"
 
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -232,39 +233,76 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
                                    float temperature) const {
     auto results = this->forwarding_results(tokens);
     matrix& logits = results.back().outputs[0];
-    
-    // constexpr float min_prob = 0.75f;
-    constexpr size_t top_n = 10;
 
     const size_t last_row = logits.rows - 1;
 
-    std::priority_queue<std::pair<float, token_id_t>> min_heap;
+    std::vector<std::pair<float, token_id_t>> candidates;
+    candidates.reserve(logits.cols);
+
+    if (temperature <= 0.0f) {
+        // Greedy sampling
+        token_id_t best_token = 0;
+        float max_logit = -std::numeric_limits<float>::infinity();
+        for (size_t i = 0; i < logits.cols; ++i) {
+            float val = logits.get(last_row, i);
+            if (val > max_logit) {
+                max_logit = val;
+                best_token = static_cast<token_id_t>(i);
+            }
+        }
+        return best_token;
+    }
+
+    // Find max logit for numerical stability in softmax
+    float max_logit = -std::numeric_limits<float>::infinity();
     for (size_t i = 0; i < logits.cols; ++i) {
-        float prob = logits.get(last_row, i);
-        min_heap.emplace(prob, static_cast<token_id_t>(i));
+        max_logit = std::max(max_logit, logits.get(last_row, i));
     }
-    
-    std::vector<std::pair<float, token_id_t>> top_tokens;
-    float top_n_prob = 0.0f;
 
-    for (size_t i = 0; i < top_n; ++i) {
-        top_tokens.emplace_back(std::move(min_heap.top()));
-        min_heap.pop();
-        
-        top_n_prob += top_tokens.back().first;
+    float sum_exp = 0.0f;
+    for (size_t i = 0; i < logits.cols; ++i) {
+        float p = std::exp((logits.get(last_row, i) - max_logit) / temperature);
+        candidates.emplace_back(p, static_cast<token_id_t>(i));
+        sum_exp += p;
     }
-    
-    float cumulative_prob = static_cast<float>(rand())
-                            / static_cast<float>(RAND_MAX) * top_n_prob;
 
-    for (const auto& [prob, token] : top_tokens) {
-        cumulative_prob -= prob;
-        if (cumulative_prob <= 0.0f) {
-            return token;
+    for (auto& c : candidates) {
+        c.first /= sum_exp;
+    }
+
+    // Sort candidates by probability descending
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto& a, const auto& b) { return a.first > b.first; });
+
+    // Top-p (nucleus) sampling
+    constexpr float top_p = 0.9f;
+    float cumulative_prob = 0.0f;
+    size_t cutoff = 0;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        cumulative_prob += candidates[i].first;
+        cutoff = i + 1;
+        if (cumulative_prob >= top_p) {
+            break;
         }
     }
 
-    return min_heap.top().second;
+    // Re-sample from the truncated distribution
+    float top_p_sum = 0.0f;
+    for (size_t i = 0; i < cutoff; ++i) {
+        top_p_sum += candidates[i].first;
+    }
+
+    float r = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
+              * top_p_sum;
+    float current_sum = 0.0f;
+    for (size_t i = 0; i < cutoff; ++i) {
+        current_sum += candidates[i].first;
+        if (r <= current_sum) {
+            return candidates[i].second;
+        }
+    }
+
+    return candidates[0].second;
 }
 
 float InferenceModel::train_on(const std::span<const token_id_t> tokens,
@@ -276,10 +314,14 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
 
     std::vector<ForwardingResult> results = this->forwarding_results(tokens);
     kernel::optimizer::wait_for_operations();
-    
+
+    // Apply softmax to logits for cross-entropy loss backprop
+    results.back().outputs[0].softmax();
+    kernel::optimizer::wait_for_operations();
+
     // Backprop through logit layer
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
-        results[results.size() - 2].outputs[0], results.back().outputs[0],
+        results.rbegin()[1].outputs[0], results.back().outputs[0],
         actual, learning_rate);
     kernel::matrix::check_errors("Backpropogating logits...");
     kernel::optimizer::wait_for_operations();
