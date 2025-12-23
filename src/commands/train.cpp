@@ -118,13 +118,13 @@ int handle_train(int argc, char* argv[]) {
                 = ((ROLLING_AVG_WINDOW - 1) * rolling_average_loss + loss)
                   / ROLLING_AVG_WINDOW;
 
-            if (i % 100 == 0) {
+            if ((i + 1) % 100 == 0) {
                 float as_percentage = std::exp(-rolling_average_loss) * 100.0f;
 
                 std::printf(
                     "Row %zu / %zu processed. Rolling Avg Loss: "
                     "%.2f | As Accuracy: %.3f%%\n",
-                    i, n_rows, rolling_average_loss, as_percentage);
+                    (i + 1), n_rows, rolling_average_loss, as_percentage);
                 std::fflush(stdout);
             }
         });

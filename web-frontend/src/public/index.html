@@ -84,27 +84,36 @@
 
         .view-section {
             display: none;
-            max-width: 800px;
+            width: 100%;
+        }
+
+        .view-section h1 {
+            width: 100%;
         }
 
         .view-section.active {
-            display: block;
+            display: flex;
+            flex-direction: column;
             animation: fadeIn 0.3s ease-out;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .main-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
         }
-
-        h1 { margin-top: 0; font-size: 28px; font-weight: 700; margin-bottom: 30px; }
-
+        
         .form-card {
             background: var(--card-bg);
             padding: 30px;
             border-radius: 12px;
             border: 1px solid var(--border);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .form-group { margin-bottom: 20px; }
@@ -177,6 +186,29 @@
         }
         .stderr { color: #f87171; }
         .stdout { color: #cbd5e1; }
+
+        .train-container {
+            display: flex;
+            gap: 30px;
+            align-items: stretch;
+            margin-bottom: 20px;
+        }
+
+        .train-inputs {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        #chart-container {
+            background: rgba(2, 6, 23, 0.5);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            flex: 1.5;
+            display: none;
+            min-height: 350px;
+            margin-top: 0;
+        }
         
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -224,21 +256,28 @@
             <!-- Train View -->
             <div id="view-train" class="view-section">
                 <h1>Train Model</h1>
-                <div class="form-group">
-                    <label>Dataset Select</label>
-                    <select id="train-data-select" class="dataset-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Model</label>
-                    <select id="train-model-select" class="model-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Tokenizer</label>
-                    <select id="train-tokenizer-select" class="tokenizer-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Limit Rows (Optional)</label>
-                    <input type="number" id="row-limit" value="">
+                <div class="train-container">
+                    <div class="train-inputs">
+                        <div class="form-group">
+                            <label>Dataset Select</label>
+                            <select id="train-data-select" class="dataset-dropdown"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Model</label>
+                            <select id="train-model-select" class="model-dropdown"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tokenizer</label>
+                            <select id="train-tokenizer-select" class="tokenizer-dropdown"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Limit Rows (Optional)</label>
+                            <input type="number" id="row-limit" value="">
+                        </div>
+                    </div>
+                    <div id="chart-container">
+                        <canvas id="training-chart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -293,6 +332,7 @@
         <div id="console">Console ready...</div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
