@@ -1,5 +1,6 @@
 #include "layer_normalize.hpp"
 
+#include <cstddef>
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
 #include <kernels/layer_norm.hpp>
@@ -17,14 +18,24 @@ LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
       inner_node(std::move(inner_node)) {}
 
 size_t LayerNorm::parameterCount() const {
-    return (gamma.rows * gamma.cols) + (beta.rows * beta.cols)
-           + inner_node->parameterCount();
+    size_t inner_parameters = [&]() -> size_t {
+        if (inner_node) {
+            return inner_node->parameterCount();
+        } else {
+            return 0;
+        }
+    }();
+
+    return inner_parameters + (gamma.rows * gamma.cols)
+           + (beta.rows * beta.cols);
 }
 
 void LayerNorm::randomize(float min, float max) {
     gamma.set_all(1.0f);
     beta.set_all(0.0f);
-    inner_node->randomize(min, max);
+
+    if (inner_node)
+        inner_node->randomize(min, max);
 }
 
 NodeType LayerNorm::getType() const {
@@ -36,6 +47,10 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
 
     auto results
         = kernel::layer_norm::layer_normalization(input, gamma, beta, epsilon);
+
+    if (!inner_node)
+        return standardResult(matrix::construct_vec(
+            results.normalized, results.mean, results.inv_variance));
 
     MATRIX_ASSERT(results.normalized.rows == input.rows
                       && results.normalized.cols == input.cols,
@@ -49,16 +64,12 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
     inner_node_outputs.outputs[0].add(input);
 
     LOG_DEBUG("  LayerNorm Forward:");
-    LOG_DEBUG("    input norm: %f",
-                input.norm());
-    LOG_DEBUG("    normalized norm: %f",
-                results.normalized.norm());
-    LOG_DEBUG("    mean norm: %f",
-                results.mean.norm());
-    LOG_DEBUG("    inv_variance norm: %f",
-                results.inv_variance.norm());
+    LOG_DEBUG("    input norm: %f", input.norm());
+    LOG_DEBUG("    normalized norm: %f", results.normalized.norm());
+    LOG_DEBUG("    mean norm: %f", results.mean.norm());
+    LOG_DEBUG("    inv_variance norm: %f", results.inv_variance.norm());
     LOG_DEBUG("    post_residual_connection norm: %f",
-                inner_node_outputs.outputs[0].norm());
+              inner_node_outputs.outputs[0].norm());
 
     std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
     return_vec.emplace_back(std::move(results.normalized));
@@ -72,29 +83,34 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                                              std::span<const matrix> gradients,
                                              float learning_rate) {
     const matrix& layer_input = inputs[0];
-    const matrix& normalized_input = result.outputs.rbegin()[2];
     const matrix& mean = result.outputs.rbegin()[1];
     const matrix& inv_variance = result.outputs.rbegin()[0];
+    
+    // Maybe unused if no inner node
+    std::vector<matrix> inner_backprop_outputs;
 
     // The gradient dL/dy splits at the residual connection y = x + z
     // The gradient for the residual path (x) is grad_output.
     // The gradient for the main path (z) is also grad_output.
-    std::vector<matrix> inner_backprop_outputs = inner_node->backpropogate(
-        result, std::span<const matrix>{ &normalized_input, 1 }, gradients,
-        learning_rate);
-    matrix& grad_normalized = inner_backprop_outputs[0];
+    const matrix& grad_normalized = [&]() -> const matrix& {
+        const matrix& normalized_input = result.outputs.rbegin()[2];
+        
+        if (inner_node) {
+            inner_backprop_outputs = inner_node->backpropogate(
+                result, std::span<const matrix>{ &normalized_input, 1 }, gradients,
+                learning_rate);
+            return inner_backprop_outputs[0];
+        } else {
+            return gradients[0];
+        }
+    }();
 
     LOG_DEBUG("  LayerNorm Inputs: ");
-    LOG_DEBUG("    layer_input norm: %f",
-                layer_input.norm());
-    LOG_DEBUG("    normalized_input norm: %f",
-                normalized_input.norm());
-    LOG_DEBUG("    mean norm: %f",
-                mean.norm());
-    LOG_DEBUG("    inv_variance norm: %f",
-                inv_variance.norm());
-    LOG_DEBUG("    grad_normalized norm: %f",
-                grad_normalized.norm());
+    LOG_DEBUG("    layer_input norm: %f", layer_input.norm());
+    LOG_DEBUG("    normalized_input norm: %f", normalized_input.norm());
+    LOG_DEBUG("    mean norm: %f", mean.norm());
+    LOG_DEBUG("    inv_variance norm: %f", inv_variance.norm());
+    LOG_DEBUG("    grad_normalized norm: %f", grad_normalized.norm());
 
     kernel::layer_norm::LayerNormGradients results
         = kernel::layer_norm::layer_normalization_backward(
@@ -102,12 +118,9 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
             epsilon);
 
     LOG_DEBUG("  LayerNorm Layer Gradients:");
-    LOG_DEBUG("    grad_gamma norm: %f",
-                results.grad_gamma.norm());
-    LOG_DEBUG("    grad_beta norm: %f",
-                results.grad_beta.norm());
-    LOG_DEBUG("    grad_input norm: %f",
-                results.grad_input.norm());
+    LOG_DEBUG("    grad_gamma norm: %f", results.grad_gamma.norm());
+    LOG_DEBUG("    grad_beta norm: %f", results.grad_beta.norm());
+    LOG_DEBUG("    grad_input norm: %f", results.grad_input.norm());
 
     kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,
                                                learning_rate);
@@ -117,7 +130,9 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     kernel::matrix::check_errors("post adjust beta");
 
     // Add the gradient from the residual path
-    results.grad_input.add(gradients[0]);
+    if (inner_node) {
+        results.grad_input.add(gradients[0]);
+    }
     return matrix::construct_vec(results.grad_input);
 }
 
@@ -127,6 +142,13 @@ void LayerNorm::save(std::ostream& out) const {
     gamma.save(out);
     beta.save(out);
 
+    bool has_inner_node = (inner_node != nullptr);
+    out.write(reinterpret_cast<const char*>(&has_inner_node),
+              sizeof(has_inner_node));
+    
+    if (!inner_node)
+        return;
+    
     auto node_type = inner_node->getType();
     out.write(reinterpret_cast<const char*>(&node_type), sizeof(node_type));
     inner_node->save(out);
@@ -139,6 +161,11 @@ LayerNorm LayerNorm::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&layer.epsilon), sizeof(layer.epsilon));
     layer.gamma = matrix::load(in);
     layer.beta = matrix::load(in);
-    layer.inner_node = load_node(in);
+    
+    bool has_inner_node;
+    in.read(reinterpret_cast<char*>(&has_inner_node), sizeof(has_inner_node));
+    if (has_inner_node)
+        layer.inner_node = load_node(in);
+    
     return layer;
 }

@@ -13,16 +13,17 @@ InferenceModel minimal_model(size_t vocab_size) {
     InferenceModel model(dimensions, vocab_size);
 
     model.add_connection(0, 1);
+    model.add_connection(1, 2);
     
     auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1, true);
-    // model.add_layer(std::move(attn_layer));
     model.add_layer(std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
  
     auto ff_layer = std::make_unique<FeedForwardLayer>(dimensions, dimensions * 4);
-    // model.add_layer(std::move(ff_layer));
     model.add_layer(std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
 
-
+    auto empty_norm = std::make_unique<LayerNorm>(nullptr, dimensions);
+    model.add_layer(std::move(empty_norm));
+    
     model.finalize();
     model.randomize();
     return model;
