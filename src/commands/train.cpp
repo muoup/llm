@@ -63,10 +63,10 @@ int handle_train(int argc, char* argv[]) {
             return model;
         } else {
             std::cout << "Creating and randomizing new model." << std::endl;
-            // InferenceModel model = minimal_model(_tokenizer.vocab_size());
-            InferenceModel model
-                = standard_attention_model(dimensions, _tokenizer.vocab_size(),
-                                           num_layers, attention_heads);
+            InferenceModel model = minimal_model(_tokenizer.vocab_size());
+            // InferenceModel model
+            //     = standard_attention_model(dimensions, _tokenizer.vocab_size(),
+            //                                num_layers, attention_heads);
             // InferenceModel model = linearized_attention_model(dimensions,
             // _tokenizer.vocab_size(), attention_heads, num_layers);
             // InferenceModel model = standard_recursive_model(dimensions,
@@ -133,7 +133,7 @@ int handle_train(int argc, char* argv[]) {
                     i, n_rows, loss, rolling_average_loss);
 
                 learning_rate
-                    = starting_learning_rate * std::pow(0.98f, 25 - loss);
+                    = starting_learning_rate * std::pow(0.95f, 25 - rolling_average_loss);
             },
             n_rows);
     } catch (const std::out_of_range& e) {

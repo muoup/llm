@@ -86,7 +86,7 @@ __global__ void normalize_and_scale(const const_matrix_view input,
     const size_t row = blockIdx.y * blockDim.y + threadIdx.y;
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (col < normalized_input.cols || row < normalized_input.rows) {
+    if (col < normalized_input.cols && row < normalized_input.rows) {
         float input_val = kernel::matrix::device_get(input, row, col);
         float inv_variance_val
             = kernel::matrix::device_get(inv_variance, row, 0);

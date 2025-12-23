@@ -22,8 +22,8 @@ size_t LayerNorm::parameterCount() const {
 }
 
 void LayerNorm::randomize(float min, float max) {
-    gamma.randomize(min, max);
-    beta.randomize(min, max);
+    gamma.set_all(1.0f);
+    beta.set_all(0.0f);
     inner_node->randomize(min, max);
 }
 

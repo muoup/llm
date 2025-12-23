@@ -54,7 +54,7 @@ void matrix::randomize(const float min, const float max) {
 void matrix::leaky_kaiming_randomize() {
     constexpr float negative_slope = 0.01f;
 
-    float n_in = static_cast<float>(this->size());
+    float n_in = static_cast<float>(this->rows);
     float stddev
         = std::sqrt(2.0f / ((1 + negative_slope) * n_in));
         
