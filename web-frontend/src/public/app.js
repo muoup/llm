@@ -257,7 +257,7 @@ runBtn.addEventListener('click', async () => {
             '--tokenizer',
             document.getElementById('train-tokenizer-select').value,
             '--output-model',
-            document.getElementById('train-data-select').value,
+            document.getElementById('train-model-select').value,
             '--dataset-type',
             'row-based'
         ];
