@@ -6,6 +6,7 @@
 #include <inference/linearized_attention.hpp>
 #include <inference/recursion_node.hpp>
 #include "inference/inference.hpp"
+#include "kernels/optimizer.hpp"
 
 InferenceModel minimal_model(size_t vocab_size) {
     const size_t dimensions = 128;
@@ -63,6 +64,7 @@ InferenceModel standard_attention_model(size_t dimensions,
 
     model.randomize();
     model.finalize();
+    kernel::optimizer::wait_for_operations();
     return model;
 }
 
