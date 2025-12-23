@@ -119,8 +119,8 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
     LOG_DEBUG("    final_output norm: %f", final_output.norm());
 
     // Expected returns layout:
-    // [0] -> concatenated heads
-    // [1] -> final output
+    // [0] -> final output
+    // [1] -> concatenated heads
     // [2] -> q1 (queries head 1)
     // [3] -> k1 (keys head 1)
     // [4] -> v1 (values head 2)
@@ -140,14 +140,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
-    const matrix& layer_output = result.outputs[0];
+    const matrix& concat_heads = result.outputs[1];
     const matrix& post_layer_gradient = gradients[0];
 
     LOG_DEBUG("  Attention Layer Backpropagation:");
-    LOG_DEBUG("    layer_output norm: %f", layer_output.norm());
     LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
-    matrix wo_gradient = layer_output.t_cross_multiplied(post_layer_gradient);
+    matrix wo_gradient = concat_heads.t_cross_multiplied(post_layer_gradient);
     matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
 
