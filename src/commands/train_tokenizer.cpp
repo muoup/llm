@@ -32,9 +32,19 @@ int handle_train_tokenizer(int argc, char* argv[]) {
     std::printf("Training tokenizer from row-based dataset...\b");
     std::printf("  Corpus: %s\n", corpus_path.data());
     
+    std::string training_data;
+    // 1MB limit for training data to keep it fast but representative
+    constexpr size_t MAX_TRAINING_SIZE = 1024 * 1024; 
+
     dataset->for_each([&](std::string_view row) {
-        train_tokenizer(tokenizer, row, vocab_size);
+        if (training_data.size() < MAX_TRAINING_SIZE) {
+            training_data.append(row);
+            training_data.push_back('\n'); // Preserve separation
+        }
     });
+
+    std::printf("  Collected %zu bytes of training data.\n", training_data.size());
+    train_tokenizer(tokenizer, training_data, vocab_size);
 
     save_tokenizer(tokenizer, output_path);
 

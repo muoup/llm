@@ -66,7 +66,8 @@ int handle_train(int argc, char* argv[]) {
             std::cout << "Creating and randomizing new model." << std::endl;
             InferenceModel model = minimal_model(_tokenizer.vocab_size());
             // InferenceModel model
-            //     = standard_attention_model(dimensions, _tokenizer.vocab_size(),
+            //     = standard_attention_model(dimensions,
+            //     _tokenizer.vocab_size(),
             //                                num_layers, attention_heads);
             // InferenceModel model = linearized_attention_model(dimensions,
             // _tokenizer.vocab_size(), attention_heads, num_layers);
@@ -90,13 +91,13 @@ int handle_train(int argc, char* argv[]) {
 
     try {
         size_t specified_size = std::numeric_limits<size_t>::max();
-        
+
         if (!n_str.empty()) {
             try {
                 specified_size = std::stoul(n_str);
             } catch (const std::exception& e) {
                 std::cerr << "Error: Invalid value for -n: " << n_str
-                            << std::endl;
+                          << std::endl;
                 std::exit(1);
             }
         }
@@ -109,35 +110,44 @@ int handle_train(int argc, char* argv[]) {
         constexpr float starting_learning_rate = 0.0001f;
         float learning_rate = 0.0f;
         float rolling_average_loss = 0.0f;
-        
+
         const size_t n_rows = dataset->size();
 
-        dataset->enumerate(
-            [&](size_t i, std::string_view row) {
-                auto tokens = encode(_tokenizer, row);
-                if (tokens.size() < 2) {
-                    return;
-                }
-                const auto input_tokens
-                    = std::span{ tokens.begin(), tokens.end() - 1 };
-                const auto target_tokens
-                    = std::span{ tokens.begin() + 1, tokens.end() };
-                float loss = model.train_on(input_tokens, target_tokens,
-                                            learning_rate);
-                
-                constexpr size_t ROLLING_AVG_WINDOW = 100;
-                
-                rolling_average_loss
-                    = (ROLLING_AVG_WINDOW - 1) / 100.0f * rolling_average_loss + (1.0f / ROLLING_AVG_WINDOW) * loss;
+        dataset->enumerate([&](size_t i, std::string_view row) {
+            auto tokens = encode(_tokenizer, row);
+            if (tokens.size() < 2) {
+                return;
+            }
+            const auto input_tokens
+                = std::span{ tokens.begin(), tokens.end() - 1 };
+            const auto target_tokens
+                = std::span{ tokens.begin() + 1, tokens.end() };
+            float loss
+                = model.train_on(input_tokens, target_tokens, learning_rate);
+
+            constexpr size_t ROLLING_AVG_WINDOW = 100;
+
+            if (i == 0)
+                rolling_average_loss = loss;
+            
+            rolling_average_loss
+                = (ROLLING_AVG_WINDOW - 1) / 100.0f * rolling_average_loss
+                  + (1.0f / ROLLING_AVG_WINDOW) * loss;
+            
+
+            if (i % 100 == 0) {
+                float as_percentage = std::exp(-rolling_average_loss) * 100.0f;
 
                 std::printf(
-                    "Row %zu / %zu processed. Loss: %.2f, Rolling Avg Loss: "
-                    "%.2f\n",
-                    i, n_rows, loss, rolling_average_loss);
+                    "Row %zu / %zu processed. Rolling Avg Loss: "
+                    "%.2f | As Accuracy: %.3f%%\n",
+                    i, n_rows, rolling_average_loss, as_percentage);
+                std::fflush(stdout);
+            }
 
-                learning_rate
-                    = starting_learning_rate * std::pow(0.95f, 25 - rolling_average_loss);
-            });
+            learning_rate = starting_learning_rate
+                            * std::pow(0.95f, 25 - rolling_average_loss);
+        });
     } catch (const std::out_of_range& e) {
         std::cerr << "Out of range error during training: " << e.what()
                   << std::endl;

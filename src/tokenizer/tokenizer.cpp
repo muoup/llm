@@ -1,6 +1,7 @@
 #include "tokenizer.hpp"
 
 #include <map>
+#include <unordered_map>
 #include <fstream>
 
 struct pair_frequency_t {
@@ -17,7 +18,7 @@ static pair_frequency_t get_most_frequent_pair(const std::span<const token_id_t>
         return {0, 0};
     }
 
-    std::map<combo_token_t, size_t> counts;
+    std::unordered_map<combo_token_t, size_t> counts;
     for (size_t i = 0; i < tokens.size() - 1; ++i) {
         counts[{tokens[i], tokens[i+1]}]++;
     }
@@ -81,6 +82,11 @@ void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t max_v
         token_id_t new_token_id = tokenizer.token_map.size();
         tokenizer.token_map.push_back({new_token_text});
         tokenizer.merges.push_back(most_frequent_pair.combo);
+        
+        if (tokenizer.token_map.size() % 100 == 0) {
+            std::printf("Tokenizer training: vocabulary size %zu / %zu\r", tokenizer.token_map.size(), max_vocab_size);
+            std::fflush(stdout);
+        }
 
         replace_pair(tokens, most_frequent_pair.combo, new_token_id);
     }

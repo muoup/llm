@@ -107,7 +107,6 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
 
     LOG_DEBUG("  LayerNorm Inputs: ");
     LOG_DEBUG("    layer_input norm: %f", layer_input.norm());
-    LOG_DEBUG("    normalized_input norm: %f", normalized_input.norm());
     LOG_DEBUG("    mean norm: %f", mean.norm());
     LOG_DEBUG("    inv_variance norm: %f", inv_variance.norm());
     LOG_DEBUG("    grad_normalized norm: %f", grad_normalized.norm());

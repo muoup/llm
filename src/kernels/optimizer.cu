@@ -10,7 +10,8 @@ void kernel::optimizer::norm_clip(::matrix& gradient) {
     kernel::matrix::check_errors("After absmax in norm_clip");
 
     if (max > max_magnitude) {
-        float factor = max_magnitude / max;
+        float goal_magnitude = max_magnitude + (max_magnitude - max) / 2;
+        float factor = goal_magnitude / max;
         gradient.scale(factor);
     }
 }
@@ -21,7 +22,7 @@ __global__ void _test_output() {
 
 static __global__ void regularize_gradient(const matrix_view gradient,
                                            const const_matrix_view parameters) {
-    constexpr float regularization_strength = 0.01f;
+    constexpr float regularization_strength = 0.0001f;
 
     size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     size_t col = blockIdx.y * blockDim.y + threadIdx.y;

@@ -232,54 +232,38 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
                                    float temperature) const {
     auto results = this->forwarding_results(tokens);
     matrix& logits = results.back().outputs[0];
-
-    logits.scale(temperature);
-    logits.softmax();
-
+    
     // constexpr float min_prob = 0.75f;
     constexpr size_t top_n = 5;
-    
+
     const size_t last_row = logits.rows - 1;
-    // float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX)
-    // * (1.0f - min_prob) + min_prob;
 
-    // Q: Does C++ have a max heap?
-    // A: Yes, you can use a priority_queue with a custom comparator to create a
-    // min-heap.
-
-    struct Compare {
-        bool operator()(const std::pair<float, token_id_t>& a,
-                        const std::pair<float, token_id_t>& b) {
-            return a.first > b.first;  // Min-heap based on probability
-        }
-    };
-
-    std::priority_queue<std::pair<float, token_id_t>,
-                        std::vector<std::pair<float, token_id_t>>, Compare>
-        min_heap;
-
+    std::priority_queue<std::pair<float, token_id_t>> min_heap;
     for (size_t i = 0; i < logits.cols; ++i) {
-        min_heap.emplace(logits.get(last_row, i), static_cast<token_id_t>(i));
+        float prob = logits.get(last_row, i);
+        min_heap.emplace(prob, static_cast<token_id_t>(i));
     }
     
     std::vector<std::pair<float, token_id_t>> top_tokens;
     float top_n_prob = 0.0f;
-    
+
     for (size_t i = 0; i < top_n; ++i) {
         top_tokens.emplace_back(std::move(min_heap.top()));
         min_heap.pop();
+        
         top_n_prob += top_tokens.back().first;
     }
     
-    float cumulative_prob = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * top_n_prob;
-    
+    float cumulative_prob = static_cast<float>(rand())
+                            / static_cast<float>(RAND_MAX) * top_n_prob;
+
     for (const auto& [prob, token] : top_tokens) {
         cumulative_prob -= prob;
         if (cumulative_prob <= 0.0f) {
             return token;
         }
     }
-    
+
     return min_heap.top().second;
 }
 
@@ -292,7 +276,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
 
     std::vector<ForwardingResult> results = this->forwarding_results(tokens);
     kernel::optimizer::wait_for_operations();
-
+    
     // Backprop through logit layer
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
         results[results.size() - 2].outputs[0], results.back().outputs[0],
