@@ -62,7 +62,7 @@ int handle_predict(int argc, char* argv[]) {
     std::cout << "Generating: " << prompt << std::flush;
     
     for (size_t i = 0; i < length; ++i) {
-        token_id_t next_token = model.predict(tokens);
+        token_id_t next_token = model.predict(tokens, temperature);
         tokens.push_back(next_token);
         
         if (next_token < _tokenizer.token_map.size()) {

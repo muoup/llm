@@ -1,5 +1,6 @@
 #include "dataset_factory.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -7,7 +8,7 @@
 #include <string_view>
 
 // Implementation of the factory function
-std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type, std::optional<size_t> specified_size) {
+std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type, size_t specified_size) {
     std::printf("Loading dataset from: %s\n", path.data());
     std::ifstream file(path.data());
 
@@ -29,8 +30,9 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
 
         std::string_view remaining_view(ds->data);
         const std::string_view delimiter = "<|endoftext|>";
+        size_t true_size = 0;
 
-        while (!remaining_view.empty()) {
+        while (!remaining_view.empty() && true_size < specified_size) {
             size_t delimiter_pos = remaining_view.find(delimiter);
 
             if (delimiter_pos == std::string_view::npos) {
@@ -47,11 +49,15 @@ std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_typ
                 advance_by++; // Also skip the newline that often follows the delimiter
             }
             remaining_view.remove_prefix(advance_by);
+            true_size++;
         }
+        
         return ds;
     } else if (type == dataset_type::OVERFIT) {
+        constexpr size_t MAX_OVERFIT_ROWS = 1000;
+        
         auto ds = std::make_unique<overfit_dataset>();
-        ds->repeat_count = specified_size.value_or(1000);
+        ds->repeat_count = std::min(specified_size, MAX_OVERFIT_ROWS);
         ds->data = file_content.substr(0, 250); // Take first 250 characters
         return ds;
     }

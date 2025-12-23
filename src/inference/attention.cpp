@@ -64,7 +64,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         matrix k = input.cross_multiplied(head.wk);
         matrix v = input.cross_multiplied(head.wv);
 
-        // Attention score = Q x K^T / sqrt(d_k)
         matrix scores = q.cross_t_multiplied(k);
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
         kernel::optimizer::wait_for_operations();
@@ -72,7 +71,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         scores.scale(scale);
         kernel::optimizer::wait_for_operations();
 
-        // Mask & Softmax
         if (masked) {
             scores.mask_upper_triangular();
             kernel::optimizer::wait_for_operations();
@@ -81,7 +79,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         scores.softmax();
         kernel::optimizer::wait_for_operations();
 
-        // Weighted sum
         matrix weighted_sum = scores.cross_multiplied(v);
         kernel::optimizer::wait_for_operations();
 
@@ -98,8 +95,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
         LOG_DEBUG("    scores norm: %f", scores.norm());
         LOG_DEBUG("    weighted_sum norm: %f", weighted_sum.norm());
 
-        // returns is not modified, so the output reference will remain valid
-        // until this point
         returns.emplace_back(std::move(q));
         returns.emplace_back(std::move(k));
         returns.emplace_back(std::move(v));

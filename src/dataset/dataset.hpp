@@ -9,12 +9,9 @@ struct dataset {
   
     virtual size_t size() const = 0;
     virtual void for_each(std::function<void(std::string_view)>) const = 0;
-    void enumerate(std::function<void(size_t, std::string_view)> func, size_t limit = 0) const {
+    void enumerate(std::function<void(size_t, std::string_view)> func) const {
         size_t index = 0;
         for_each([&](std::string_view row) {
-            if (limit > 0 && index >= limit) {
-                return;
-            }
             func(index++, row);
         });
     }

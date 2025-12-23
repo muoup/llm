@@ -231,15 +231,15 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
 token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
                                    float temperature) const {
     auto results = this->forwarding_results(tokens);
-    matrix logits = std::move(results.back().outputs[0]);
+    matrix& logits = results.back().outputs[0];
 
     logits.scale(temperature);
     logits.softmax();
     
-    constexpr float min_prob = 0.3f;
+    constexpr float min_prob = 0.75f;
     
     const size_t last_row = logits.rows - 1;
-    float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * (1.0f - min_prob * 2) + min_prob;
+    float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * (1.0f - min_prob) + min_prob;
 
     for (size_t i = 0; i < logits.cols; ++i) {
         random -= logits.get(last_row, i);

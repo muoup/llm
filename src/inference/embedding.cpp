@@ -5,6 +5,7 @@
 #include <kernels/optimizer.hpp>
 
 #include <cassert>
+#include <cmath>
 
 #include <util/logger.hpp>
 
@@ -25,6 +26,8 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
         kernel::matrix::check_errors("EmbeddingLayer::forward row transfer");
     }
 
+    output.scale(std::sqrt(static_cast<float>(this->get_dimensions())));
+
     LOG_DEBUG("  Embedding Layer Forward:");
     LOG_DEBUG("    output norm pre pos encoding: %f", output.norm());
 
@@ -43,9 +46,12 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     kernel::optimizer::wait_for_operations();
 
+    matrix scaled_x_gradient = x_gradient.clone();
+    scaled_x_gradient.scale(std::sqrt(static_cast<float>(get_dimensions())));
+
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient,
+        kernel::matrix::add_row_vector(embedding_gradient, token, scaled_x_gradient,
                                        t);
         kernel::optimizer::wait_for_operations();
     }

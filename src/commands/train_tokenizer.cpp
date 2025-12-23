@@ -27,7 +27,7 @@ int handle_train_tokenizer(int argc, char* argv[]) {
     std::cout << "  Dataset type: " << (type == dataset_type::RAW ? "raw" : "row-based") << std::endl;
 
     tokenizer tokenizer;
-    auto dataset = create_dataset(corpus_path, type);
+    auto dataset = create_dataset(corpus_path, type, std::numeric_limits<size_t>::max());
 
     std::printf("Training tokenizer from row-based dataset...\b");
     std::printf("  Corpus: %s\n", corpus_path.data());
