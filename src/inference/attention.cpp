@@ -245,6 +245,7 @@ AttentionLayer AttentionLayer::load(std::istream& in) {
     layer.dimensions = dimensions;
     layer.head_size = head_size;
     layer.head_count = head_count;
+    layer.masked = masked;
 
     for (size_t i = 0; i < head_count; ++i) {
         layer.heads.emplace_back(
