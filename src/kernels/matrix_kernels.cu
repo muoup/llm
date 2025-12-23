@@ -197,7 +197,8 @@ struct reduction_mutex {
     float result;
 };
 
-template <__device__ float (*reducer)(float, float)>
+template <__device__ float (*ElementReducer)(float, float),
+          __device__ float (*SegmentReducer)(float, float)>
 static __global__ void matrix_reduce(const const_matrix_view data,
                                      float acc,
                                      reduction_mutex* result_mutex) {
@@ -210,20 +211,22 @@ static __global__ void matrix_reduce(const const_matrix_view data,
 
     for (std::uint64_t row = 0; row < data.rows; ++row) {
         float val = kernel::matrix::device_get(data, row, col);
-        partial_reduction = reducer(partial_reduction, val);
+        partial_reduction = ElementReducer(partial_reduction, val);
     }
 
     volatile int* lock = &result_mutex->lock;
     while (atomicExch((int*)lock, 1) == 1)
         ;
 
-    result_mutex->result = reducer(result_mutex->result, partial_reduction);
+    result_mutex->result
+        = SegmentReducer(result_mutex->result, partial_reduction);
 
     // Release lock
     atomicExch((int*)lock, 0);
 };
 
-template <__device__ float (*reducer)(float, float)>
+template <__device__ float (*ElementReducer)(float, float),
+          __device__ float (*RowReducer)(float, float)>
 float general_reduce(const ::matrix& mat, float acc) {
     reduction_mutex host_reference = { .lock = 0, .result = acc };
     reduction_mutex* d_result;
@@ -234,7 +237,9 @@ float general_reduce(const ::matrix& mat, float acc) {
     const size_t blocks = mat.cols;
     const size_t threads_per_block = 1;
 
-    (matrix_reduce<reducer>)<<<blocks, threads_per_block>>>(mat, acc, d_result);
+    (matrix_reduce<ElementReducer, RowReducer>)<<<blocks,
+                                                      threads_per_block>>>(
+        mat, acc, d_result);
     cudaDeviceSynchronize();
 
     cudaMemcpy(&host_reference, d_result, sizeof(reduction_mutex),
@@ -248,7 +253,7 @@ __device__ float kernel_fadd(float a, float b) {
 }
 
 float kernel::matrix::sum(const ::matrix& mat) {
-    return general_reduce<kernel_fadd>(mat, 0.0f);
+    return general_reduce<kernel_fadd, kernel_fadd>(mat, 0.0f);
 }
 
 __device__ float abs_sum(float a, float b) {
@@ -256,7 +261,7 @@ __device__ float abs_sum(float a, float b) {
 }
 
 float kernel::matrix::abssum(const ::matrix& mat) {
-    return general_reduce<abs_sum>(mat, 0.0f);
+    return general_reduce<abs_sum, kernel_fadd>(mat, 0.0f);
 }
 
 __device__ float square_sum(float a, float b) {
@@ -264,7 +269,7 @@ __device__ float square_sum(float a, float b) {
 }
 
 float kernel::matrix::sum_of_squares(const ::matrix& mat) {
-    return general_reduce<square_sum>(mat, 0.0f);
+    return general_reduce<square_sum, kernel_fadd>(mat, 0.0f);
 }
 
 __device__ float kernel_fmaxf(float a, float b) {
@@ -272,7 +277,7 @@ __device__ float kernel_fmaxf(float a, float b) {
 }
 
 float kernel::matrix::max(const ::matrix& mat) {
-    return general_reduce<kernel_fmaxf>(mat, FLT_MIN);
+    return general_reduce<kernel_fmaxf, kernel_fmaxf>(mat, FLT_MIN);
 }
 
 __device__ float kernel_fminf(float a, float b) {
@@ -280,7 +285,7 @@ __device__ float kernel_fminf(float a, float b) {
 }
 
 float kernel::matrix::min(const ::matrix& mat) {
-    return general_reduce<kernel_fminf>(mat, FLT_MAX);
+    return general_reduce<kernel_fminf, kernel_fminf>(mat, FLT_MAX);
 }
 
 __device__ float kernel_fabsf(float a) {
@@ -292,7 +297,7 @@ __device__ float individual_absmax(float a, float b) {
 }
 
 float kernel::matrix::absmax(const ::matrix& mat) {
-    return general_reduce<individual_absmax>(mat, 0.0f);
+    return general_reduce<individual_absmax, individual_absmax>(mat, 0.0f);
 }
 
 float kernel::matrix::variance(const ::matrix& mat) {

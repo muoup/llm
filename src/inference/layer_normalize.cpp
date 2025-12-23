@@ -46,7 +46,6 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
 
     auto inner_node_outputs
         = inner_node->forward(std::span(&results.normalized, 1));
-    matrix pre_residual_connection = inner_node_outputs.outputs[0].clone();
     inner_node_outputs.outputs[0].add(input);
 
     LOG_DEBUG("  LayerNorm Forward:");
@@ -64,7 +63,6 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
                 inner_node_outputs.outputs[0].norm());
 
     std::vector<matrix> return_vec = std::move(inner_node_outputs.outputs);
-    return_vec.emplace_back(std::move(pre_residual_connection));
     return_vec.emplace_back(std::move(results.normalized));
     return_vec.emplace_back(std::move(results.mean));
     return_vec.emplace_back(std::move(results.inv_variance));
