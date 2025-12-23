@@ -52,29 +52,19 @@ int handle_train(int argc, char* argv[]) {
     constexpr size_t attention_heads = 4;
     constexpr size_t num_layers = 4;
 
-    InferenceModel model = [&]() {
-        if (!input_model_path.empty()) {
-            std::cout << "Loading existing model from: " << input_model_path
-                      << std::endl;
-            std::ifstream file(input_model_path);
+    std::cout << "Loading model from: " << input_model_path
+                << std::endl;
+    std::ifstream file(input_model_path);
 
-            auto model = InferenceModel::load(file);
-            std::cout << "Successfully loaded model. Parameter count: "
-                      << model.parameter_count() << '\n';
-            return model;
-        } else {
-            std::cout << "Creating and randomizing new model." << std::endl;
-            InferenceModel model
-                = standard_attention_model(dimensions,
-                                           _tokenizer.vocab_size(),
-                                           num_layers, attention_heads);
-            model.randomize();
-
-            std::cout << "New model created. Parameter count: "
-                      << model.parameter_count() << '\n';
-            return model;
-        }
-    }();
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open model file: " << input_model_path
+                  << std::endl;
+        return 1;
+    }
+    
+    auto model = InferenceModel::load(file);
+    std::cout << "Successfully loaded model. Parameter count: "
+                << model.parameter_count() << '\n';
 
     if (model.vocab_size() != _tokenizer.token_map.size()) {
         std::cerr << "Model vocabulary size does not match tokenizer size."
@@ -123,10 +113,10 @@ int handle_train(int argc, char* argv[]) {
 
             if (i == 0)
                 rolling_average_loss = loss;
-            
+
             rolling_average_loss
-                = ((ROLLING_AVG_WINDOW - 1) * rolling_average_loss + loss) / ROLLING_AVG_WINDOW;
-            
+                = ((ROLLING_AVG_WINDOW - 1) * rolling_average_loss + loss)
+                  / ROLLING_AVG_WINDOW;
 
             if (i % 100 == 0) {
                 float as_percentage = std::exp(-rolling_average_loss) * 100.0f;

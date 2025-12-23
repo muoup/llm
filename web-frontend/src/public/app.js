@@ -1,12 +1,72 @@
 const runBtn = document.getElementById('run-btn');
 const stopBtn = document.getElementById('stop-btn');
 const consoleDiv = document.getElementById('console');
-const statusBar = document.getElementById('status');
-const commandSelect = document.getElementById('command-select');
+const statusText = document.getElementById('status-text');
+const statusContainer = document.getElementById('status-container');
+const navItems = document.querySelectorAll('.nav-item');
+const views = document.querySelectorAll('.view-section');
 
+const datasetDropdowns = document.querySelectorAll('.dataset-dropdown');
+const modelDropdowns = document.querySelectorAll('.model-dropdown');
+const tokenizerDropdowns = document.querySelectorAll('.tokenizer-dropdown');
+
+let activeView = 'predict';
 let eventSource = null;
 
-// Connect to SSE
+// --- Navigation Logic ---
+navItems.forEach(item => {
+    item.addEventListener('click', () => {
+        // Update Nav
+        navItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        // Update View
+        const viewId = item.getAttribute('data-view');
+        activeView = viewId;
+        
+        views.forEach(v => v.classList.remove('active'));
+        document.getElementById(`view-${viewId}`).classList.add('active');
+    });
+});
+
+// --- Resource Loading ---
+async function fetchAndPopulate(url, dropdowns, placeholder) {
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const keys = Object.keys(data);
+        const list = data[keys[0]]; // e.g. data.datasets or data.models
+
+        dropdowns.forEach(dropdown => {
+            dropdown.innerHTML = '';
+            if (list.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = `No resources found`;
+                dropdown.appendChild(opt);
+            } else {
+                list.forEach(path => {
+                    const opt = document.createElement('option');
+                    opt.value = path;
+                    opt.textContent = path;
+                    dropdown.appendChild(opt);
+                });
+            }
+        });
+    } catch (err) {
+        console.error(`Failed to load ${url}:`, err);
+    }
+}
+
+async function loadAllResources() {
+    await Promise.all([
+        fetchAndPopulate('/api/datasets', datasetDropdowns, 'datasets'),
+        fetchAndPopulate('/api/models', modelDropdowns, 'models'),
+        fetchAndPopulate('/api/tokenizers', tokenizerDropdowns, 'tokenizers')
+    ]);
+}
+
+// --- SSE & Process Logic ---
 function connectSSE() {
     if (eventSource) eventSource.close();
     
@@ -22,8 +82,12 @@ function connectSSE() {
             consoleDiv.appendChild(span);
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
         } else if (data.type === 'exit') {
-            appendLog(`\nProcess exited with code ${data.code}\n`);
+            appendLog(`
+[Process exited with code ${data.code}]
+`);
             setRunning(false);
+            // Refresh lists in case new files were created
+            loadAllResources();
         }
     };
 
@@ -44,32 +108,79 @@ function setRunning(running) {
     if (running) {
         runBtn.disabled = true;
         stopBtn.style.display = 'inline-block';
-        statusBar.textContent = 'Status: Running...';
-        statusBar.className = 'status-bar status-running';
+        statusText.textContent = `Status: Running (${activeView})...`;
+        statusContainer.className = 'status-container status-running';
     } else {
         runBtn.disabled = false;
         stopBtn.style.display = 'none';
-        statusBar.textContent = 'Status: Idle';
-        statusBar.className = 'status-bar status-idle';
+        statusText.textContent = 'Status: Idle';
+        statusContainer.className = 'status-container status-idle';
     }
 }
 
 runBtn.addEventListener('click', async () => {
-    const cmd = commandSelect.value;
     let args = [];
+    let command = activeView;
 
-    if (cmd === 'predict') {
+    if (activeView === 'predict') {
         args = [
-            '--prompt', document.getElementById('predict-prompt').value,
-            '--model', document.getElementById('predict-model').value,
-            '--tokenizer', document.getElementById('predict-tokenizer').value
+            '--prompt',
+            document.getElementById('predict-prompt').value,
+            '--model',
+            document.getElementById('predict-model-select').value,
+            '--tokenizer',
+            document.getElementById('predict-tokenizer-select').value,
+            '--length',
+            document.getElementById('predict-length').value
         ];
-    } else if (cmd === 'train') {
-        // You can add more inputs to the HTML and harvest them here
-        args = ['--data', 'data.txt', '--tokenizer', 'tokenizer.bin', '--output-model', 'model.bin'];
+    } else if (activeView === 'train') {
+        args = [
+            '--data',
+            document.getElementById('train-data-select').value,
+            '--input-model',
+            document.getElementById('train-model-select').value,
+            '--tokenizer',
+            document.getElementById('train-tokenizer-select').value,
+            '--output-model',
+            document.getElementById('train-data-select').value,
+            '--dataset-type',
+            'row-based'
+        ];
+        
+        var row_limit = document.getElementById('row-limit').value;
+        
+        if (row_limit && parseInt(row_limit) > 0) {
+          args = [...args, '-n', row_limit];
+        }
+    } else if (activeView === 'train-tokenizer') {
+        args = [
+            '--corpus',
+            document.getElementById('tok-corpus-select').value,
+            '--output',
+            document.getElementById('tok-output').value,
+            '--vocab-size',
+            document.getElementById('tok-vocab').value,
+            '--dataset-type',
+            'row-based'
+        ];
+    } else if (activeView === 'init-model') {
+        args = [
+            '--output',
+            document.getElementById('init-output').value,
+            '--tokenizer',
+            document.getElementById('init-tokenizer-select').value,
+            '--dimensions',
+            document.getElementById('init-dim').value,
+            '--heads',
+            document.getElementById('init-heads').value,
+            '--layers',
+            document.getElementById('init-layers').value
+        ];
     }
 
-    consoleDiv.textContent = `> Dispatching: ${cmd} ${args.join(' ')}\n`;
+    consoleDiv.textContent = `> Dispatching: ${command} ${args.join(' ')}
+
+`;
     setRunning(true);
     connectSSE();
 
@@ -77,7 +188,7 @@ runBtn.addEventListener('click', async () => {
         const response = await fetch('/api/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: cmd, args })
+            body: JSON.stringify({ command, args })
         });
         
         const result = await response.json();
@@ -96,5 +207,5 @@ stopBtn.addEventListener('click', async () => {
 });
 
 // Initialize
+loadAllResources();
 connectSSE();
-

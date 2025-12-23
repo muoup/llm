@@ -2,6 +2,7 @@ import express from 'express';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import cors from 'cors';
+import fs from 'fs';
 
 const app = express();
 const port = 3000;
@@ -12,9 +13,59 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let currentProcess: ChildProcess | null = null;
 const BINARY_PATH = path.resolve(__dirname, '../../build/llm');
+const DATASETS_DIR = path.resolve(__dirname, '../../.datasets');
+const MODELS_DIR = path.resolve(__dirname, '../../.models');
 
 // Helper to broadcast logs to any connected SSE clients
 let logStream: express.Response | null = null;
+
+// Recursive helper to find files by extension
+function getFiles(dir: string, extension: string): string[] {
+    let results: string[] = [];
+    if (!fs.existsSync(dir)) return results;
+    
+    const list = fs.readdirSync(dir);
+    list.forEach(file => {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat && stat.isDirectory()) {
+            results = results.concat(getFiles(fullPath, extension));
+        } else {
+            if (file.endsWith(extension)) {
+                // Return path relative to the project root
+                results.push(path.relative(path.resolve(__dirname, '../../'), fullPath));
+            }
+        }
+    });
+    return results;
+}
+
+app.get('/api/datasets', (req, res) => {
+    try {
+        const datasets = getFiles(DATASETS_DIR, '.rows');
+        res.json({ datasets });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to list datasets' });
+    }
+});
+
+app.get('/api/tokenizers', (req, res) => {
+    try {
+        const tokenizers = getFiles(MODELS_DIR, '.tok');
+        res.json({ tokenizers });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to list tokenizers' });
+    }
+});
+
+app.get('/api/models', (req, res) => {
+    try {
+        const models = getFiles(MODELS_DIR, '.lm');
+        res.json({ models });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to list models' });
+    }
+});
 
 app.post('/api/run', (req, res) => {
     if (currentProcess) {
@@ -24,7 +75,7 @@ app.post('/api/run', (req, res) => {
     const { command, args } = req.body;
     
     // Safety check: only allow known commands
-    const allowedCommands = ['train', 'train-tokenizer', 'predict'];
+    const allowedCommands = ['train', 'train-tokenizer', 'predict', 'init-model'];
     if (!allowedCommands.includes(command)) {
         return res.status(400).json({ error: 'Invalid command.' });
     }
