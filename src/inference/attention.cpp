@@ -76,6 +76,13 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
     // placeholder for the concatenated heads
     returns.emplace_back(input.rows, head_count * head_size);
 
+    for (size_t h = 0; h < head_count; ++h) {
+        returns.emplace_back();  // q
+        returns.emplace_back();  // k
+        returns.emplace_back();  // v
+        returns.emplace_back();  // scores
+    }
+
 #pragma omp parallel for
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
@@ -91,7 +98,8 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
                                             streams[stream_offset + 1],
                                             streams[stream_offset + 2]);
 
-        matrix scores = kernel::matrix::cross_t_multiplied(q, k, streams[stream_offset + 0]);
+        matrix scores = kernel::matrix::cross_t_multiplied(
+            q, k, streams[stream_offset + 0]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
         kernel::matrix::scale(scores, scale, streams[stream_offset + 0]);
@@ -120,10 +128,10 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
             LOG_DEBUG("    weighted_sum norm: %f", weighted_sum.norm());
         }
 
-        returns.emplace_back(std::move(q));
-        returns.emplace_back(std::move(k));
-        returns.emplace_back(std::move(v));
-        returns.emplace_back(std::move(scores));
+        returns[2 + h * 4 + 0] = std::move(q);
+        returns[2 + h * 4 + 1] = std::move(k);
+        returns[2 + h * 4 + 2] = std::move(v);
+        returns[2 + h * 4 + 3] = std::move(scores);
     }
 
     matrix& final_output = returns[0];
@@ -174,11 +182,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
     kernel::optimizer::adjust_regularize_parameter_matrix(wo_gradient, wo,
                                                           learning_rate);
-
-    std::vector<matrix> head_input_gradients;
-    for (size_t i = 0; i < head_count; ++i) {
-        head_input_gradients.emplace_back();
-    }
 
 #pragma omp parallel for
     for (size_t h = 0; h < head_count; ++h) {
@@ -244,7 +247,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         kernel::optimizer::adjust_regularize_parameter_matrix(
             wv_gradient, head.wv, learning_rate);
 
-        // Gradient of the input: sum of contributions via each projection +
         matrix head_input_gradient = kernel::matrix::cross_t_multiplied(
             q_gradient, head.wq, streams[stream_offset + 0]);
         matrix input_k = kernel::matrix::cross_t_multiplied(
@@ -255,17 +257,19 @@ std::vector<matrix> AttentionLayer::backpropogate(
                                             streams[stream_offset + 1],
                                             streams[stream_offset + 2]);
 
-        kernel::matrix::add(head_input_gradient, input_k, streams[0]);
-        kernel::matrix::add(head_input_gradient, input_v, streams[1]);
-        kernel::optimizer::wait_for_streams(streams[0], streams[1]);
+        kernel::matrix::add(head_input_gradient, input_k,
+                            streams[stream_offset + 0]);
+        kernel::optimizer::wait_for_stream(streams[stream_offset + 0]);
+        kernel::matrix::add(head_input_gradient, input_v,
+                            streams[stream_offset + 0]);
+        kernel::optimizer::wait_for_stream(streams[stream_offset + 0]);
 
-        head_input_gradients[h] = std::move(head_input_gradient);
+        // This runs on the main stream, meaning only one head may update
+        // input_gradient at a time, eliminating the risk of data races
+        kernel::matrix::add(input_gradient, head_input_gradient, nullptr);
     }
 
-    for (auto& gradient : head_input_gradients) {
-        kernel::matrix::add(input_gradient, gradient);
-    }
-
+    kernel::optimizer::norm_clip(input_gradient);
     return matrix::construct_vec(input_gradient);
 }
 

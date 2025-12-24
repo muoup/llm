@@ -35,20 +35,13 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
     const matrix& input = inputs[0];
 
     matrix activation_input = input.cross_multiplied(w1);
-    // kernel::optimizer::wait_for_operations();
-
     kernel::feed_forward::add_bias(activation_input, b1);
-    // kernel::optimizer::wait_for_operations();
 
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
-    // kernel::optimizer::wait_for_operations();
 
     matrix final_output = activation_output.cross_multiplied(w2);
-    // kernel::optimizer::wait_for_operations();
-
     kernel::feed_forward::add_bias(final_output, b2);
-    // kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  FF Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -94,7 +87,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
     kernel::optimizer::adjust_regularize_parameter_matrix(w1, w1_gradient, learning_rate);
 
-    // kernel::optimizer::norm_clip(input_gradient);
+    kernel::optimizer::norm_clip(input_gradient);
     kernel::optimizer::wait_for_operations();
 
     return matrix::construct_vec(input_gradient);

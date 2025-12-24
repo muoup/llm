@@ -27,7 +27,7 @@ struct CurandGenerator {
         if (gen != nullptr) {
             return gen;
         }
-        
+
         auto status = curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
 
         if (status != CURAND_STATUS_SUCCESS) {
@@ -51,6 +51,7 @@ constexpr size_t CUBLAS_HANDLES = 4;
 struct cuBlasHandlePool {
     cublasHandle_t handles[4] = { nullptr };
     size_t current_pointer = 0;
+    std::mutex pool_mutex;
 
     // The linker does not seem to like this function having undefined behaviour
     // checks.
@@ -58,6 +59,8 @@ struct cuBlasHandlePool {
     cuBlasHandlePool() {}
 
     cublasHandle_t get_handle() {
+        pool_mutex.lock();
+
         size_t pointer = current_pointer;
         current_pointer = (current_pointer + 1) % CUBLAS_HANDLES;
 
@@ -75,6 +78,8 @@ struct cuBlasHandlePool {
 
             handles[pointer] = handle;
         }
+
+        pool_mutex.unlock();
 
         return handle;
     }
@@ -230,10 +235,11 @@ void kernel::matrix::randomize(::matrix& matrix,
     curandSetStream(global_curand_generator, nullptr);
     curandGenerateUniform(global_curand_generator, matrix.data,
                           matrix.buffer_size() / sizeof(float));
-    
+
     const auto range = max - min;
 
     matrix.scale(range);
+    kernel::optimizer::wait_for_operations();
     matrix.add(min);
 }
 
@@ -298,6 +304,22 @@ __device__ float individual_absmax(float a, float b) {
     return fmaxf(fabsf(a), fabsf(b));
 }
 
+__device__ void kernel_atomic_fadd(float* a, float b) {
+    atomicAdd(a, b);
+}
+
+__device__ void kernel_atomic_fmax(float* addr, float val) {
+    int* addr_as_int = (int*)addr;
+    int old = *addr_as_int, assumed;
+    
+    while (val > __int_as_float(old)) {
+        assumed = old;
+        old = atomicCAS(addr_as_int, assumed, __float_as_int(val));
+        if (old == assumed)
+            break;
+    }
+}
+
 template <__device__ float (*ElementReducer)(float, float),
           __device__ void (*AtomicReducer)(float*, float)>
 static __global__ void matrix_reduce_kernel(const const_matrix_view data,
@@ -317,10 +339,9 @@ static __global__ void matrix_reduce_kernel(const const_matrix_view data,
     }
 
     // Block reduction
-    if constexpr (ElementReducer == kernel_fadd) {
+    if constexpr (AtomicReducer == kernel_atomic_fadd) {
         local_acc = kernel::matrix::device::block_reduce_sum(local_acc);
-    } else if constexpr (ElementReducer == kernel_fmaxf
-                         || ElementReducer == individual_absmax) {
+    } else if constexpr (AtomicReducer == kernel_atomic_fmax) {
         local_acc = kernel::matrix::device::block_reduce_max(local_acc);
     } else {
         // Generic slow reduction for other types if needed, but we mostly use
@@ -342,22 +363,12 @@ static __global__ void matrix_reduce_kernel(const const_matrix_view data,
     }
 }
 
-__device__ void kernel_atomic_fmax(float* addr, float val) {
-    int* addr_as_int = (int*)addr;
-    int old = *addr_as_int, assumed;
-    while (val > __int_as_float(old)) {
-        assumed = old;
-        old = atomicCAS(addr_as_int, assumed, __float_as_int(val));
-        if (old == assumed)
-            break;
-    }
-}
-
 template <__device__ float (*ElementReducer)(float, float),
           __device__ void (*AtomicReducer)(float*, float)>
 float run_reduction(const ::matrix& mat, float identity) {
-    ensure_reduction_buffer();
-    cudaMemcpy(d_reduction_result, &identity, sizeof(float),
+    float* reduction_result;
+    cudaMalloc(&reduction_result, sizeof(float));
+    cudaMemcpy(reduction_result, &identity, sizeof(float),
                cudaMemcpyHostToDevice);
 
     const size_t threads_per_block = 256;
@@ -367,16 +378,13 @@ float run_reduction(const ::matrix& mat, float identity) {
                    (num_elements + threads_per_block - 1) / threads_per_block);
 
     matrix_reduce_kernel<ElementReducer, AtomicReducer>
-        <<<num_blocks, threads_per_block>>>(mat, d_reduction_result, identity);
+        <<<num_blocks, threads_per_block>>>(mat, reduction_result, identity);
 
     float h_result;
-    cudaMemcpy(&h_result, d_reduction_result, sizeof(float),
+    cudaMemcpy(&h_result, reduction_result, sizeof(float),
                cudaMemcpyDeviceToHost);
+    cudaFree(reduction_result);
     return h_result;
-}
-
-__device__ void kernel_atomic_fadd(float* a, float b) {
-    atomicAdd(a, b);
 }
 
 float kernel::matrix::sum(const ::matrix& mat) {
@@ -835,9 +843,9 @@ matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
     auto handle = cublas_handle_pool.get_handle();
 
     cublasSetStream(handle, s_from_stream(kernel_stream));
-    cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols,
-                b.cols, a.rows, &alpha, a.data, a.stride, b.data, b.stride,
-                &beta, result.data, result.stride);
+    cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols, b.cols, a.rows,
+                &alpha, a.data, a.stride, b.data, b.stride, &beta, result.data,
+                result.stride);
     CHECK_ERRORS("t_cross_multiplied");
 
     return result;

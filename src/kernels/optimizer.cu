@@ -25,8 +25,8 @@ __global__ void _test_output() {
 }
 
 static __global__ void gradient_regularize_and_adjust(
-    const matrix_view gradient,
-    const const_matrix_view parameters,
+    const const_matrix_view gradient,
+    const matrix_view parameters,
     const float learning_rate) {
     constexpr float regularization_strength = 0.0001f;
 
@@ -43,14 +43,14 @@ static __global__ void gradient_regularize_and_adjust(
     float updated_parameter
         = param_value - learning_rate * (gradient_val + regularization);
 
-    kernel::matrix::device_set(gradient, row, col, updated_parameter);
+    kernel::matrix::device_set(parameters, row, col, updated_parameter);
 }
 
 static kernel::optimizer::kernel_stream_pool adjustment_pool(16);
 
 void kernel::optimizer::adjust_regularize_parameter_matrix(
-    ::matrix& gradient,
-    const ::matrix& parameters,
+    const ::matrix& gradient,
+    ::matrix& parameters,
     float learning_rate) {
     auto stream = adjustment_pool.get_next_stream();
     cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
@@ -58,7 +58,7 @@ void kernel::optimizer::adjust_regularize_parameter_matrix(
     MATRIX_ASSERT(
         gradient.rows == parameters.rows && gradient.cols == parameters.cols,
         "Dimension mismatch in regularize_gradient");
-
+    
     dim3 threads_per_block(16, 16);
     dim3 blocks(
         (gradient.rows + threads_per_block.x - 1) / threads_per_block.x,
@@ -76,11 +76,6 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
                                                 float learning_rate) {
     MATRIX_ASSERT(adjust.rows == gradient.rows && adjust.cols == gradient.cols,
                   "Dimension mismatch in adjust_parameter_matrix");
-
-    dim3 threads_per_block(16, 16);
-    dim3 blocks((adjust.rows + threads_per_block.x - 1) / threads_per_block.x,
-                (adjust.cols + threads_per_block.y - 1) / threads_per_block.y);
-
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
     CHECK_ERRORS("After adjust_parameter_matrix");
 }

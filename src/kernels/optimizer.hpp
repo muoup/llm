@@ -9,7 +9,7 @@ typedef void* kernel_stream_t;
     
 void norm_clip(::matrix& gradient);
 
-void adjust_regularize_parameter_matrix(::matrix& gradient, const ::matrix& parameters, float learning_rate);
+void adjust_regularize_parameter_matrix(const ::matrix& gradient, ::matrix& parameters, float learning_rate);
 
 void adjust_parameter_matrix(::matrix& adjust,
                              ::matrix& gradient,
