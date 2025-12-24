@@ -55,9 +55,8 @@ void matrix::leaky_kaiming_randomize() {
     constexpr float negative_slope = 0.01f;
 
     float n_in = static_cast<float>(this->rows);
-    float stddev
-        = std::sqrt(2.0f / ((1 + negative_slope) * n_in));
-        
+    float stddev = std::sqrt(2.0f / ((1 + negative_slope) * n_in));
+
     float bound = stddev * std::sqrt(3.0f);
 
     kernel::matrix::randomize(*this, -bound, bound);
@@ -143,8 +142,12 @@ matrix& matrix::add(float f) {
     return *this;
 }
 
-matrix matrix::get_row_vector(const size_t row) const {
-    return kernel::matrix::get_row_vector(*this, row);
+const_matrix_view matrix::get_row_vector(const size_t row) const {
+    MATRIX_ASSERT(row < this->rows,
+                  "Row index out of bounds for getting row vector");
+
+    return const_matrix_view(1, this->cols, this->rows + this->stride - 1,
+                             this->data + row);
 }
 
 void matrix::set_row_vector(const size_t row, const matrix& row_vector) {
@@ -168,12 +171,12 @@ void matrix::set_horizontal_slice(const size_t col_start, const matrix& slice) {
     kernel::matrix::set_horizontal_slice(*this, col_start, slice);
 }
 
-matrix matrix::get_horizontal_slice(const size_t col_start,
-                                    const size_t slice_cols) const {
+const_matrix_view matrix::get_horizontal_slice(const size_t col_start,
+                                               const size_t slice_cols) const {
     MATRIX_ASSERT(col_start + slice_cols <= this->cols,
                   "Slice dimensions do not match for getting horizontal slice");
 
-    return kernel::matrix::get_horizontal_slice(*this, col_start, slice_cols);
+    return const_matrix_view(this->rows, slice_cols, this->stride, this->data + col_start * this->stride);
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {
@@ -316,4 +319,12 @@ void matrix::print_contents() const {
         std::printf("\n");
     }
     std::fflush(stdout);
+}
+
+matrix matrix_view::to_matrix() const {
+    return kernel::matrix::clone(*this);
+}
+
+matrix const_matrix_view::to_matrix() const {
+    return kernel::matrix::clone(*this);
 }

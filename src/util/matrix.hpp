@@ -24,6 +24,9 @@
     (void)(message);
 #endif
 
+struct const_matrix_view;
+struct matrix_view;
+
 struct matrix {
     std::uint64_t rows, cols, stride;
 
@@ -65,16 +68,16 @@ struct matrix {
         set(row, col, current_value + offset);
     }
 
-    matrix get_row_vector(const size_t row) const;
+    const_matrix_view get_row_vector(const size_t row) const;
     void set_row_vector(const size_t row, const matrix& row_vector);
     void add_row_vector(const size_t row, const matrix& other);
     void set_horizontal_slice(const size_t col_start, const matrix& slice);
-    matrix get_horizontal_slice(const size_t col_start,
+    const_matrix_view get_horizontal_slice(const size_t col_start,
                                 const size_t slice_cols) const;
 
     matrix& softmax();
     matrix backprop_softmax(const matrix& output_gradient) const;
-    
+
     matrix& mask_upper_triangular(float mask_value
                                   = -std::numeric_limits<float>::infinity());
     matrix& normalize() {
@@ -155,7 +158,7 @@ struct matrix {
         std::cout << "Matrix bounds: rows=" << rows << ", cols=" << cols
                   << ", stride=" << this->stride << "\n";
     }
-    
+
     void print_contents() const;
 
     [[nodiscard]] size_t size() const { return cols * rows; }
@@ -179,6 +182,8 @@ struct matrix_view {
                 const size_t stride,
                 float* data)
         : rows(rows), cols(cols), stride(stride), data(data) {}
+
+    matrix to_matrix() const;
 };
 
 struct const_matrix_view {
@@ -206,4 +211,6 @@ struct const_matrix_view {
                       const size_t stride,
                       const float* data)
         : rows(rows), cols(cols), stride(stride), data(data) {}
+
+    matrix to_matrix() const;
 };

@@ -7,6 +7,7 @@
 #include <inference/network_node.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
+#include "kernels/matrix_kernels.hpp"
 
 NodeType AttentionLayer::getType() const {
     return NodeType::Attention;
@@ -156,35 +157,24 @@ std::vector<matrix> AttentionLayer::backpropogate(
         const matrix& v = result.outputs[2 + h * 4 + 2];
         const matrix& scores = result.outputs[2 + h * 4 + 3];
 
-        // Slice the gradient for the current head's output
-        matrix attention_gradient
+        const auto attention_gradient
             = attention_concat_gradient.get_horizontal_slice(h * head_size,
                                                              head_size);
-        kernel::optimizer::wait_for_operations();
 
-        // Backprop through weighted sum: weighted_sum = scores * v
-        matrix v_gradient = scores.t_cross_multiplied(attention_gradient);
-        matrix scores_gradient = attention_gradient.cross_t_multiplied(v);
-        kernel::optimizer::wait_for_operations();
-
-        // Backprop through softmax
+        matrix v_gradient = kernel::matrix::t_cross_multiplied(scores, attention_gradient);
+        matrix scores_gradient = kernel::matrix::cross_t_multiplied(attention_gradient, v);
+        
         matrix raw_scores_gradient = scores.backprop_softmax(scores_gradient);
-        kernel::optimizer::wait_for_operations();
-
-        // Backprop through scaling
+        
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         raw_scores_gradient.scale(scale);
-        kernel::optimizer::wait_for_operations();
-
+        
         matrix q_gradient = raw_scores_gradient.cross_multiplied(k);
         matrix k_gradient = raw_scores_gradient.t_cross_multiplied(q);
-        kernel::optimizer::wait_for_operations();
-
-        // Backprop through Q, K, V projections to their weight matrices
+        
         matrix wq_gradient = layer_input.t_cross_multiplied(q_gradient);
         matrix wk_gradient = layer_input.t_cross_multiplied(k_gradient);
         matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
-        kernel::optimizer::wait_for_operations();
 
         LOG_DEBUG("  Attention Head %zu Gradients:", h);
         LOG_DEBUG("    scores_gradient norm: %f", scores_gradient.norm());

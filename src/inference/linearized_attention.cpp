@@ -3,6 +3,7 @@
 #include <kernels/optimizer.hpp>
 
 #include <cmath>
+#include "kernels/matrix_kernels.hpp"
 
 LinearizedAttention::LinearizedAttention()
     : dimensions(0), head_size(0), head_count(0), heads(), wo() {}
@@ -121,13 +122,12 @@ std::vector<matrix> LinearizedAttention::backpropogate(
         const matrix& scores = result.outputs[2 + h * 4 + 3];
 
         // Slice the gradient for the current head's output
-        matrix attention_gradient
+        auto attention_gradient
             = attention_concat_gradient.get_horizontal_slice(h * head_size,
                                                              head_size);
 
-        matrix q_gradient = attention_gradient.cross_t_multiplied(scores);
-        matrix weights_gradient
-            = q_gradient.t_cross_multiplied(attention_gradient);
+        matrix q_gradient = kernel::matrix::cross_t_multiplied(attention_gradient, scores);
+        matrix weights_gradient = kernel::matrix::t_cross_multiplied(q_gradient, attention_gradient);
 
         // Backprop through softmax
         matrix

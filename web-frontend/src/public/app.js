@@ -124,6 +124,7 @@ async function fetchAndPopulate(url, dropdowns, placeholder) {
         const list = data[keys[0]]; // e.g. data.datasets or data.models
 
         dropdowns.forEach(dropdown => {
+            const currentValue = dropdown.value;
             dropdown.innerHTML = '';
             if (list.length === 0) {
                 const opt = document.createElement('option');
@@ -137,6 +138,9 @@ async function fetchAndPopulate(url, dropdowns, placeholder) {
                     opt.textContent = path;
                     dropdown.appendChild(opt);
                 });
+            }
+            if (currentValue) {
+                dropdown.value = currentValue;
             }
         });
     } catch (err) {

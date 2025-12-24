@@ -26,7 +26,7 @@ float min(const ::matrix& mat);
 float absmax(const ::matrix& mat);
 float variance(const ::matrix& mat);
 
-::matrix clone(const ::matrix& mat);
+::matrix clone(const ::const_matrix_view mat);
 
 void set_all(::matrix& mat, float value);
 void offset_all(::matrix& mat, float offset);
@@ -39,9 +39,6 @@ void add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec, const 
 void set_horizontal_slice(::matrix& mat,
                           const size_t start_col,
                           const ::matrix& slice);
-::matrix get_horizontal_slice(const ::matrix& mat,
-                              const size_t start_col,
-                              const size_t slice_cols);
 
 void add(::matrix& mat, float value);
 void add(::matrix& mat, const ::matrix& offset);
@@ -54,9 +51,9 @@ void softmax(::matrix& mat);
 void mask_upper_triangle(::matrix& mat, const float mask_value);
 
 ::matrix dot_product(const ::matrix& a, const ::matrix& b);
-::matrix cross_multiplied(const ::matrix& a, const ::matrix& b);
-::matrix t_cross_multiplied(const ::matrix& a, const ::matrix& b);
-::matrix cross_t_multiplied(const ::matrix& a, const ::matrix& b);
+::matrix cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
+::matrix t_cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
+::matrix cross_t_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
 
 void element_wise_multiply(::matrix& a, const ::matrix& b);
 
