@@ -30,36 +30,32 @@ void FeedForwardLayer::randomize(const float min, const float max) {
     b2.leaky_kaiming_randomize();
 }
 
-ForwardingResult FeedForwardLayer::forward(
-    std::span<const matrix> inputs) const {
+ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
+                                           bool perf) const {
     const matrix& input = inputs[0];
-    
+
     matrix activation_input = input.cross_multiplied(w1);
     kernel::optimizer::wait_for_operations();
-    
+
     kernel::feed_forward::add_bias(activation_input, b1);
     kernel::optimizer::wait_for_operations();
-    
+
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
     kernel::optimizer::wait_for_operations();
 
     matrix final_output = activation_output.cross_multiplied(w2);
     kernel::optimizer::wait_for_operations();
-    
+
     kernel::feed_forward::add_bias(final_output, b2);
     kernel::optimizer::wait_for_operations();
-    
+
     LOG_DEBUG("  FF Layer Forward:");
-    LOG_DEBUG("    input norm: %f",
-                input.norm());
-    LOG_DEBUG("    activation_input norm: %f",
-                activation_input.norm());
-    LOG_DEBUG("    activation_output norm: %f",
-                activation_output.norm());
-    LOG_DEBUG("    final_output norm: %f",
-                final_output.norm());
-    
+    LOG_DEBUG("    input norm: %f", input.norm());
+    LOG_DEBUG("    activation_input norm: %f", activation_input.norm());
+    LOG_DEBUG("    activation_output norm: %f", activation_output.norm());
+    LOG_DEBUG("    final_output norm: %f", final_output.norm());
+
     return standardResult(matrix::construct_vec(final_output, activation_input,
                                                 activation_output));
 }
@@ -68,12 +64,13 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate) {
+    float learning_rate,
+    bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& activation_input = result.outputs[1];
     matrix activation_output = result.outputs[2].clone();
     const matrix& post_layer_gradient = gradients[0];
-    
+
     kernel::optimizer::wait_for_operations();
 
     matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
@@ -81,11 +78,11 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
         = activation_output.t_cross_multiplied(post_layer_gradient);
     const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
     kernel::optimizer::wait_for_operations();
-    
+
     matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
         activation_input, a1_gradient);
     kernel::optimizer::wait_for_operations();
-    
+
     matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
     auto input_gradient = z1_gradient.cross_t_multiplied(w1);
@@ -93,7 +90,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
     kernel::optimizer::wait_for_operations();
-    
+
     LOG_DEBUG("  FF Layer Gradients:");
     LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
     LOG_DEBUG("    b1_gradient norm: %f", b1_gradient.norm());
@@ -107,7 +104,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
 
     kernel::optimizer::norm_clip(input_gradient);
     kernel::optimizer::wait_for_operations();
-    
+
     return matrix::construct_vec(input_gradient);
 }
 

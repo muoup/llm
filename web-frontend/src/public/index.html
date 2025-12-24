@@ -175,13 +175,16 @@
             color: #cbd5e1; 
             padding: 20px; 
             border-radius: 12px; 
-            height: 300px; 
+            height: 400px; 
+            min-height: 300px;
+            flex-shrink: 0;
             overflow-y: auto; 
             font-family: 'JetBrains Mono', 'Fira Code', monospace; 
             font-size: 13px; 
             line-height: 1.6; 
             white-space: pre-wrap; 
             margin-top: 40px;
+            margin-bottom: 20px;
             border: 1px solid var(--border);
         }
         .stderr { color: #f87171; }
@@ -222,6 +225,7 @@
         <div class="nav-item" data-view="train-tokenizer">Train Tokenizer</div>
         <div class="nav-item" data-view="init-model">Create Model</div>
         <div class="nav-item" data-view="train">Model Training</div>
+        <div class="nav-item" data-view="perf-model">Performance</div>
         <div class="nav-item active" data-view="predict">Prediction</div>
     </div>
 
@@ -320,6 +324,31 @@
                 <div class="form-group">
                     <label>Layers</label>
                     <input type="number" id="init-layers" value="4">
+                </div>
+            </div>
+
+            <!-- Performance View -->
+            <div id="view-perf-model" class="view-section">
+                <h1>Performance Diagnostic</h1>
+                <div class="train-container">
+                    <div class="train-inputs">
+                        <div class="form-group">
+                            <label>Model</label>
+                            <select id="perf-model-select" class="model-dropdown"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tokenizer</label>
+                            <select id="perf-tokenizer-select" class="tokenizer-dropdown"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Dataset Select</label>
+                            <select id="perf-data-select" class="dataset-dropdown"></select>
+                        </div>
+                    </div>
+                    <div id="perf-details-container" style="flex: 1.5; background: rgba(2, 6, 23, 0.8); padding: 20px; border-radius: 12px; border: 1px solid var(--border); display: none; min-height: 350px; max-height: 500px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #cbd5e1;">
+                        <div style="color: var(--accent); margin-bottom: 15px; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Execution Details</div>
+                        <pre id="perf-details-log" style="margin: 0; white-space: pre-wrap;"></pre>
+                    </div>
                 </div>
             </div>
 

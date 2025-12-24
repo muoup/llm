@@ -1,7 +1,9 @@
 #include "inference.hpp"
 
-#include <cstring>
+#include <chrono>
 #include <cmath>
+#include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -199,36 +201,81 @@ void InferenceModel::finalize() {
 }
 
 std::vector<ForwardingResult> InferenceModel::forwarding_results(
-    const std::span<const token_id_t> tokens) const {
+    const std::span<const token_id_t> tokens,
+    bool perf) const {
     if (!finalized) {
         throw std::runtime_error("Model must be finalized before prediction.");
     }
 
     std::vector<ForwardingResult> results;
 
+    auto start_total = std::chrono::high_resolution_clock::now();
+
+    auto start = std::chrono::high_resolution_clock::now();
     matrix embeddings = m_embedding_layer.forward(tokens);
     kernel::matrix::check_errors("Forwarding embeddings...");
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "[PERF] Embedding forward: " << std::fixed
+                  << std::setprecision(3) << duration.count() << " ms"
+                  << std::endl;
+    }
+
     results.emplace_back(
         INode::standardResult(matrix::construct_vec(embeddings)));
 
-    for (size_t node_idx : execution_order) {
+    for (size_t i = 0; i < execution_order.size(); ++i) {
+        size_t node_idx = execution_order[i];
+        start = std::chrono::high_resolution_clock::now();
         auto forward_result
-            = this->m_layers.at(node_idx)->forward(results.back().outputs);
+            = this->m_layers.at(node_idx)->forward(results.back().outputs, perf);
         results.emplace_back(std::move(forward_result));
-        std::string msg
-            = std::string("Forwarding layer ") + std::to_string(node_idx + 1);
+        std::string msg = std::format("Forwarding layer {}", node_idx + 1);
         kernel::matrix::check_errors(msg.data());
+
+        if (perf) {
+            kernel::optimizer::wait_for_operations();
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> duration = end - start;
+            std::cout << "[PERF] Layer " << (i + 1) << " ("
+                      << node_type_to_string(
+                             this->m_layers.at(node_idx)->getType())
+                      << ") final forwarding time: " << duration.count() << " ms"
+                      << std::endl;
+        }
     }
 
+    start = std::chrono::high_resolution_clock::now();
     auto logits = m_logit_layer.forward(results.back().outputs[0]);
     kernel::matrix::check_errors("Forwarding logits...");
-    results.emplace_back(INode::standardResult(matrix::construct_vec(logits)));
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "[PERF] Logit forward: " << duration.count() << " ms"
+                  << std::endl;
+    }
+
+    results.emplace_back(
+        INode::standardResult(matrix::construct_vec(logits)));
+
+    if (perf) {
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration
+            = end_total - start_total;
+        std::cout << "[PERF] Total forwarding: " << duration.count() << " ms"
+                  << std::endl;
+    }
+
     return results;
 }
 
 token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
-                                   float temperature) const {
-    auto results = this->forwarding_results(tokens);
+                                   float temperature,
+                                   bool perf) const {
+    auto results = this->forwarding_results(tokens, perf);
     matrix& logits = results.back().outputs[0];
 
     const size_t last_row = logits.rows - 1;
@@ -246,7 +293,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
         }
         return best_token;
     }
-    
+
     std::priority_queue<std::pair<float, token_id_t>> candidates;
 
     // Find max logit for numerical stability in softmax
@@ -261,7 +308,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
         candidates.emplace(p, static_cast<token_id_t>(i));
         sum_exp += p;
     }
-    
+
     std::vector<std::pair<float, token_id_t>> candidate_vec;
 
     // Top-p (nucleus) sampling
@@ -272,9 +319,9 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
         auto pair = std::move(candidates.top());
         candidates.pop();
         cumulative_prob += pair.first / sum_exp;
-        
+
         candidate_vec.emplace_back(std::move(pair));
-        
+
         cutoff = i + 1;
         if (cumulative_prob >= top_p) {
             cumulative_prob -= pair.first / sum_exp;
@@ -285,7 +332,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
     float r = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
               * cumulative_prob;
     float current_sum = 0.0f;
-    for (auto &[prob, tok] : candidate_vec) {
+    for (auto& [prob, tok] : candidate_vec) {
         current_sum += prob;
         if (r <= current_sum) {
             return tok;
@@ -297,24 +344,43 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
 
 float InferenceModel::train_on(const std::span<const token_id_t> tokens,
                                const std::span<const token_id_t> actual,
-                               float learning_rate) {
+                               float learning_rate,
+                               bool perf) {
     if (!finalized) {
         throw std::runtime_error("Model must be finalized before training.");
     }
 
-    std::vector<ForwardingResult> results = this->forwarding_results(tokens);
+    auto start_total = std::chrono::high_resolution_clock::now();
+
+    std::vector<ForwardingResult> results
+        = this->forwarding_results(tokens, perf);
+
+    auto start = std::chrono::high_resolution_clock::now();
     kernel::optimizer::wait_for_operations();
 
     // Apply softmax to logits for cross-entropy loss backprop
     results.back().outputs[0].softmax();
     kernel::optimizer::wait_for_operations();
+    if (perf) {
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "[PERF] Softmax: " << duration.count() << " ms"
+                  << std::endl;
+    }
 
     // Backprop through logit layer
+    start = std::chrono::high_resolution_clock::now();
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
-        results.rbegin()[1].outputs[0], results.back().outputs[0],
-        actual, learning_rate);
+        results.rbegin()[1].outputs[0], results.back().outputs[0], actual,
+        learning_rate);
     kernel::matrix::check_errors("Backpropogating logits...");
     kernel::optimizer::wait_for_operations();
+    if (perf) {
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "[PERF] Logit backprop: " << duration.count() << " ms"
+                  << std::endl;
+    }
 
     std::vector<std::vector<matrix>> gradients;
     gradients.emplace_back(matrix::construct_vec(logit_gradients));
@@ -322,17 +388,42 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     // Backprop through layers in reverse order
     for (int i = execution_order.size() - 1; i >= 0; i--) {
         size_t node_idx = execution_order[i];
+        start = std::chrono::high_resolution_clock::now();
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients.back(),
-            learning_rate));
+            learning_rate, perf));
 
         std::string msg = std::string("Backpropogating layer ")
                           + std::to_string(i + 1) + "...";
         kernel::matrix::check_errors(msg.data());
+        if (perf) {
+            kernel::optimizer::wait_for_operations();
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> duration = end - start;
+            std::cout << "[PERF] Layer " << (i + 1) << " ("
+                      << node_type_to_string(
+                             this->m_layers.at(node_idx)->getType())
+                      << ") final backpropogation time: " << duration.count() << " ms"
+                      << std::endl;
+        }
     }
 
+    start = std::chrono::high_resolution_clock::now();
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
                                           learning_rate);
     kernel::matrix::check_errors("Backpropogating embeddings...");
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "[PERF] Embedding backprop: " << duration.count() << " ms"
+                  << std::endl;
+
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration_total
+            = end_total - start_total;
+        std::cout << "[PERF] Total training step: " << duration_total.count()
+                  << " ms" << std::endl;
+    }
     return loss;
 }

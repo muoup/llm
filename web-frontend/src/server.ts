@@ -75,7 +75,7 @@ app.post('/api/run', (req, res) => {
     const { command, args } = req.body;
     
     // Safety check: only allow known commands
-    const allowedCommands = ['train', 'train-tokenizer', 'predict', 'init-model'];
+    const allowedCommands = ['train', 'train-tokenizer', 'predict', 'init-model', 'perf-model'];
     if (!allowedCommands.includes(command)) {
         return res.status(400).json({ error: 'Invalid command.' });
     }

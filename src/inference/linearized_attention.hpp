@@ -22,11 +22,13 @@ class LinearizedAttention : public INode {
     size_t parameterCount() const override;
     NodeType getType() const override { return NodeType::LinearizedAttention; }
 
-    ForwardingResult forward(std::span<const matrix> inputs) const override;
+    ForwardingResult forward(std::span<const matrix> inputs,
+                             bool perf = false) const override;
     std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
-                                      float learning_rate) override;
+                                      float learning_rate,
+                                      bool perf = false) override;
 
     void randomize(float min, float max) override;
     void save(std::ostream& out) const override;

@@ -9,8 +9,8 @@
 
 #include <inference/network_node.hpp>
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 struct RecursionData : INodeData {
     size_t recursionCount;
@@ -37,20 +37,22 @@ class RecursionNode final : public INode {
     NodeType getType() const override { return NodeType::Recursion; }
 
     size_t parameterCount() const override {
-        size_t acc = (w.rows * w.cols) + (b.rows * b.cols); 
-        
+        size_t acc = (w.rows * w.cols) + (b.rows * b.cols);
+
         for (const auto& node : loop) {
             acc += node->parameterCount();
         }
-        
-        return acc; 
+
+        return acc;
     }
 
-    ForwardingResult forward(std::span<const matrix> inputs) const override;
+    ForwardingResult forward(std::span<const matrix> inputs,
+                             bool perf = false) const override;
     std::vector<matrix> backpropogate(const ForwardingResult& results,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
-                                      float learning_rate) override;
+                                      float learning_rate,
+                                      bool perf) override;
 
     void randomize(float min, float max) override;
     void save(std::ostream& out) const override;

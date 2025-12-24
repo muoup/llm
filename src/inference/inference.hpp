@@ -22,10 +22,10 @@ std::unique_ptr<INode> load_node(std::istream& in);
 struct InferenceModel {
     void randomize();
 
-    std::vector<ForwardingResult> forwarding_results(std::span<const token_id_t> tokens) const;
+    std::vector<ForwardingResult> forwarding_results(std::span<const token_id_t> tokens, bool perf = false) const;
     
-    token_id_t predict(std::span<const token_id_t> tokens, float temperature = 1.0f) const;
-    float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, float learning_rate);
+    token_id_t predict(std::span<const token_id_t> tokens, float temperature = 1.0f, bool perf = false) const;
+    float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, float learning_rate, bool perf = false);
     
     size_t parameter_count() const;
     

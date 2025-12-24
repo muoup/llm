@@ -1,8 +1,10 @@
 #include "layer_normalize.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
+#include <iomanip>
 #include <kernels/layer_norm.hpp>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
@@ -15,7 +17,13 @@ LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
       epsilon(epsilon),
       gamma(1, dimensions),
       beta(1, dimensions),
-      inner_node(std::move(inner_node)) {}
+      inner_node(std::move(inner_node)) {
+    if (this->inner_node) {
+        this->context_name = node_type_to_string(this->inner_node->getType());
+    } else {
+        this->context_name = "LayerNorm";
+    }
+}
 
 size_t LayerNorm::parameterCount() const {
     size_t inner_parameters = [&]() -> size_t {
@@ -42,26 +50,42 @@ NodeType LayerNorm::getType() const {
     return NodeType::LayerNorm;
 }
 
-ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
+ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
+                                    bool perf) const {
     const matrix& input = inputs[0];
 
+    auto start_norm = std::chrono::high_resolution_clock::now();
     auto results
         = kernel::layer_norm::layer_normalization(input, gamma, beta, epsilon);
 
-    if (!inner_node)
-        return standardResult(matrix::construct_vec(
+    if (!inner_node) {
+        auto fr = standardResult(matrix::construct_vec(
             results.normalized, results.mean, results.inv_variance));
+        return fr;
+    }
 
-    MATRIX_ASSERT(results.normalized.rows == input.rows
-                      && results.normalized.cols == input.cols,
-                  "LayerNorm forward: normalized output dimensions mismatch "
-                  "(expected %zux%zu, got %zux%zu)",
-                  input.rows, input.cols, results.normalized.rows,
-                  results.normalized.cols);
-
+    auto start_inner = std::chrono::high_resolution_clock::now();
     auto inner_node_outputs
-        = inner_node->forward(std::span(&results.normalized, 1));
+        = inner_node->forward(std::span(&results.normalized, 1), perf);
     inner_node_outputs.outputs[0].add(input);
+
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end_inner = std::chrono::high_resolution_clock::now();
+
+        auto end_norm = start_inner;
+        std::chrono::duration<double, std::milli> norm_dur
+            = end_norm - start_norm;
+        std::chrono::duration<double, std::milli> inner_dur
+            = end_inner - start_inner;
+
+        std::cout << "[PERF] " << context_name
+                  << " norm forward: " << std::fixed << std::setprecision(3)
+                  << norm_dur.count() << " ms" << std::endl;
+        std::cout << "[PERF] " << context_name << " inner ("
+                  << node_type_to_string(inner_node->getType())
+                  << ") forward: " << inner_dur.count() << " ms" << std::endl;
+    }
 
     LOG_DEBUG("  LayerNorm Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -81,30 +105,46 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs) const {
 std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                                              std::span<const matrix> inputs,
                                              std::span<const matrix> gradients,
-                                             float learning_rate) {
+                                             float learning_rate,
+                                             bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& mean = result.outputs.rbegin()[1];
     const matrix& inv_variance = result.outputs.rbegin()[0];
-    
+
     // Maybe unused if no inner node
     std::vector<matrix> inner_backprop_outputs;
 
+    auto start_inner = std::chrono::high_resolution_clock::now();
     // The gradient dL/dy splits at the residual connection y = x + z
     // The gradient for the residual path (x) is grad_output.
     // The gradient for the main path (z) is also grad_output.
     const matrix& grad_normalized = [&]() -> const matrix& {
         const matrix& normalized_input = result.outputs.rbegin()[2];
-        
+
         if (inner_node) {
             inner_backprop_outputs = inner_node->backpropogate(
-                result, std::span<const matrix>{ &normalized_input, 1 }, gradients,
-                learning_rate);
+                result, std::span<const matrix>{ &normalized_input, 1 },
+                gradients, learning_rate);
             return inner_backprop_outputs[0];
         } else {
             return gradients[0];
         }
     }();
 
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end_inner = std::chrono::high_resolution_clock::now();
+        if (inner_node) {
+            std::chrono::duration<double, std::milli> duration
+                = end_inner - start_inner;
+            std::cout << "[PERF] " << context_name << " inner ("
+                      << node_type_to_string(inner_node->getType())
+                      << ") backprop: " << std::fixed << std::setprecision(3)
+                      << duration.count() << " ms" << std::endl;
+        }
+    }
+
+    auto start_norm = std::chrono::high_resolution_clock::now();
     LOG_DEBUG("  LayerNorm Inputs: ");
     LOG_DEBUG("    layer_input norm: %f", layer_input.norm());
     LOG_DEBUG("    mean norm: %f", mean.norm());
@@ -115,6 +155,16 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         = kernel::layer_norm::layer_normalization_backward(
             layer_input, gamma, beta, mean, inv_variance, grad_normalized,
             epsilon);
+
+    if (perf) {
+        kernel::optimizer::wait_for_operations();
+        auto end_norm = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration
+            = end_norm - start_norm;
+        std::cout << "[PERF] " << context_name
+                  << " norm backprop: " << duration.count() << " ms"
+                  << std::endl;
+    }
 
     LOG_DEBUG("  LayerNorm Layer Gradients:");
     LOG_DEBUG("    grad_gamma norm: %f", results.grad_gamma.norm());
@@ -144,10 +194,10 @@ void LayerNorm::save(std::ostream& out) const {
     bool has_inner_node = (inner_node != nullptr);
     out.write(reinterpret_cast<const char*>(&has_inner_node),
               sizeof(has_inner_node));
-    
+
     if (!inner_node)
         return;
-    
+
     auto node_type = inner_node->getType();
     out.write(reinterpret_cast<const char*>(&node_type), sizeof(node_type));
     inner_node->save(out);
@@ -160,11 +210,15 @@ LayerNorm LayerNorm::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&layer.epsilon), sizeof(layer.epsilon));
     layer.gamma = matrix::load(in);
     layer.beta = matrix::load(in);
-    
+
     bool has_inner_node;
     in.read(reinterpret_cast<char*>(&has_inner_node), sizeof(has_inner_node));
-    if (has_inner_node)
+    if (has_inner_node) {
         layer.inner_node = load_node(in);
-    
+        layer.context_name = node_type_to_string(layer.inner_node->getType());
+    } else {
+        layer.context_name = "LayerNorm";
+    }
+
     return layer;
 }

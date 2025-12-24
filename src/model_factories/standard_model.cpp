@@ -61,7 +61,10 @@ InferenceModel standard_attention_model(size_t dimensions,
 
         last_layer_idx = ff_block_idx;
     }
-
+    
+    size_t standardized_norm = model.add_layer(std::make_unique<LayerNorm>(nullptr, dimensions));
+    model.add_connection(last_layer_idx, standardized_norm);
+    
     model.randomize();
     model.finalize();
     kernel::optimizer::wait_for_operations();

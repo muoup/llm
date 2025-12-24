@@ -11,6 +11,8 @@ const modelDropdowns = document.querySelectorAll('.model-dropdown');
 const tokenizerDropdowns = document.querySelectorAll('.tokenizer-dropdown');
 
 const chartContainer = document.getElementById('chart-container');
+const perfDetailsContainer = document.getElementById('perf-details-container');
+const perfDetailsLog = document.getElementById('perf-details-log');
 const ctx = document.getElementById('training-chart').getContext('2d');
 let trainingChart = new Chart(ctx, {
     type: 'line',
@@ -90,7 +92,7 @@ navItems.forEach(item => {
         // Update View
         const viewId = item.getAttribute('data-view');
         activeView = viewId;
-        
+
         views.forEach(v => v.classList.remove('active'));
         document.getElementById(`view-${viewId}`).classList.add('active');
 
@@ -100,8 +102,15 @@ navItems.forEach(item => {
                 chartContainer.style.display = 'block';
             }
         } else {
-            // When not in train view, we don't show the chart because it's now inside the train view DOM
             chartContainer.style.display = 'none';
+        }
+
+        if (activeView === 'perf-model') {
+            if (perfDetailsLog.textContent.length > 0 || runningCommand === 'perf-model') {
+                perfDetailsContainer.style.display = 'block';
+            }
+        } else {
+            perfDetailsContainer.style.display = 'none';
         }
     });
 });
@@ -146,12 +155,12 @@ async function loadAllResources() {
 // --- SSE & Process Logic ---
 function connectSSE() {
     if (eventSource) eventSource.close();
-    
+
     eventSource = new EventSource('/api/events');
-    
+
     eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.type === 'stdout' || data.type === 'stderr') {
             const span = document.createElement('span');
             span.className = data.type;
@@ -159,45 +168,54 @@ function connectSSE() {
             consoleDiv.appendChild(span);
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
 
-            // Parse training progress
-            if (runningCommand === 'train' && data.type === 'stdout') {
+            // Parse progress and performance data
+            if (data.type === 'stdout') {
                 stdoutBuffer += data.message;
-                
+
                 // Process complete lines
                 if (stdoutBuffer.includes('\n')) {
                     const lines = stdoutBuffer.split('\n');
                     // Keep the last partial line in the buffer
                     stdoutBuffer = lines.pop();
 
-                    lines.forEach(line => {
+                    for (const line of lines) {
                         const cleanLine = line.replace(/\u001b\[[0-9;]*m/g, '');
-                        const match = cleanLine.match(/Row +(\d+) \/ \d+.*Loss: *([\d.]+).*Accuracy:\s*([\d.]+)%/i);
-                        
-                        if (match) {
-                            const row = parseInt(match[1]);
-                            const loss = parseFloat(match[2]);
-                            const accuracy = parseFloat(match[3]);
-                            
-                            trainingChart.data.labels.push(row);
-                            trainingChart.data.datasets[0].data.push(loss);
-                            trainingChart.data.datasets[1].data.push(accuracy);
-                            
-                            // Keep the last 200 points for performance
-                            if (trainingChart.data.labels.length > 200) {
-                                trainingChart.data.labels.shift();
-                                trainingChart.data.datasets[0].data.shift();
-                                trainingChart.data.datasets[1].data.shift();
+
+                        // Parse performance data (for any command)
+                        if (cleanLine.includes('[PERF]')) {
+                            perfDetailsContainer.style.display = 'block';
+                            perfDetailsLog.textContent += cleanLine + '\n';
+                            perfDetailsContainer.scrollTop = perfDetailsContainer.scrollHeight;
+                        }
+
+                        // Parse training progress
+                        if (runningCommand === 'train') {
+                            const match = cleanLine.match(/Row +(\d+) \/ \d+.*Loss: *([\d.]+).*Accuracy:\s*([\d.]+)%/i);
+
+                            if (match) {
+                                const row = parseInt(match[1]);
+                                const loss = parseFloat(match[2]);
+                                const accuracy = parseFloat(match[3]);
+
+                                trainingChart.data.labels.push(row);
+                                trainingChart.data.datasets[0].data.push(loss);
+                                trainingChart.data.datasets[1].data.push(accuracy);
+
+                                // Keep the last 200 points for performance
+                                if (trainingChart.data.labels.length > 200) {
+                                    trainingChart.data.labels.shift();
+                                    trainingChart.data.datasets[0].data.shift();
+                                    trainingChart.data.datasets[1].data.shift();
+                                }
+                                trainingChart.update('none');
                             }
                         }
-                    });
-                    trainingChart.update('none');
+                    }
                 }
             }
         } else if (data.type === 'exit') {
             stdoutBuffer = ""; // Clear buffer on exit
-            appendLog(`
-[Process exited with code ${data.code}]
-`);
+            appendLog(`[Process exited with code ${data.code}]`);
             setRunning(false);
             // Refresh lists in case new files were created
             loadAllResources();
@@ -261,9 +279,9 @@ runBtn.addEventListener('click', async () => {
             '--dataset-type',
             'row-based'
         ];
-        
+
         var row_limit = document.getElementById('row-limit').value;
-        
+
         if (row_limit && parseInt(row_limit) > 0) {
           args = [...args, '-n', row_limit];
         }
@@ -291,11 +309,22 @@ runBtn.addEventListener('click', async () => {
             '--layers',
             document.getElementById('init-layers').value
         ];
+    } else if (activeView === 'perf-model') {
+        args = [
+            '--model',
+            document.getElementById('perf-model-select').value,
+            '--tokenizer',
+            document.getElementById('perf-tokenizer-select').value,
+            '--data',
+            document.getElementById('perf-data-select').value,
+            '--dataset-type',
+            'row-based'
+        ];
     }
 
     consoleDiv.textContent = `> Dispatching: ${command} ${args.join(' ')}\n\n`;
     stdoutBuffer = "";
-    
+
     if (command === 'train') {
         chartContainer.style.display = 'block';
         trainingChart.data.labels = [];
@@ -304,6 +333,13 @@ runBtn.addEventListener('click', async () => {
         trainingChart.update();
     } else {
         chartContainer.style.display = 'none';
+    }
+
+    if (command === 'perf-model') {
+        perfDetailsContainer.style.display = 'block';
+        perfDetailsLog.textContent = '';
+    } else {
+        perfDetailsContainer.style.display = 'none';
     }
 
     setRunning(true, command);
@@ -315,7 +351,7 @@ runBtn.addEventListener('click', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command, args })
         });
-        
+
         const result = await response.json();
         if (result.error) {
             appendLog(`Error: ${result.error}\n`);

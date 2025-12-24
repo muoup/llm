@@ -32,8 +32,8 @@ size_t LinearizedAttention::parameterCount() const {
     return count;
 }
 
-ForwardingResult LinearizedAttention::forward(
-    std::span<const matrix> inputs) const {
+ForwardingResult LinearizedAttention::forward(std::span<const matrix> inputs,
+                                              bool perf) const {
     const matrix& input = inputs[0];
 
     std::vector<matrix> returns;
@@ -97,7 +97,8 @@ std::vector<matrix> LinearizedAttention::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate) {
+    float learning_rate,
+    bool perf) {
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];
@@ -129,9 +130,11 @@ std::vector<matrix> LinearizedAttention::backpropogate(
             = q_gradient.t_cross_multiplied(attention_gradient);
 
         // Backprop through softmax
-        matrix pre_softmax_gradient; //scores.backprop_softmax(weights_gradient);
-        throw std::runtime_error("Linearized attention backprop softmax not implemented.");
-        
+        matrix
+            pre_softmax_gradient;  // scores.backprop_softmax(weights_gradient);
+        throw std::runtime_error(
+            "Linearized attention backprop softmax not implemented.");
+
         // Backprop through scaling
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         pre_softmax_gradient.scale(scale);
@@ -145,9 +148,12 @@ std::vector<matrix> LinearizedAttention::backpropogate(
         matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
 
         LinearAttentionHead& head = heads[h];
-        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient, learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient, learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient, learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
+                                                   learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient,
+                                                   learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
+                                                   learning_rate);
 
         // Gradient of the input: sum of contributions via each projection +
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);

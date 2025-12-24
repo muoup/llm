@@ -7,6 +7,7 @@
 #include <commands/train.hpp>
 #include <commands/train_tokenizer.hpp>
 #include <commands/init_model.hpp>
+#include <commands/perf_model.hpp>
 
 #include <kernels/feed_forward.hpp>
 #include <kernels/matrix_kernels.hpp>
@@ -35,6 +36,7 @@ int main(int argc, char* argv[]) {
     commands["train"] = handle_train;
     commands["predict"] = handle_predict;
     commands["init-model"] = handle_init_model;
+    commands["perf-model"] = handle_perf_model;
 
     std::string command = argv[1];
 

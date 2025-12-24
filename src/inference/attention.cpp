@@ -49,8 +49,10 @@ size_t AttentionLayer::parameterCount() const {
     return count;
 }
 
-ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs) const {
+ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
+                                         bool perf) const {
     const matrix& input = inputs[0];
+    const size_t seq_len = input.rows;
 
     std::vector<matrix> returns;
     // placeholder for the final output to prevent insert(0) additional overhead
@@ -131,7 +133,8 @@ std::vector<matrix> AttentionLayer::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate) {
+    float learning_rate,
+    bool perf) {
     constexpr float regularization_strength = 0.01f;
 
     const matrix& layer_input = inputs[0];

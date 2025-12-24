@@ -4,16 +4,14 @@
 #include <inference/network_node.hpp>
 #include <kernels/optimizer.hpp>
 
-#include <cmath>
-
-ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
+ForwardingResult RecursionNode::forward(std::span<const matrix> inputs, bool perf) const {
     RecursionData recursion_data;
 
     float budget = 0.0f;
 
     matrix final_output;
     size_t recursion_count = 0;
-    
+
     for (recursion_count = 0; recursion_count < max_recursion_depth;
          recursion_count++) {
         recursion_data.loopNodeOutputs.emplace_back();
@@ -45,7 +43,8 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs) const {
 
         // Sigmoid activation
         // TODO:
-        // p_n = p_n.mapped([](float x) { return 1.0f / (1.0f + std::exp(-x)); });
+        // p_n = p_n.mapped([](float x) { return 1.0f / (1.0f + std::exp(-x));
+        // });
 
         auto probability = p_n.col_sum(0) / static_cast<float>(p_n.rows);
         budget += probability;
@@ -85,8 +84,8 @@ std::vector<matrix> RecursionNode::backpropogate(
     const ForwardingResult& results,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate) {
-
+    float learning_rate,
+    bool perf) {
     constexpr auto TIME_PENALTY = 0.01f;
 
     auto* rec_data = dynamic_cast<RecursionData*>(results.data.get());
