@@ -3,14 +3,16 @@
 #include <util/matrix.hpp>
 
 #ifdef MATRIX_CHECKS
-#define CHECK_ERRORS(step) check_errors(step)
+#define CHECK_ERRORS(step) kernel::matrix::check_errors(step)
 #else
 #define CHECK_ERRORS(step)
 #endif
 
 namespace kernel::matrix {
 
-typedef void* matmul_stream_t;
+using kernel_stream_t = void*;
+
+::matrix async_create(const size_t rows, const size_t cols, kernel_stream_t stream = nullptr);
     
 void test_print();
 void check_errors(const char* step);
@@ -48,26 +50,27 @@ void set_horizontal_slice(::matrix& mat,
                           const size_t start_col,
                           const ::matrix& slice);
 
-void add(::matrix& mat, float value);
-void add(::matrix& mat, const ::matrix& offset);
-void add_scaled(::matrix& mat, const ::matrix& other, const float factor);
-void scale(::matrix& mat, float factor);
+void add(::matrix& mat, float value, kernel_stream_t stream = nullptr);
+void add(::matrix& mat, const ::matrix& offset, kernel_stream_t stream = nullptr);
+void add_scaled(::matrix& mat, const ::matrix& other, const float factor, kernel_stream_t stream = nullptr);
+void scale(::matrix& mat, float factor, kernel_stream_t stream = nullptr);
 
 void softmax(::matrix& mat);
-::matrix backprop_softmax(const ::matrix& output, const ::matrix& gradient);
+::matrix backprop_softmax(const ::matrix& output, const ::matrix& gradient, kernel_stream_t stream = nullptr);
 
 void mask_upper_triangle(::matrix& mat, const float mask_value);
 
 ::matrix dot_product(const ::matrix& a, const ::matrix& b);
-::matrix cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
-::matrix t_cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
-::matrix cross_t_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
+
+::matrix cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, kernel_stream_t handle = nullptr);
+::matrix t_cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, kernel_stream_t handle = nullptr);
+::matrix cross_t_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, kernel_stream_t handle = nullptr);
 
 void element_wise_multiply(::matrix& a, const ::matrix& b);
 
 bool is_equal(const ::matrix& a, const ::matrix& b, const float epsilon);
 
-matmul_stream_t create_matmul_stream();
-void destroy_matmul_stream(matmul_stream_t stream);
+kernel_stream_t create_kernel_stream();
+void destroy_kernel_stream(kernel_stream_t stream);
 
 }  // namespace kernel::matrix

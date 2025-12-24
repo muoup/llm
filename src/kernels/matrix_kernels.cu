@@ -1,7 +1,8 @@
 #include "kernels/optimizer.hpp"
-#include "matrix_device_kernels.cuh"
-#include "matrix_kernels.hpp"
-#include "util/matrix.hpp"
+
+#include <kernels/matrix_device_kernels.cuh>
+#include <kernels/matrix_kernels.hpp>
+#include <util/matrix.hpp>
 
 #include <cublas_api.h>
 #include <cublas_v2.h>
@@ -13,12 +14,20 @@
 
 #include <float.h>
 
+static cudaStream_t s_from_stream(kernel::matrix::kernel_stream_t stream) {
+    return static_cast<cudaStream_t>(stream);
+}
+
 struct CurandGenerator {
-    curandGenerator_t gen;
+    curandGenerator_t gen = nullptr;
 
     CurandGenerator() {}
 
     operator curandGenerator_t() {
+        if (gen != nullptr) {
+            return gen;
+        }
+        
         auto status = curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
 
         if (status != CURAND_STATUS_SUCCESS) {
@@ -37,39 +46,82 @@ static CurandGenerator global_curand_generator;
 
 void cleanup_cublas();
 
-struct cublas_handle {
-    cublasHandle_t handle;
-    bool initialized = false;
+constexpr size_t CUBLAS_HANDLES = 4;
+
+struct cuBlasHandlePool {
+    cublasHandle_t handles[4] = { nullptr };
+    size_t current_pointer = 0;
 
     // The linker does not seem to like this function having undefined behaviour
     // checks.
     __attribute__((no_sanitize("address"), no_sanitize("undefined")))
-    cublas_handle() {}
+    cuBlasHandlePool() {}
 
-    void initialize() {
-        auto status = cublasCreate(&handle);
+    cublasHandle_t get_handle() {
+        size_t pointer = current_pointer;
+        current_pointer = (current_pointer + 1) % CUBLAS_HANDLES;
 
-        if (status != CUBLAS_STATUS_SUCCESS) {
-            std::puts("Failed to create cuBLAS handle");
-            std::printf("Error Code: %d\n", status);
-            std::fflush(stdout);
-            std::exit(1);
-        }
+        auto& handle = handles[pointer];
 
-        initialized = true;
-    }
+        if (handle == nullptr) {
+            auto status = cublasCreate(&handle);
 
-    ~cublas_handle() { cublasDestroy(handle); }
-    operator cublasHandle_t() {
-        if (!initialized) {
-            initialize();
+            if (status != CUBLAS_STATUS_SUCCESS) {
+                std::puts("Failed to create cuBLAS handle");
+                std::printf("Error Code: %d\n", status);
+                std::fflush(stdout);
+                std::exit(1);
+            }
+
+            handles[pointer] = handle;
         }
 
         return handle;
     }
+
+    ~cuBlasHandlePool() {
+        for (auto handle : handles)
+            cublasDestroy(handle);
+    }
+
+    operator cublasHandle_t() { return get_handle(); }
 };
 
-static cublas_handle handle;
+static cuBlasHandlePool cublas_handle_pool;
+
+// Persistent buffer for small results (e.g. reductions)
+static float* d_reduction_result = nullptr;
+static bool* d_reduction_bool_result = nullptr;
+
+void ensure_reduction_buffer() {
+    if (d_reduction_result == nullptr) {
+        cudaMalloc(&d_reduction_result, sizeof(float));
+        cudaMalloc(&d_reduction_bool_result, sizeof(bool));
+    }
+}
+
+constexpr size_t MAX_CLEANUP_STREAMS = 8;
+static kernel::matrix::kernel_stream_t cleanup_streams[MAX_CLEANUP_STREAMS];
+
+kernel::matrix::kernel_stream_t get_cleanup_stream() {
+    static bool initialized = false;
+    static size_t next_stream = 0;
+
+    if (!initialized) [[unlikely]] {
+        for (size_t i = 0; i < MAX_CLEANUP_STREAMS; ++i) {
+            cudaStream_t stream;
+            cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+            cleanup_streams[i]
+                = static_cast<kernel::matrix::kernel_stream_t>(stream);
+        }
+        initialized = true;
+    }
+
+    size_t stream = next_stream;
+    next_stream = (next_stream + 1) % MAX_CLEANUP_STREAMS;
+
+    return cleanup_streams[stream];
+}
 
 __global__ void test_print() {
     printf("Hello from CUDA kernel!\n");
@@ -81,6 +133,7 @@ void kernel::matrix::test_print() {
 
 void kernel::matrix::check_errors(const char* step) {
     cudaError_t err = cudaGetLastError();
+
     if (err != cudaSuccess) {
         std::printf("Failure during: %s\n", step);
         std::printf("CUDA error: %s\n", cudaGetErrorString(err));
@@ -88,16 +141,45 @@ void kernel::matrix::check_errors(const char* step) {
     }
 }
 
+static kernel::optimizer::kernel_stream_pool allocation_pool(4);
+
 float* kernel::matrix::allocate_buffer(const size_t size) {
+    kernel_stream_t stream = allocation_pool.get_next_stream();
+
+    CHECK_ERRORS("Pre matrix buffer allocation");
     float* data;
-    cudaMalloc(&data, size);
-    cudaMemset(data, 0, size);
+    cudaMallocAsync(&data, size, s_from_stream(stream));
+    kernel::optimizer::wait_for_stream(stream);
+    cudaMemsetAsync(data, 0, size, s_from_stream(stream));
+    kernel::optimizer::wait_for_stream(stream);
     CHECK_ERRORS("Allocating matrix buffer");
     return data;
 }
 
+::matrix kernel::matrix::async_create(const size_t rows,
+                                      const size_t cols,
+                                      kernel::matrix::kernel_stream_t stream) {
+    size_t stride = ::matrix::calculate_stride(rows);
+    size_t size = stride * rows * sizeof(float);
+
+    ::matrix result;
+    result.rows = rows;
+    result.cols = cols;
+    result.stride = stride;
+
+    cudaMallocAsync(&result.data, size, s_from_stream(stream));
+    kernel::optimizer::wait_for_stream(stream);
+    cudaMemsetAsync(result.data, 0, size, s_from_stream(stream));
+    CHECK_ERRORS("Async matrix buffer allocation");
+
+    return result;
+}
+
 void kernel::matrix::free_buffer(float* data) {
-    cudaFree(data);
+    auto stream = allocation_pool.get_next_stream();
+
+    cudaFreeAsync(data, s_from_stream(stream));
+    kernel::optimizer::wait_for_stream(stream);
 }
 
 static __global__ void global_set(const matrix_view data,
@@ -124,13 +206,11 @@ static __global__ void global_get(const const_matrix_view data,
 float kernel::matrix::get(const ::matrix& matrix,
                           const size_t row,
                           const size_t col) {
-    float* storage;
-    cudaMalloc(&storage, sizeof(float));
-    global_get<<<1, 1>>>(matrix, row, col, storage);
+    ensure_reduction_buffer();
+    global_get<<<1, 1>>>(matrix, row, col, d_reduction_result);
     float value;
-    cudaMemcpy(&value, storage, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(storage);
-
+    cudaMemcpy(&value, d_reduction_result, sizeof(float),
+               cudaMemcpyDeviceToHost);
     return value;
 }
 
@@ -147,23 +227,24 @@ void kernel::matrix::store_from(const ::matrix& matrix, float* host_data) {
 void kernel::matrix::randomize(::matrix& matrix,
                                const float min,
                                const float max) {
+    curandSetStream(global_curand_generator, nullptr);
     curandGenerateUniform(global_curand_generator, matrix.data,
                           matrix.buffer_size() / sizeof(float));
+    
     const auto range = max - min;
 
     matrix.scale(range);
-    kernel::optimizer::wait_for_operations();
-
     matrix.add(min);
-    kernel::optimizer::wait_for_operations();
 }
 
 __global__ void copy_matrix_kernel(const matrix_view dest,
                                    const const_matrix_view src) {
-    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
+    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t total = src.rows * src.cols;
 
-    if (row < src.rows && col < src.cols) {
+    if (idx < total) {
+        size_t row = idx % src.rows;
+        size_t col = idx / src.rows;
         auto val = kernel::matrix::device_get(src, row, col);
         kernel::matrix::device_set(dest, row, col, val);
     }
@@ -172,10 +253,9 @@ __global__ void copy_matrix_kernel(const matrix_view dest,
 matrix kernel::matrix::clone(const ::const_matrix_view other) {
     ::matrix result(other.rows, other.cols);
 
-    const dim3 threads_per_block(16, 16);
-    const dim3 blocks(
-        (other.rows + threads_per_block.x - 1) / threads_per_block.x,
-        (other.cols + threads_per_block.y - 1) / threads_per_block.y);
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (other.rows * other.cols + threads_per_block - 1) / threads_per_block;
     copy_matrix_kernel<<<blocks, threads_per_block>>>(result, other);
 
     return result;
@@ -206,116 +286,93 @@ void kernel::matrix::set_all(::matrix& mat, float value) {
                                                   mat.rows, mat.cols, value);
 }
 
-struct reduction_mutex {
-    int lock;
-    float result;
-};
-
-template <__device__ float (*ElementReducer)(float, float),
-          __device__ float (*SegmentReducer)(float, float)>
-static __global__ void matrix_reduce(const const_matrix_view data,
-                                     float acc,
-                                     reduction_mutex* global_result) {
-    extern __shared__ float shared_data[];
-    size_t tid = threadIdx.y * blockDim.x + threadIdx.x;
-    size_t total_threads = blockDim.x * blockDim.y;
-
-    float local_acc = acc;
-
-    // Each thread processes multiple elements
-    for (size_t index = tid; index < data.rows * data.cols;
-         index += total_threads) {
-        size_t r = index % data.rows;
-        size_t c = index / data.rows;
-        if (r < data.rows && c < data.cols) {
-            float val = kernel::matrix::device_get(data, r, c);
-            local_acc = ElementReducer(local_acc, val);
-        }
-    }
-
-    shared_data[tid] = local_acc;
-    __syncthreads();
-
-    // Reduce within the block
-    for (size_t s = total_threads / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_data[tid]
-                = SegmentReducer(shared_data[tid], shared_data[tid + s]);
-        }
-        __syncthreads();
-    }
-
-    // Write block result to global memory
-    if (tid == 0) {
-        float block_result = shared_data[0];
-        // Atomic reduction to global result
-        while (atomicExch(&global_result->lock, 1) != 0)
-            ;
-        global_result->result
-            = SegmentReducer(global_result->result, block_result);
-        atomicExch(&global_result->lock, 0);
-    }
-};
-
-template <__device__ float (*ElementReducer)(float, float),
-          __device__ float (*SegmentReducer)(float, float)>
-float general_reduce(const ::matrix& mat, float acc) {
-    reduction_mutex* d_result;
-    cudaMalloc(&d_result, sizeof(*d_result));
-    cudaMemcpy(d_result, &acc, sizeof(*d_result), cudaMemcpyHostToDevice);
-
-    const dim3 threads_per_block(16, 16);
-    const dim3 blocks(
-        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
-        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
-    const size_t shared_mem_size
-        = threads_per_block.x * threads_per_block.y * sizeof(float);
-
-    (matrix_reduce<
-        ElementReducer,
-        SegmentReducer>)<<<blocks, threads_per_block, shared_mem_size>>>(
-        mat, acc, d_result);
-
-    reduction_mutex h_result;
-    cudaMemcpy(&h_result, d_result, sizeof(h_result), cudaMemcpyDeviceToHost);
-    cudaFree(d_result);
-    return h_result.result;
-}
-
-template <__device__ void (*AtomicReducer)(float*, float)>
-static __global__ void atomic_matrix_reduce(const const_matrix_view data,
-                                            float* global_result) {
-    size_t row = blockIdx.x * blockDim.x + threadIdx.x;
-    size_t col = blockIdx.y * blockDim.y + threadIdx.y;
-
-    if (row < data.rows && col < data.cols) {
-        float val = kernel::matrix::device_get(data, row, col);
-        AtomicReducer(global_result, val);
-    }
-};
-
-template <__device__ void (*AtomicReducer)(float*, float)>
-float atomic_reduce(const ::matrix& mat, float acc) {
-    float* d_result;
-    cudaMalloc(&d_result, sizeof(float));
-    cudaMemcpy(d_result, &acc, sizeof(float), cudaMemcpyHostToDevice);
-
-    const dim3 threads_per_block(16, 16);
-    const dim3 blocks(
-        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
-        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
-
-    (atomic_matrix_reduce<AtomicReducer>)<<<blocks, threads_per_block>>>(
-        mat, d_result);
-
-    float h_result;
-    cudaMemcpy(&h_result, d_result, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(d_result);
-    return h_result;
-}
-
 __device__ float kernel_fadd(float a, float b) {
     return a + b;
+}
+
+__device__ float kernel_fmaxf(float a, float b) {
+    return fmaxf(a, b);
+}
+
+__device__ float individual_absmax(float a, float b) {
+    return fmaxf(fabsf(a), fabsf(b));
+}
+
+template <__device__ float (*ElementReducer)(float, float),
+          __device__ void (*AtomicReducer)(float*, float)>
+static __global__ void matrix_reduce_kernel(const const_matrix_view data,
+                                            float* global_result,
+                                            float identity) {
+    size_t tid = threadIdx.x;
+    size_t total_threads = blockDim.x;
+    size_t size = data.rows * data.cols;
+
+    float local_acc = identity;
+    for (size_t i = blockIdx.x * total_threads + tid; i < size;
+         i += gridDim.x * total_threads) {
+        size_t r = i % data.rows;
+        size_t c = i / data.rows;
+        local_acc
+            = ElementReducer(local_acc, kernel::matrix::device_get(data, r, c));
+    }
+
+    // Block reduction
+    if constexpr (ElementReducer == kernel_fadd) {
+        local_acc = kernel::matrix::device::block_reduce_sum(local_acc);
+    } else if constexpr (ElementReducer == kernel_fmaxf
+                         || ElementReducer == individual_absmax) {
+        local_acc = kernel::matrix::device::block_reduce_max(local_acc);
+    } else {
+        // Generic slow reduction for other types if needed, but we mostly use
+        // sum/max
+        static __shared__ float shared_data[1024];
+        shared_data[tid] = local_acc;
+        __syncthreads();
+        for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
+            if (tid < s)
+                shared_data[tid]
+                    = ElementReducer(shared_data[tid], shared_data[tid + s]);
+            __syncthreads();
+        }
+        local_acc = shared_data[0];
+    }
+
+    if (tid == 0) {
+        AtomicReducer(global_result, local_acc);
+    }
+}
+
+__device__ void kernel_atomic_fmax(float* addr, float val) {
+    int* addr_as_int = (int*)addr;
+    int old = *addr_as_int, assumed;
+    while (val > __int_as_float(old)) {
+        assumed = old;
+        old = atomicCAS(addr_as_int, assumed, __float_as_int(val));
+        if (old == assumed)
+            break;
+    }
+}
+
+template <__device__ float (*ElementReducer)(float, float),
+          __device__ void (*AtomicReducer)(float*, float)>
+float run_reduction(const ::matrix& mat, float identity) {
+    ensure_reduction_buffer();
+    cudaMemcpy(d_reduction_result, &identity, sizeof(float),
+               cudaMemcpyHostToDevice);
+
+    const size_t threads_per_block = 256;
+    const size_t num_elements = mat.rows * mat.cols;
+    const size_t num_blocks
+        = std::min((size_t)1024,
+                   (num_elements + threads_per_block - 1) / threads_per_block);
+
+    matrix_reduce_kernel<ElementReducer, AtomicReducer>
+        <<<num_blocks, threads_per_block>>>(mat, d_reduction_result, identity);
+
+    float h_result;
+    cudaMemcpy(&h_result, d_reduction_result, sizeof(float),
+               cudaMemcpyDeviceToHost);
+    return h_result;
 }
 
 __device__ void kernel_atomic_fadd(float* a, float b) {
@@ -323,51 +380,52 @@ __device__ void kernel_atomic_fadd(float* a, float b) {
 }
 
 float kernel::matrix::sum(const ::matrix& mat) {
-    return atomic_reduce<kernel_atomic_fadd>(mat, 0.0f);
+    return run_reduction<kernel_fadd, kernel_atomic_fadd>(mat, 0.0f);
 }
 
-__device__ float abs_sum(float a, float b) {
-    return a + (b < 0 ? -b : b);
+__device__ float abs_val(float a, float b) {
+    return a + fabsf(b);
 }
 
 float kernel::matrix::abssum(const ::matrix& mat) {
-    return general_reduce<abs_sum, kernel_fadd>(mat, 0.0f);
+    return run_reduction<abs_val, kernel_atomic_fadd>(mat, 0.0f);
 }
 
-__device__ void kernel_atomic_square_sum(float* a, float b) {
-    atomicAdd(a, b * b);
+__device__ float square_val(float a, float b) {
+    return a + b * b;
 }
 
 float kernel::matrix::sum_of_squares(const ::matrix& mat) {
-    return atomic_reduce<kernel_atomic_square_sum>(mat, 0.0f);
-}
-
-__device__ float kernel_fmaxf(float a, float b) {
-    return a > b ? a : b;
+    return run_reduction<square_val, kernel_atomic_fadd>(mat, 0.0f);
 }
 
 float kernel::matrix::max(const ::matrix& mat) {
-    return general_reduce<kernel_fmaxf, kernel_fmaxf>(mat, FLT_MIN);
+    return run_reduction<kernel_fmaxf, kernel_atomic_fmax>(
+        mat, std::numeric_limits<float>::min());
 }
 
 __device__ float kernel_fminf(float a, float b) {
-    return a < b ? a : b;
+    return fminf(a, b);
+}
+
+__device__ void kernel_atomic_fmin(float* addr, float val) {
+    int* addr_as_int = (int*)addr;
+    int old = *addr_as_int, assumed;
+    while (val < __int_as_float(old)) {
+        assumed = old;
+        old = atomicCAS(addr_as_int, assumed, __float_as_int(val));
+        if (old == assumed)
+            break;
+    }
 }
 
 float kernel::matrix::min(const ::matrix& mat) {
-    return general_reduce<kernel_fminf, kernel_fminf>(mat, FLT_MAX);
-}
-
-__device__ float kernel_fabsf(float a) {
-    return a < 0 ? -a : a;
-}
-
-__device__ float individual_absmax(float a, float b) {
-    return kernel_fmaxf(kernel_fabsf(a), kernel_fabsf(b));
+    return run_reduction<kernel_fminf, kernel_atomic_fmin>(
+        mat, std::numeric_limits<float>::max());
 }
 
 float kernel::matrix::absmax(const ::matrix& mat) {
-    return general_reduce<individual_absmax, individual_absmax>(mat, 0.0f);
+    return run_reduction<individual_absmax, kernel_atomic_fmax>(mat, 0.0f);
 }
 
 float kernel::matrix::variance(const ::matrix& mat) {
@@ -378,26 +436,25 @@ float kernel::matrix::variance(const ::matrix& mat) {
     return (sum_of_squares / size) - (sum * sum) / (size * size);
 }
 
-__global__ void kernel_scale(float* data,
-                             const size_t stride,
-                             const size_t rows,
-                             const size_t cols,
-                             const float factor) {
+__global__ void kernel_scale(const matrix_view matrix, const float factor) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (row < rows && col < cols) {
-        *(kernel::matrix::device_get_addr(data, stride, row, col)) *= factor;
+    if (row < matrix.rows && col < matrix.cols) {
+        *(kernel::matrix::device_get_addr(matrix, row, col)) *= factor;
     }
 }
 
-void kernel::matrix::scale(::matrix& mat, const float factor) {
-    dim3 threads_per_block(16, 16);
-    dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
-                (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
+void kernel::matrix::scale(::matrix& mat,
+                           const float factor,
+                           kernel_stream_t stream) {
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_scale<<<blocks, threads_per_block>>>(mat.data, mat.stride, mat.rows,
-                                                mat.cols, factor);
+    kernel_scale<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(
+        mat, factor);
 }
 
 static __global__ void kernel_transfer_row(const matrix_view dest,
@@ -542,13 +599,16 @@ static __global__ void matrix_add_matrix(const matrix_view data,
     }
 }
 
-void kernel::matrix::add(::matrix& mat, const ::matrix& offset) {
+void kernel::matrix::add(::matrix& mat,
+                         const ::matrix& offset,
+                         kernel_stream_t stream) {
     const dim3 threads_per_block(16, 16);
     const dim3 blocks(
         (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    matrix_add_matrix<<<blocks, threads_per_block>>>(mat, offset);
+    matrix_add_matrix<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(
+        mat, offset);
 }
 
 static __global__ void kernel_add_scaled(const matrix_view data,
@@ -566,12 +626,14 @@ static __global__ void kernel_add_scaled(const matrix_view data,
 
 void kernel::matrix::add_scaled(::matrix& mat,
                                 const ::matrix& other,
-                                const float factor) {
+                                const float factor,
+                                kernel_stream_t stream) {
     dim3 threads_per_block(16, 16);
     dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
                 (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_add_scaled<<<blocks, threads_per_block>>>(mat, other, factor);
+    kernel_add_scaled<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(
+        mat, other, factor);
 }
 
 static __global__ void kernel_add_value(const matrix_view data,
@@ -584,17 +646,17 @@ static __global__ void kernel_add_value(const matrix_view data,
     }
 }
 
-void kernel::matrix::add(::matrix& mat, float value) {
+void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
     const dim3 threads_per_block(16, 16);
     const dim3 blocks(
         (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_add_value<<<blocks, threads_per_block>>>(mat, value);
+    kernel_add_value<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(
+        mat, value);
 }
 
 __global__ void kernel_softmax(matrix_view data) {
-    extern __shared__ float shared_data[];
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
     const size_t cols = data.cols;
@@ -607,17 +669,12 @@ __global__ void kernel_softmax(matrix_view data) {
         local_max = fmaxf(local_max, kernel::matrix::device_get(data, row, j));
     }
 
-    shared_data[tid] = local_max;
+    float max_val = kernel::matrix::device::block_reduce_max(local_max);
+    __shared__ float shared_max;
+    if (tid == 0)
+        shared_max = max_val;
     __syncthreads();
-
-    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_data[tid] = fmaxf(shared_data[tid], shared_data[tid + s]);
-        }
-        __syncthreads();
-    }
-    float max_val = shared_data[0];
-    __syncthreads();
+    max_val = shared_max;
 
     float local_sum = 0.0f;
     for (size_t j = tid; j < cols; j += blockDim.x) {
@@ -627,53 +684,18 @@ __global__ void kernel_softmax(matrix_view data) {
         local_sum += exp_val;
     }
 
-    shared_data[tid] = local_sum;
+    float sum_exp = kernel::matrix::device::block_reduce_sum(local_sum);
+    __shared__ float shared_sum;
+    if (tid == 0)
+        shared_sum = sum_exp;
     __syncthreads();
-
-    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_data[tid] += shared_data[tid + s];
-        }
-        __syncthreads();
-    }
-    float sum_exp = shared_data[0];
-    __syncthreads();
+    sum_exp = shared_sum;
 
     for (size_t j = tid; j < cols; j += blockDim.x) {
         float val = kernel::matrix::device_get(data, row, j);
         kernel::matrix::device_set(data, row, j, val / sum_exp);
     }
 }
-
-// __global__ void kernel_softmax(const matrix_view data) {
-//     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
-
-//     if (row < data.rows) {
-//         // Find max value for numerical stability
-//         float max_val = kernel::matrix::device_get(data, row, 0);
-//         for (size_t j = 1; j < data.cols; ++j) {
-//             const float val = kernel::matrix::device_get(data, row, j);
-//             if (val > max_val) {
-//                 max_val = val;
-//             }
-//         }
-
-//         // Compute exponentials and sum
-//         float sum_exp = 0.0f;
-//         for (size_t j = 0; j < data.cols; ++j) {
-//             const float exp_val
-//                 = expf(kernel::matrix::device_get(data, row, j) - max_val);
-//             kernel::matrix::device_set(data, row, j, exp_val);
-//             sum_exp += exp_val;
-//         }
-
-//         // Normalize to get probabilities
-//         for (size_t j = 0; j < data.cols; ++j) {
-//             const float val = kernel::matrix::device_get(data, row, j);
-//             kernel::matrix::device_set(data, row, j, val / sum_exp);
-//         }
-//     }
-// }
 
 void kernel::matrix::softmax(::matrix& mat) {
     const size_t threads_per_block = 256;
@@ -687,40 +709,43 @@ static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
     const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t row = blockIdx.x;
+    const size_t tid = threadIdx.x;
+    const size_t cols = softmax_gradient.cols;
 
-    if (row < softmax_output.rows) {
-        float s_dot = 0.0f;
+    if (row >= softmax_output.rows)
+        return;
 
-        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
-            float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(output_gradient, row, col);
-            s_dot += s_j * g_j;
-        }
+    float local_s_dot = 0.0f;
+    for (size_t col = tid; col < cols; col += blockDim.x) {
+        float s_j = kernel::matrix::device_get(softmax_output, row, col);
+        float g_j = kernel::matrix::device_get(output_gradient, row, col);
+        local_s_dot += s_j * g_j;
+    }
 
-        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
-            float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(output_gradient, row, col);
-            kernel::matrix::device_set(softmax_gradient, row, col,
-                                       s_j * (g_j - s_dot));
+    float s_dot = kernel::matrix::device::block_reduce_sum(local_s_dot);
+    __shared__ float shared_s_dot;
+    if (tid == 0)
+        shared_s_dot = s_dot;
+    __syncthreads();
 
-            // std::printf("s_j=%f, g_j=%f, s_dot=%f, grad=%f\n", s_j, g_j,
-            // s_dot,
-            //             s_j * (g_j - s_dot));
-        }
+    for (size_t col = tid; col < cols; col += blockDim.x) {
+        float s_j = kernel::matrix::device_get(softmax_output, row, col);
+        float g_j = kernel::matrix::device_get(output_gradient, row, col);
+        kernel::matrix::device_set(softmax_gradient, row, col,
+                                   s_j * (g_j - shared_s_dot));
     }
 }
 
 ::matrix kernel::matrix::backprop_softmax(const ::matrix& output,
-                                          const ::matrix& gradient) {
+                                          const ::matrix& gradient,
+                                          kernel_stream_t stream) {
     ::matrix softmax_gradient(gradient.rows, gradient.cols);
 
     const size_t threads_per_block = 256;
-    const size_t blocks
-        = (gradient.rows + threads_per_block - 1) / threads_per_block;
-
-    kernel_backprop_softmax<<<blocks, threads_per_block>>>(output, gradient,
-                                                           softmax_gradient);
+    kernel_backprop_softmax<<<gradient.rows, threads_per_block, 0,
+                              s_from_stream(stream)>>>(output, gradient,
+                                                       softmax_gradient);
 
     return softmax_gradient;
 }
@@ -747,29 +772,31 @@ void kernel::matrix::mask_upper_triangle(::matrix& mat,
 
 matrix kernel::matrix::dot_product(const ::matrix& a, const ::matrix& b) {
     ::matrix result(a.rows, b.cols);
-    cublasSdot(handle, a.rows * a.cols, a.data, 1, b.data, 1, result.data);
+    cublasSdot(cublas_handle_pool, a.rows * a.cols, a.data, 1, b.data, 1,
+               result.data);
     return result;
 }
 
-kernel::matrix::matmul_stream_t kernel::matrix::create_matmul_stream() {
+kernel::matrix::kernel_stream_t kernel::matrix::create_kernel_stream() {
     cudaStream_t stream;
     cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
-    return static_cast<matmul_stream_t>(stream);
+    return static_cast<kernel_stream_t>(stream);
 }
 
-void kernel::matrix::destroy_matmul_stream(matmul_stream_t stream) {
-    cudaStreamDestroy(static_cast<cudaStream_t>(stream));
+void kernel::matrix::destroy_kernel_stream(kernel_stream_t stream) {
+    cudaStreamDestroy(s_from_stream(stream));
 }
 
 matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
                                         const ::const_matrix_view b,
-                                        matmul_stream_t stream) {
+                                        kernel_stream_t kernel_stream) {
     ::matrix result = ::matrix(a.rows, b.cols);
+    auto handle = cublas_handle_pool.get_handle();
 
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(handle, static_cast<cudaStream_t>(stream));
+    cublasSetStream(handle, s_from_stream(kernel_stream));
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, a.rows, b.cols, a.cols,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta,
                 result.data_ptr(), result.stride);
@@ -780,12 +807,16 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
 
 matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
                                           const ::const_matrix_view b,
-                                          matmul_stream_t stream) {
-    ::matrix result = ::matrix(a.rows, b.rows);
+                                          kernel_stream_t matmul_handle) {
+    ::matrix result
+        = ::matrix(a.rows, b.rows);  // kernel::matrix::async_create(a.rows,
+                                     // b.rows, matmul_handle.stream);
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(handle, static_cast<cudaStream_t>(stream));
+    auto handle = cublas_handle_pool.get_handle();
+
+    cublasSetStream(handle, s_from_stream(matmul_handle));
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, a.rows, b.rows, a.cols,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta,
                 result.data_ptr(), result.stride);
@@ -796,15 +827,17 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
 
 matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
                                           const ::const_matrix_view b,
-                                          matmul_stream_t stream) {
+                                          kernel_stream_t kernel_stream) {
     ::matrix result = ::matrix(a.cols, b.cols);
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(handle, static_cast<cudaStream_t>(stream));
-    cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols, b.cols, a.rows,
-                &alpha, a.data, a.stride, b.data, b.stride, &beta, result.data,
-                result.stride);
+    auto handle = cublas_handle_pool.get_handle();
+
+    cublasSetStream(handle, s_from_stream(kernel_stream));
+    cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols,
+                b.cols, a.rows, &alpha, a.data, a.stride, b.data, b.stride,
+                &beta, result.data, result.stride);
     CHECK_ERRORS("t_cross_multiplied");
 
     return result;
@@ -816,9 +849,8 @@ __global__ void element_wise_multiply_kernel(matrix_view a_data,
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (row < a_data.rows && col < a_data.cols) {
-        float val_a = kernel::matrix::device_get(a_data, row, col);
         float val_b = kernel::matrix::device_get(b_data, row, col);
-        kernel::matrix::device_set(a_data, row, col, val_a * val_b);
+        *kernel::matrix::device_get_addr(a_data, row, col) *= val_b;
     }
 }
 
@@ -830,22 +862,17 @@ void kernel::matrix::element_wise_multiply(::matrix& a, const ::matrix& b) {
     element_wise_multiply_kernel<<<blocks, threads_per_block>>>(a, b);
 }
 
-__global__ void compare(const float* a,
-                        const float* b,
-                        const size_t stride_a,
-                        const size_t stride_b,
-                        const size_t rows,
-                        const size_t cols,
+__global__ void compare(const const_matrix_view a,
+                        const const_matrix_view b,
                         const float epsilon,
                         bool* result) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        float val_a = a[row + col * stride_a];
-        float val_b = b[row + col * stride_b];
+    if (row < a.rows && col < a.cols) {
+        float val_a = kernel::matrix::device_get(a, row, col);
+        float val_b = kernel::matrix::device_get(b, row, col);
+
         if (fabsf(val_a - val_b) > epsilon) {
             *result = false;
         }
@@ -859,16 +886,22 @@ bool kernel::matrix::is_equal(const ::matrix& a,
         return false;
     }
 
-    bool* d_result;
-    cudaMalloc(&d_result, sizeof(bool));
-    cudaMemset(d_result, 1, sizeof(bool));
+    ensure_reduction_buffer();
 
-    compare<<<(a.rows * a.cols + 255) / 256, 256>>>(
-        a.data, b.data, a.stride, b.stride, a.rows, a.cols, epsilon, d_result);
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks((a.rows + threads_per_block.x - 1) / threads_per_block.x,
+                      (a.cols + threads_per_block.y - 1) / threads_per_block.y);
+
+    const bool initial_value = true;
+
+    cudaMemcpy(d_reduction_bool_result, &initial_value, sizeof(bool),
+               cudaMemcpyHostToDevice);
+    compare<<<threads_per_block, blocks>>>(a, b, epsilon,
+                                           d_reduction_bool_result);
 
     bool h_result;
-    cudaMemcpy(&h_result, d_result, sizeof(bool), cudaMemcpyDeviceToHost);
-    cudaFree(d_result);
+    cudaMemcpy(&h_result, d_reduction_bool_result, sizeof(bool),
+               cudaMemcpyDeviceToHost);
 
     return h_result;
 }

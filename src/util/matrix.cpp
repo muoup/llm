@@ -9,14 +9,6 @@
 #include <sstream>
 #include <utility>
 
-static constexpr size_t calculate_stride(const size_t i) {
-    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
-    // to or Greater Than i
-    constexpr size_t alignment = 256 / sizeof(float);
-
-    return ((i + alignment - 1) / alignment) * alignment;
-}
-
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
     if (this->buffer_size() > 0) {
@@ -42,8 +34,12 @@ matrix& matrix::operator=(matrix&& other) {
 }
 
 matrix::~matrix() {
-    // If data is nullptr, free_buffer will handle it gracefully
-    kernel::matrix::free_buffer(std::exchange(this->data, nullptr));
+    CHECK_ERRORS("pre matrix::~matrix");
+
+    if (this->data != nullptr) {
+        kernel::matrix::free_buffer(std::exchange(this->data, nullptr));
+    }
+
     CHECK_ERRORS("matrix::~matrix");
 }
 
@@ -176,7 +172,8 @@ const_matrix_view matrix::get_horizontal_slice(const size_t col_start,
     MATRIX_ASSERT(col_start + slice_cols <= this->cols,
                   "Slice dimensions do not match for getting horizontal slice");
 
-    return const_matrix_view(this->rows, slice_cols, this->stride, this->data + col_start * this->stride);
+    return const_matrix_view(this->rows, slice_cols, this->stride,
+                             this->data + col_start * this->stride);
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {
@@ -287,6 +284,7 @@ bool matrix::equals(const matrix& other, const float epsilon) const {
 void matrix::save(std::ostream& out) const {
     out.write(reinterpret_cast<const char*>(&rows), sizeof(size_t));
     out.write(reinterpret_cast<const char*>(&cols), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(&stride), sizeof(size_t));
 
     float* buffer = new float[buffer_size() / sizeof(float)];
     kernel::matrix::store_from(*this, buffer);
@@ -295,11 +293,17 @@ void matrix::save(std::ostream& out) const {
 }
 
 matrix matrix::load(std::istream& in) {
-    size_t new_rows, new_cols;
+    size_t new_rows, new_cols, new_stride;
     in.read(reinterpret_cast<char*>(&new_rows), sizeof(size_t));
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
+    in.read(reinterpret_cast<char*>(&new_stride), sizeof(size_t));
 
-    matrix new_matrix = matrix(new_rows, new_cols);
+    matrix new_matrix = matrix();
+    new_matrix.rows = new_rows;
+    new_matrix.cols = new_cols;
+    new_matrix.stride = new_stride;
+    new_matrix.data = kernel::matrix::allocate_buffer(new_matrix.buffer_size());
+    
     CHECK_ERRORS("pre2 matrix::load");
     float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());

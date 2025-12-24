@@ -32,7 +32,13 @@ struct matrix {
 
     float* data;
 
-    constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 256;
+    constexpr static size_t MATRIX_ELEMENT_ALIGNMENT = 256;
+    constexpr static inline size_t calculate_stride(const size_t i) {
+        // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
+        // to or Greater Than i
+        constexpr size_t alignment = 256 / sizeof(float);
+        return ((i + alignment - 1) / alignment) * alignment;
+    }
 
     matrix() : rows(0), cols(0), stride(0), data(nullptr) {}
     matrix(const size_t rows, const size_t cols);

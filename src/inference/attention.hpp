@@ -25,7 +25,7 @@ struct AttentionHead {
 class AttentionLayer final : public INode {
    public:
     AttentionLayer(size_t dimensions, size_t head_count, bool masked);
-    AttentionLayer(AttentionLayer&&) noexcept;
+    AttentionLayer(AttentionLayer&&) noexcept = default;
     ~AttentionLayer();
 
     size_t parameterCount() const override;
@@ -53,5 +53,5 @@ class AttentionLayer final : public INode {
     std::vector<AttentionHead> heads;
     matrix wo;
     
-    kernel::matrix::matmul_stream_t streams[4];
+    std::vector<kernel::matrix::kernel_stream_t> streams;
 };

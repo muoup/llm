@@ -37,24 +37,29 @@ InferenceModel standard_attention_model(size_t dimensions,
     constexpr size_t ffn_multiplier = 4;
 
     InferenceModel model(dimensions, vocab_size);
+    CHECK_ERRORS("InferenceModel Constructor");
 
     size_t last_layer_idx = 0;
 
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer
             = std::make_unique<AttentionLayer>(dimensions, attention_heads, true);
+        CHECK_ERRORS("AttentionLayer Creation");
         auto attn_block
             = std::make_unique<LayerNorm>(std::move(attn_layer), dimensions);
+        CHECK_ERRORS("LayerNorm Creation");
         size_t attn_block_idx = model.add_layer(std::move(attn_block));
 
-        if (last_layer_idx != 0) {
+        if (attn_block_idx != 0) {
             model.add_connection(last_layer_idx, attn_block_idx);
         }
 
         auto ff_layer = std::make_unique<FeedForwardLayer>(
             dimensions, dimensions * ffn_multiplier);
+        CHECK_ERRORS("FeedForwardLayer Creation");
         auto ff_block
             = std::make_unique<LayerNorm>(std::move(ff_layer), dimensions);
+        CHECK_ERRORS("LayerNorm Creation");
         size_t ff_block_idx = model.add_layer(std::move(ff_block));
 
         model.add_connection(attn_block_idx, ff_block_idx);
@@ -64,6 +69,7 @@ InferenceModel standard_attention_model(size_t dimensions,
     
     size_t standardized_norm = model.add_layer(std::make_unique<LayerNorm>(nullptr, dimensions));
     model.add_connection(last_layer_idx, standardized_norm);
+    CHECK_ERRORS("Final LayerNorm Creation");
     
     model.randomize();
     model.finalize();

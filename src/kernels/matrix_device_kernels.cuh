@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cuda_runtime_api.h>
+#include <math_constants.h>
+
 #include <util/matrix.hpp>
 
 namespace kernel::matrix {
@@ -94,6 +96,56 @@ inline __device__ void device_offset_elem_atomic(matrix_view data,
                                                  const size_t col,
                                                  float value) {
     device_offset_elem_atomic(data.data, data.stride, row, col, value);
+}
+
+namespace device {
+    inline __device__ float warp_reduce_sum(float val) {
+        for (int offset = 16; offset > 0; offset /= 2)
+            val += __shfl_down_sync(0xffffffff, val, offset);
+        return val;
+    }
+
+    inline __device__ float warp_reduce_max(float val) {
+        for (int offset = 16; offset > 0; offset /= 2)
+            val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+        return val;
+    }
+
+    inline __device__ float block_reduce_sum(float val) {
+        static __shared__ float shared[32];
+        int lane = threadIdx.x % 32;
+        int wid = threadIdx.x / 32;
+
+        val = warp_reduce_sum(val);
+
+        if (lane == 0) shared[wid] = val;
+
+        __syncthreads();
+
+        val = (threadIdx.x < blockDim.x / 32.0f) ? shared[lane] : 0;
+
+        if (wid == 0) val = warp_reduce_sum(val);
+
+        return val;
+    }
+
+    inline __device__ float block_reduce_max(float val) {
+        static __shared__ float shared[32];
+        int lane = threadIdx.x % 32;
+        int wid = threadIdx.x / 32;
+
+        val = warp_reduce_max(val);
+
+        if (lane == 0) shared[wid] = val;
+
+        __syncthreads();
+
+        val = (threadIdx.x < blockDim.x / 32.0f) ? shared[lane] : -CUDART_INF_F;
+
+        if (wid == 0) val = warp_reduce_max(val);
+
+        return val;
+    }
 }
 
 template <auto Mapping>

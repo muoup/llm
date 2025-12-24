@@ -71,25 +71,17 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     matrix activation_output = result.outputs[2].clone();
     const matrix& post_layer_gradient = gradients[0];
 
-    kernel::optimizer::wait_for_operations();
-
     matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
     matrix w2_gradient
         = activation_output.t_cross_multiplied(post_layer_gradient);
     const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
-    kernel::optimizer::wait_for_operations();
 
     matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
         activation_input, a1_gradient);
-    kernel::optimizer::wait_for_operations();
 
     matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
     matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
     auto input_gradient = z1_gradient.cross_t_multiplied(w1);
-
-    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
-    kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  FF Layer Gradients:");
     LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
@@ -98,11 +90,11 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);
+    kernel::optimizer::adjust_regularize_parameter_matrix(w2, w2_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate);
+    kernel::optimizer::adjust_regularize_parameter_matrix(w1, w1_gradient, learning_rate);
 
-    kernel::optimizer::norm_clip(input_gradient);
+    // kernel::optimizer::norm_clip(input_gradient);
     kernel::optimizer::wait_for_operations();
 
     return matrix::construct_vec(input_gradient);

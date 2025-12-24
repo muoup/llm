@@ -31,6 +31,7 @@ void logger::log(LogLevel level, const char* format, ...) {
     va_end(args);
 
     std::printf("\n");
+    std::fflush(stdout);
 }
 
 void logger::set_log_level(LogLevel level) {

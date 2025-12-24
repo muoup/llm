@@ -26,12 +26,15 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
         CHECK_ERRORS("EmbeddingLayer::forward row transfer");
     }
 
+    kernel::optimizer::wait_for_operations();
+    
     output.scale(std::sqrt(static_cast<float>(this->get_dimensions())));
+    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  Embedding Layer Forward:");
+    LOG_DEBUG("    embeddings norm: %f", m_embeddings.norm());
     LOG_DEBUG("    output norm pre pos encoding: %f", output.norm());
 
-    kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
     kernel::optimizer::wait_for_operations();
 

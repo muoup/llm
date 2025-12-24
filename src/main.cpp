@@ -14,9 +14,11 @@
 #include <util/matrix.hpp>
 #include <util/logger.hpp>
 
+#include <omp.h>
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
-
+    
 #ifdef MATRIX_CHECKS
     logger::set_log_level(LogLevel::DEBUG);
 #else
