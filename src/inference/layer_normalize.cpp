@@ -173,10 +173,10 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
 
     kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,
                                                learning_rate);
-    kernel::matrix::check_errors("pre adjust beta");
+    CHECK_ERRORS("pre adjust beta");
     kernel::optimizer::adjust_parameter_matrix(beta, results.grad_beta,
                                                learning_rate);
-    kernel::matrix::check_errors("post adjust beta");
+    CHECK_ERRORS("post adjust beta");
 
     // Add the gradient from the residual path
     if (inner_node) {

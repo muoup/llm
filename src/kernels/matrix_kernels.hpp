@@ -2,8 +2,16 @@
 
 #include <util/matrix.hpp>
 
+#ifdef MATRIX_CHECKS
+#define CHECK_ERRORS(step) check_errors(step)
+#else
+#define CHECK_ERRORS(step)
+#endif
+
 namespace kernel::matrix {
 
+typedef void* matmul_stream_t;
+    
 void test_print();
 void check_errors(const char* step);
     
@@ -51,12 +59,15 @@ void softmax(::matrix& mat);
 void mask_upper_triangle(::matrix& mat, const float mask_value);
 
 ::matrix dot_product(const ::matrix& a, const ::matrix& b);
-::matrix cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
-::matrix t_cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
-::matrix cross_t_multiplied(const ::const_matrix_view a, const ::const_matrix_view b);
+::matrix cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
+::matrix t_cross_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
+::matrix cross_t_multiplied(const ::const_matrix_view a, const ::const_matrix_view b, matmul_stream_t stream = nullptr);
 
 void element_wise_multiply(::matrix& a, const ::matrix& b);
 
 bool is_equal(const ::matrix& a, const ::matrix& b, const float epsilon);
+
+matmul_stream_t create_matmul_stream();
+void destroy_matmul_stream(matmul_stream_t stream);
 
 }  // namespace kernel::matrix

@@ -44,7 +44,7 @@ matrix& matrix::operator=(matrix&& other) {
 matrix::~matrix() {
     // If data is nullptr, free_buffer will handle it gracefully
     kernel::matrix::free_buffer(std::exchange(this->data, nullptr));
-    kernel::matrix::check_errors("matrix::~matrix");
+    CHECK_ERRORS("matrix::~matrix");
 }
 
 void matrix::randomize(const float min, const float max) {
@@ -300,12 +300,12 @@ matrix matrix::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
 
     matrix new_matrix = matrix(new_rows, new_cols);
-    kernel::matrix::check_errors("pre2 matrix::load");
+    CHECK_ERRORS("pre2 matrix::load");
     float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);
     delete[] buffer_data;
-    kernel::matrix::check_errors("matrix::load");
+    CHECK_ERRORS("matrix::load");
 
     return new_matrix;
 }

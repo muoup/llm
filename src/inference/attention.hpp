@@ -1,9 +1,11 @@
 #pragma once
 
+#include <kernels/matrix_kernels.hpp>
 #include <inference/network_node.hpp>
-#include <istream>
 #include <util/matrix.hpp>
+
 #include <vector>
+#include <istream>
 
 // Note: The INode forward pass is pure and does not modify layer state.
 // It returns a vector of matrices containing the actual output followed by
@@ -23,6 +25,8 @@ struct AttentionHead {
 class AttentionLayer final : public INode {
    public:
     AttentionLayer(size_t dimensions, size_t head_count, bool masked);
+    AttentionLayer(AttentionLayer&&) noexcept;
+    ~AttentionLayer();
 
     size_t parameterCount() const override;
     NodeType getType() const override;
@@ -41,12 +45,13 @@ class AttentionLayer final : public INode {
     static AttentionLayer load(std::istream& in);
 
    private:
-    AttentionLayer()
-        : dimensions(0), head_size(0), head_count(0), masked(false), wo() {}
+    AttentionLayer();
 
     size_t dimensions, head_size, head_count;
     bool masked;
 
     std::vector<AttentionHead> heads;
     matrix wo;
+    
+    kernel::matrix::matmul_stream_t streams[4];
 };

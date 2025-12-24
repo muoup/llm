@@ -5,9 +5,9 @@
 #include <vector>
 
 #include <inference/network_node.hpp>
+#include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
-#include "kernels/matrix_kernels.hpp"
 
 NodeType AttentionLayer::getType() const {
     return NodeType::Attention;
@@ -27,6 +27,38 @@ AttentionLayer::AttentionLayer(size_t dimensions,
             matrix(dimensions, head_size),  // wk
             matrix(dimensions, head_size)   // wv
         });
+    }
+
+    for (size_t i = 0; i < 4; ++i) {
+        streams[i] = kernel::matrix::create_matmul_stream();
+    }
+}
+
+AttentionLayer::AttentionLayer()
+    : dimensions(0), head_size(0), head_count(0), masked(false), wo() {
+    for (size_t i = 0; i < 4; ++i) {
+        streams[i] = kernel::matrix::create_matmul_stream();
+    }
+}
+
+AttentionLayer::AttentionLayer(AttentionLayer&& other) noexcept {
+    memcpy(this->streams, other.streams, sizeof(other.streams));
+    memset(other.streams, 0, sizeof(other.streams));
+
+    this->dimensions = other.dimensions;
+    this->head_size = other.head_size;
+    this->head_count = other.head_count;
+    this->masked = other.masked;
+
+    this->heads = std::move(other.heads);
+    this->wo = std::move(other.wo);
+}
+
+AttentionLayer::~AttentionLayer() {
+    for (size_t i = 0; i < 4; ++i) {
+        if (streams[i]) {
+            kernel::matrix::destroy_matmul_stream(streams[i]);
+        }
     }
 }
 
@@ -63,27 +95,22 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
 
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
-        matrix q = input.cross_multiplied(head.wq);
-        matrix k = input.cross_multiplied(head.wk);
-        matrix v = input.cross_multiplied(head.wv);
+
+        matrix q = kernel::matrix::cross_multiplied(input, head.wq, streams[0]);
+        matrix k = kernel::matrix::cross_multiplied(input, head.wk, streams[1]);
+        matrix v = kernel::matrix::cross_multiplied(input, head.wv, streams[2]);
+        kernel::optimizer::wait_for_operations();
 
         matrix scores = q.cross_t_multiplied(k);
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-        kernel::optimizer::wait_for_operations();
-
         scores.scale(scale);
-        kernel::optimizer::wait_for_operations();
 
         if (masked) {
             scores.mask_upper_triangular();
-            kernel::optimizer::wait_for_operations();
         }
 
         scores.softmax();
-        kernel::optimizer::wait_for_operations();
-
         matrix weighted_sum = scores.cross_multiplied(v);
-        kernel::optimizer::wait_for_operations();
 
         matrix& concatenated_heads = returns[1];
         concatenated_heads.set_horizontal_slice(h * head_size, weighted_sum);
@@ -103,8 +130,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns.emplace_back(std::move(v));
         returns.emplace_back(std::move(scores));
     }
-
-    kernel::optimizer::wait_for_operations();
 
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];
@@ -145,12 +170,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
     LOG_DEBUG("  Attention Layer Backpropagation:");
     LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
-    matrix wo_gradient = concat_heads.t_cross_multiplied(post_layer_gradient);
-    matrix attention_concat_gradient
-        = post_layer_gradient.cross_t_multiplied(wo);
-
+    matrix wo_gradient = kernel::matrix::t_cross_multiplied(
+        concat_heads, post_layer_gradient, streams[0]);
+    matrix attention_concat_gradient = kernel::matrix::cross_t_multiplied(
+        post_layer_gradient, wo, streams[1]);
     matrix input_gradient(layer_input.rows, layer_input.cols);
-
+    kernel::optimizer::wait_for_operations();
+    
     for (size_t h = 0; h < head_count; ++h) {
         const matrix& q = result.outputs[2 + h * 4 + 0];
         const matrix& k = result.outputs[2 + h * 4 + 1];
@@ -161,20 +187,29 @@ std::vector<matrix> AttentionLayer::backpropogate(
             = attention_concat_gradient.get_horizontal_slice(h * head_size,
                                                              head_size);
 
-        matrix v_gradient = kernel::matrix::t_cross_multiplied(scores, attention_gradient);
-        matrix scores_gradient = kernel::matrix::cross_t_multiplied(attention_gradient, v);
-        
+        matrix v_gradient
+            = kernel::matrix::t_cross_multiplied(scores, attention_gradient, streams[0]);
+        matrix scores_gradient
+            = kernel::matrix::cross_t_multiplied(attention_gradient, v, streams[1]);
+        kernel::optimizer::wait_for_operations();
+            
         matrix raw_scores_gradient = scores.backprop_softmax(scores_gradient);
-        
+
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         raw_scores_gradient.scale(scale);
-        
-        matrix q_gradient = raw_scores_gradient.cross_multiplied(k);
-        matrix k_gradient = raw_scores_gradient.t_cross_multiplied(q);
-        
-        matrix wq_gradient = layer_input.t_cross_multiplied(q_gradient);
-        matrix wk_gradient = layer_input.t_cross_multiplied(k_gradient);
-        matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
+
+        matrix q_gradient = kernel::matrix::cross_multiplied(raw_scores_gradient, k, streams[0]);
+        matrix k_gradient = kernel::matrix::t_cross_multiplied(raw_scores_gradient, q, streams[1]); 
+        kernel::optimizer::wait_for_operations();
+
+        matrix wq_gradient = kernel::matrix::t_cross_multiplied(
+            layer_input, q_gradient, streams[0]);
+        matrix wk_gradient = kernel::matrix::t_cross_multiplied(
+            layer_input, k_gradient, streams[1]);
+        matrix wv_gradient = kernel::matrix::t_cross_multiplied(
+            layer_input, v_gradient, streams[2]);
+
+        kernel::optimizer::wait_for_operations();
 
         LOG_DEBUG("  Attention Head %zu Gradients:", h);
         LOG_DEBUG("    scores_gradient norm: %f", scores_gradient.norm());

@@ -35,20 +35,20 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
     const matrix& input = inputs[0];
 
     matrix activation_input = input.cross_multiplied(w1);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::wait_for_operations();
 
     kernel::feed_forward::add_bias(activation_input, b1);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::wait_for_operations();
 
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::wait_for_operations();
 
     matrix final_output = activation_output.cross_multiplied(w2);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::wait_for_operations();
 
     kernel::feed_forward::add_bias(final_output, b2);
-    kernel::optimizer::wait_for_operations();
+    // kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  FF Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -116,19 +116,19 @@ void FeedForwardLayer::save(std::ostream& out) const {
 }
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
-    kernel::matrix::check_errors("FeedForwardLayer Load - Start");
+    CHECK_ERRORS("FeedForwardLayer Load - Start");
 
     FeedForwardLayer layer(0, 0);
     auto matrix = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1 pre-move");
+    CHECK_ERRORS("FeedForwardLayer Load - w1 pre-move");
     layer.w1 = std::move(matrix);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1");
+    CHECK_ERRORS("FeedForwardLayer Load - w1");
     layer.b1 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b1");
+    CHECK_ERRORS("FeedForwardLayer Load - b1");
     layer.w2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w2");
+    CHECK_ERRORS("FeedForwardLayer Load - w2");
     layer.b2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b2");
+    CHECK_ERRORS("FeedForwardLayer Load - b2");
 
     return layer;
 }

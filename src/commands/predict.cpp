@@ -16,21 +16,25 @@ void print_tokens(const std::span<const token_id_t> tokens) {
 }
 
 int handle_predict(int argc, char* argv[]) {
-    constexpr float temperature = 1.0f;
-    
     std::string model_path = get_arg_value(argc, argv, "--model");
     std::string tokenizer_path = get_arg_value(argc, argv, "--tokenizer");
     std::string prompt = get_arg_value(argc, argv, "--prompt");
     std::string length_str = get_arg_value(argc, argv, "--length");
+    std::string temperature_str = get_arg_value(argc, argv, "--temperature");
 
     if (model_path.empty() || tokenizer_path.empty() || prompt.empty()) {
-        std::cerr << "Usage: ./llm predict --model <path> --tokenizer <path> --prompt \"text\" [--length <num>]" << std::endl;
+        std::cerr << "Usage: ./llm predict --model <path> --tokenizer <path> --prompt \"text\" [--length <num>] [--temperature <float>]" << std::endl;
         return 1;
     }
 
     size_t length = 50; // Default length
     if (!length_str.empty()) {
         length = std::stoul(length_str);
+    }
+
+    float temperature = 0.75f; // Default temperature
+    if (!temperature_str.empty()) {
+        temperature = std::stof(temperature_str);
     }
 
     std::cout << "Loading tokenizer from: " << tokenizer_path << std::endl;

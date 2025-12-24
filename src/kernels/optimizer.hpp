@@ -4,6 +4,8 @@
 
 namespace kernel::optimizer {
 
+typedef void* kernel_stream_t;
+    
 void norm_clip(::matrix& gradient);
 
 void regularize_weight_gradient(::matrix& gradient, const ::matrix& parameters);

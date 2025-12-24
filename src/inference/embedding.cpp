@@ -23,7 +23,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         kernel::matrix::transfer_row(output, i, m_embeddings, tokens[i]);
-        kernel::matrix::check_errors("EmbeddingLayer::forward row transfer");
+        CHECK_ERRORS("EmbeddingLayer::forward row transfer");
     }
 
     output.scale(std::sqrt(static_cast<float>(this->get_dimensions())));
