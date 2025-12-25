@@ -102,12 +102,16 @@ namespace device {
     inline __device__ float warp_reduce_sum(float val) {
         for (int offset = 16; offset > 0; offset /= 2)
             val += __shfl_down_sync(0xffffffff, val, offset);
+        
+        __syncthreads();
         return val;
     }
 
     inline __device__ float warp_reduce_max(float val) {
         for (int offset = 16; offset > 0; offset /= 2)
             val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+        
+        __syncthreads();
         return val;
     }
 
@@ -125,6 +129,8 @@ namespace device {
         val = (threadIdx.x < blockDim.x / 32.0f) ? shared[lane] : 0;
 
         if (wid == 0) val = warp_reduce_sum(val);
+        
+        __syncthreads();
 
         return val;
     }
@@ -143,6 +149,8 @@ namespace device {
         val = (threadIdx.x < blockDim.x / 32.0f) ? shared[lane] : -CUDART_INF_F;
 
         if (wid == 0) val = warp_reduce_max(val);
+
+        __syncthreads();
 
         return val;
     }

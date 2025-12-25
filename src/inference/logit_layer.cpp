@@ -59,6 +59,10 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     LOG_DEBUG("    logit_bias_gradient norm: %f",
               loss_result.logit_bias_gradient.norm());
 
+    kernel::optimizer::norm_clip(logit_weight_gradient);
+    kernel::optimizer::norm_clip(loss_result.logit_bias_gradient);
+    kernel::optimizer::wait_for_operations();
+
     kernel::optimizer::adjust_parameter_matrix(
         b, loss_result.logit_bias_gradient, learning_rate);
     kernel::optimizer::adjust_regularize_parameter_matrix(

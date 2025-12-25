@@ -83,6 +83,8 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns.emplace_back();  // scores
     }
 
+    kernel::optimizer::wait_for_operations();
+
 #pragma omp parallel for
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
@@ -101,19 +103,31 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         matrix scores = kernel::matrix::cross_t_multiplied(
             q, k, streams[stream_offset + 0]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
+
         const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
         kernel::matrix::scale(scores, scale, streams[stream_offset + 0]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
 
         if (masked) {
-            scores.mask_upper_triangular();
+            kernel::matrix::mask_upper_triangle(
+                scores, std::numeric_limits<float>::lowest(),
+                streams[stream_offset + 0]);
+            kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
         }
 
-        scores.softmax();
-        matrix weighted_sum = scores.cross_multiplied(v);
+        kernel::matrix::softmax(scores, streams[stream_offset + 0]);
+        kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
+
+        float abs_max = kernel::matrix::absmax(scores);
+        kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
+        matrix weighted_sum = kernel::matrix::cross_multiplied(
+            scores, v, streams[stream_offset + 0]);
+        kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
 
         matrix& concatenated_heads = returns[1];
-        concatenated_heads.set_horizontal_slice(h * head_size, weighted_sum);
+        kernel::matrix::set_horizontal_slice(concatenated_heads, h * head_size,
+                                             weighted_sum,
+                                             streams[stream_offset + 0]);
 
 #pragma omp critical
         {
@@ -138,6 +152,7 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
     matrix& concatenated_heads = returns[1];
 
     final_output = concatenated_heads.cross_multiplied(wo);
+    kernel::optimizer::norm_clip(final_output);
 
     LOG_DEBUG("  Attention Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -180,8 +195,14 @@ std::vector<matrix> AttentionLayer::backpropogate(
     matrix input_gradient(layer_input.rows, layer_input.cols);
     kernel::optimizer::wait_for_streams(streams[0], streams[1]);
 
+    kernel::optimizer::norm_clip(wo_gradient);
+    kernel::optimizer::wait_for_operations();
+    
     kernel::optimizer::adjust_regularize_parameter_matrix(wo_gradient, wo,
                                                           learning_rate);
+    
+    
+    std::vector<matrix> head_input_gradients(head_count);
 
 #pragma omp parallel for
     for (size_t h = 0; h < head_count; ++h) {
@@ -202,7 +223,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
         kernel::optimizer::wait_for_streams(streams[stream_offset + 1]);
 
         matrix raw_scores_gradient = kernel::matrix::backprop_softmax(
-            scores, scores_gradient, streams[1]);
+            scores, scores_gradient, streams[stream_offset + 1]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 1]);
 
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
@@ -224,6 +245,10 @@ std::vector<matrix> AttentionLayer::backpropogate(
             layer_input, k_gradient, streams[stream_offset + 1]);
         matrix wv_gradient = kernel::matrix::t_cross_multiplied(
             layer_input, v_gradient, streams[stream_offset + 2]);
+
+        kernel::optimizer::norm_clip(wq_gradient, streams[stream_offset + 0]);
+        kernel::optimizer::norm_clip(wk_gradient, streams[stream_offset + 1]);
+        kernel::optimizer::norm_clip(wv_gradient, streams[stream_offset + 2]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0],
                                             streams[stream_offset + 1],
                                             streams[stream_offset + 2]);
@@ -241,11 +266,11 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
         AttentionHead& head = heads[h];
         kernel::optimizer::adjust_regularize_parameter_matrix(
-            wq_gradient, head.wq, learning_rate);
+            wq_gradient, head.wq, learning_rate, streams[stream_offset + 0]);
         kernel::optimizer::adjust_regularize_parameter_matrix(
-            wk_gradient, head.wk, learning_rate);
+            wk_gradient, head.wk, learning_rate, streams[stream_offset + 1]);
         kernel::optimizer::adjust_regularize_parameter_matrix(
-            wv_gradient, head.wv, learning_rate);
+            wv_gradient, head.wv, learning_rate, streams[stream_offset + 2]);
 
         matrix head_input_gradient = kernel::matrix::cross_t_multiplied(
             q_gradient, head.wq, streams[stream_offset + 0]);
@@ -253,20 +278,21 @@ std::vector<matrix> AttentionLayer::backpropogate(
             k_gradient, head.wk, streams[stream_offset + 1]);
         matrix input_v = kernel::matrix::cross_t_multiplied(
             v_gradient, head.wv, streams[stream_offset + 2]);
-        kernel::optimizer::wait_for_streams(streams[stream_offset + 0],
-                                            streams[stream_offset + 1],
-                                            streams[stream_offset + 2]);
+        kernel::optimizer::wait_for_stream(streams[stream_offset + 0]);
 
         kernel::matrix::add(head_input_gradient, input_k,
-                            streams[stream_offset + 0]);
-        kernel::optimizer::wait_for_stream(streams[stream_offset + 0]);
+                            streams[stream_offset + 1]);
         kernel::matrix::add(head_input_gradient, input_v,
-                            streams[stream_offset + 0]);
-        kernel::optimizer::wait_for_stream(streams[stream_offset + 0]);
+                            streams[stream_offset + 2]);
 
-        // This runs on the main stream, meaning only one head may update
-        // input_gradient at a time, eliminating the risk of data races
-        kernel::matrix::add(input_gradient, head_input_gradient, nullptr);
+        kernel::optimizer::wait_for_streams(streams[stream_offset + 1],
+                                            streams[stream_offset + 2]);
+
+        head_input_gradients[h] = std::move(head_input_gradient);
+    }
+
+    for (const auto& grad : head_input_gradients) {
+        kernel::matrix::add(input_gradient, grad);
     }
 
     kernel::optimizer::norm_clip(input_gradient);

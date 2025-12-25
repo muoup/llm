@@ -7,9 +7,9 @@ namespace kernel::optimizer {
 
 typedef void* kernel_stream_t;
     
-void norm_clip(::matrix& gradient);
+void norm_clip(::matrix& gradient, kernel_stream_t stream = nullptr);
 
-void adjust_regularize_parameter_matrix(const ::matrix& gradient, ::matrix& parameters, float learning_rate);
+void adjust_regularize_parameter_matrix(::matrix& gradient, ::matrix& parameters, float learning_rate, kernel_stream_t stream = nullptr);
 
 void adjust_parameter_matrix(::matrix& adjust,
                              ::matrix& gradient,

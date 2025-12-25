@@ -1,7 +1,6 @@
 #include "inference.hpp"
 
 #include <chrono>
-#include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <iostream>

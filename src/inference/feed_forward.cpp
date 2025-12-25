@@ -36,6 +36,7 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
 
     matrix activation_input = input.cross_multiplied(w1);
     kernel::feed_forward::add_bias(activation_input, b1);
+    kernel::optimizer::norm_clip(activation_input);
 
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
@@ -49,6 +50,7 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
     LOG_DEBUG("    activation_output norm: %f", activation_output.norm());
     LOG_DEBUG("    final_output norm: %f", final_output.norm());
 
+    kernel::optimizer::norm_clip(final_output);
     return standardResult(matrix::construct_vec(final_output, activation_input,
                                                 activation_output));
 }
@@ -81,6 +83,12 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     LOG_DEBUG("    b1_gradient norm: %f", b1_gradient.norm());
     LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
+
+    kernel::optimizer::norm_clip(b2_gradient);
+    kernel::optimizer::norm_clip(w2_gradient);
+    kernel::optimizer::norm_clip(b1_gradient);
+    kernel::optimizer::norm_clip(w1_gradient);
+    kernel::optimizer::wait_for_operations();
 
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
     kernel::optimizer::adjust_regularize_parameter_matrix(w2, w2_gradient, learning_rate);

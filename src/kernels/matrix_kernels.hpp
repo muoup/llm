@@ -28,8 +28,8 @@ void randomize(::matrix& matrix, const float min, const float max);
 float* allocate_buffer(const size_t size);
 void free_buffer(float* buffer);
 
-float sum(const ::matrix& mat);
-float sum_of_squares(const ::matrix& mat);
+float sum(const ::matrix& mat, kernel_stream_t stream = nullptr);
+float sum_of_squares(const ::matrix& mat, kernel_stream_t stream = nullptr);
 float abssum(const ::matrix& mat);
 float max(const ::matrix& mat);
 float min(const ::matrix& mat);
@@ -48,17 +48,17 @@ void set_row_vector(::matrix& mat, const size_t mat_row, const ::matrix& vec, co
 void add_row_vector(::matrix& mat, const size_t row, const ::matrix& vec, const size_t vec_row = 0);
 void set_horizontal_slice(::matrix& mat,
                           const size_t start_col,
-                          const ::matrix& slice);
+                          const ::matrix& slice, kernel_stream_t stream = nullptr);
 
 void add(::matrix& mat, float value, kernel_stream_t stream = nullptr);
 void add(::matrix& mat, const ::matrix& offset, kernel_stream_t stream = nullptr);
 void add_scaled(::matrix& mat, const ::matrix& other, const float factor, kernel_stream_t stream = nullptr);
 void scale(::matrix& mat, float factor, kernel_stream_t stream = nullptr);
 
-void softmax(::matrix& mat);
+void softmax(::matrix& mat, kernel_stream_t stream = nullptr);
 ::matrix backprop_softmax(const ::matrix& output, const ::matrix& gradient, kernel_stream_t stream = nullptr);
 
-void mask_upper_triangle(::matrix& mat, const float mask_value);
+void mask_upper_triangle(::matrix& mat, const float mask_value, kernel_stream_t stream = nullptr);
 
 ::matrix dot_product(const ::matrix& a, const ::matrix& b);
 
