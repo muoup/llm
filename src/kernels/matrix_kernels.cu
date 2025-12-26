@@ -645,48 +645,48 @@ void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
 }
 
 __global__ void kernel_softmax(matrix_view data) {
-    extern __shared__ float shared_data[];
-    
+
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
-    
-    if (tid == 0) {
-        shared_data[row] = 0.0f;
-    }
-    __syncthreads();
-    
+
+    float local_sum = 0.0f;
     for (size_t col = tid; col < data.cols; col += blockDim.x) {
         float val = kernel::matrix::device_get(data, row, col);
         float exp = __expf(val);
-        
+
         kernel::matrix::device_set(data, row, col, exp);
-        atomicAdd(&shared_data[row], exp);
+        local_sum += exp;
+    }
+    float row_dot = kernel::matrix::device::block_reduce_sum(local_sum);
+    
+    __shared__ float shared_denom;
+    if (tid == 0) {
+        shared_denom = row_dot;
     }
     __syncthreads();
     
+    row_dot = shared_denom;
+
     for (size_t col = tid; col < data.cols; col += blockDim.x) {
         float exp = kernel::matrix::device_get(data, row, col);
-        kernel::matrix::device_set(data, row, col, exp / shared_data[row]);
+        kernel::matrix::device_set(data, row, col, exp / shared_denom);
     }
 }
 
 void kernel::matrix::softmax(::matrix& mat, kernel_stream_t stream) {
     const dim3 threads_per_block = 256;
     const dim3 blocks = mat.rows;
-    const size_t shared_mem_size = mat.rows * sizeof(float);
 
-    kernel_softmax<<<blocks, threads_per_block, shared_mem_size,
-                     get_kernel_stream(stream)>>>(mat);
+    kernel_softmax<<<blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
+        mat);
 }
 
 static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
     const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-    const size_t row = blockIdx.x;
 
-    if (row >= softmax_output.rows)
-        return;
+    const size_t row = blockIdx.x;
 
     float local_dot = 0.0f;
     for (size_t col = threadIdx.x; col < softmax_output.cols;
@@ -702,6 +702,7 @@ static __global__ void kernel_backprop_softmax(
         shared_dot = row_dot;
     }
     __syncthreads();
+
     row_dot = shared_dot;
 
     for (size_t col = threadIdx.x; col < softmax_gradient.cols;
