@@ -2,6 +2,12 @@
 
 #include <util/matrix.hpp>
 
+#ifdef MATRIX_CHECKS
+#define CHECK_ERRORS(step) CHECK_ERRORS(step)
+#else
+#define CHECK_ERRORS(step)
+#endif
+
 namespace kernel::matrix {
 
 void test_print();

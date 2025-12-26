@@ -7,12 +7,12 @@
 void kernel::optimizer::norm_clip(::matrix& gradient) {
     constexpr auto max_magnitude = 5.0f;
     const auto mag = kernel::matrix::sum_of_squares(gradient) / gradient.size();
-    kernel::matrix::check_errors("After absmax in norm_clip");
+    CHECK_ERRORS("After absmax in norm_clip");
 
     if (mag > max_magnitude * max_magnitude) {
         const float scale = sqrtf((max_magnitude * max_magnitude) / mag);
         kernel::matrix::scale(gradient, scale);
-        kernel::matrix::check_errors("After scaling in norm_clip");
+        CHECK_ERRORS("After scaling in norm_clip");
     }
 }
 
@@ -50,7 +50,7 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
     norm_clip(gradient);
     wait_for_operations();
     regularize_gradient<<<blocks, threads_per_block>>>(gradient, parameters);
-    kernel::matrix::check_errors("After regularize_gradient");
+    CHECK_ERRORS("After regularize_gradient");
 }
 
 void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
@@ -66,7 +66,7 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
     // kernel::optimizer::norm_clip(gradient);
     // kernel::optimizer::wait_for_operations();
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate);
-    kernel::matrix::check_errors("After adjust_parameter_matrix");
+    CHECK_ERRORS("After adjust_parameter_matrix");
 }
 
 void kernel::optimizer::wait_for_operations() {

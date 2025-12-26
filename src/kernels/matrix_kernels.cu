@@ -93,7 +93,7 @@ float* kernel::matrix::allocate_buffer(const size_t size) {
     float* data;
     cudaMalloc(&data, size);
     cudaMemset(data, 0, size);
-    kernel::matrix::check_errors("Allocating matrix buffer");
+    CHECK_ERRORS("Allocating matrix buffer");
     kernel::optimizer::wait_for_operations();
     return data;
 }
@@ -728,7 +728,7 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, a.rows, b.cols, a.cols,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta,
                 result.data_ptr(), result.stride);
-    kernel::matrix::check_errors("cross_multiplied");
+    CHECK_ERRORS("cross_multiplied");
 
     return result;
 }
@@ -742,7 +742,7 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, a.rows, b.rows, a.cols,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta,
                 result.data_ptr(), result.stride);
-    kernel::matrix::check_errors("cross_t_multiplied");
+    CHECK_ERRORS("cross_t_multiplied");
 
     return result;
 }
@@ -756,7 +756,7 @@ matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
     cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, a.cols, b.cols, a.rows,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta, result.data,
                 result.stride);
-    kernel::matrix::check_errors("t_cross_multiplied");
+    CHECK_ERRORS("t_cross_multiplied");
 
     return result;
 }

@@ -116,19 +116,19 @@ void FeedForwardLayer::save(std::ostream& out) const {
 }
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
-    kernel::matrix::check_errors("FeedForwardLayer Load - Start");
+    CHECK_ERRORS("FeedForwardLayer Load - Start");
 
     FeedForwardLayer layer(0, 0);
     auto matrix = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1 pre-move");
+    CHECK_ERRORS("FeedForwardLayer Load - w1 pre-move");
     layer.w1 = std::move(matrix);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1");
+    CHECK_ERRORS("FeedForwardLayer Load - w1");
     layer.b1 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b1");
+    CHECK_ERRORS("FeedForwardLayer Load - b1");
     layer.w2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w2");
+    CHECK_ERRORS("FeedForwardLayer Load - w2");
     layer.b2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b2");
+    CHECK_ERRORS("FeedForwardLayer Load - b2");
 
     return layer;
 }

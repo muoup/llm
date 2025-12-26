@@ -243,7 +243,7 @@ kernel::layer_norm::layer_normalization_backward(
     layer_norm_backward_kernel<<<num_blocks, threads_per_block>>>(
         mean, gamma, inv_variance, layer_input, grad_normalized, grad_beta,
         grad_gamma, grad_input);
-    kernel::matrix::check_errors("layer_normalization_backward: kernel launch");
+    CHECK_ERRORS("layer_normalization_backward: kernel launch");
 
     return { .grad_input = std::move(grad_input),
              .grad_gamma = std::move(grad_gamma),
