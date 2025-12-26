@@ -98,7 +98,12 @@ float *kernel::matrix::allocate_buffer(const size_t size) {
   return data;
 }
 
-void kernel::matrix::free_buffer(float *data) { cudaFree(data); }
+kernel::KernelStreamPool<8> free_stream_pool;
+
+void kernel::matrix::free_buffer(float *data) { 
+    auto stream = free_stream_pool.acquire();
+    cudaFreeAsync(data, from_kernel_stream(stream)); 
+}
 
 static __global__ void global_set(const matrix_view data, const size_t row,
                                   const size_t col, const float value) {
