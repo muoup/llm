@@ -61,6 +61,8 @@ void set_horizontal_slice(::matrix &mat, const size_t start_col,
 void add(::matrix &mat, float value, kernel_stream_t stream = nullptr);
 void add(::matrix &mat, const ::matrix &offset,
          kernel_stream_t stream = nullptr);
+void atomic_add(::matrix &mat, const ::matrix &offset,
+                kernel_stream_t stream = nullptr);
 void add_scaled(::matrix &mat, const ::matrix &other, const float factor,
                 kernel_stream_t stream = nullptr);
 void scale(::matrix &mat, float factor, kernel_stream_t stream = nullptr);

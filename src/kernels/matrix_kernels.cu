@@ -440,16 +440,12 @@ kernel::float_device_ptr_t kernel::matrix::variance(const ::matrix& mat,
     return (float_device_ptr_t)device_result;
 }
 
-__global__ void kernel_scale(float* data,
-                             const size_t stride,
-                             const size_t rows,
-                             const size_t cols,
-                             const float factor) {
+__global__ void kernel_scale(const matrix_view data, const float factor) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (row < rows && col < cols) {
-        *(kernel::matrix::device_get_addr(data, stride, row, col)) *= factor;
+    if (row < data.rows && col < data.cols) {
+        *(kernel::matrix::device_get_addr(data, row, col)) *= factor;
     }
 }
 
@@ -461,7 +457,7 @@ void kernel::matrix::scale(::matrix& mat,
                 (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_scale<<<blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, factor);
+        mat, factor);
 }
 
 static __global__ void kernel_transfer_row(const matrix_view dest,
@@ -623,6 +619,29 @@ void kernel::matrix::add(::matrix& mat,
                         get_kernel_stream(stream)>>>(mat, offset);
 }
 
+static __global__ void matrix_atomic_add_matrix(const matrix_view data,
+                                                const const_matrix_view offset) {
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (row < data.rows && col < data.cols) {
+        float value = kernel::matrix::device_get(offset, row, col);
+        kernel::matrix::device_offset_elem_atomic(data, row, col, value);
+    }
+}
+
+void kernel::matrix::atomic_add(::matrix& mat,
+                                const ::matrix& offset,
+                                kernel_stream_t stream) {
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
+
+    matrix_atomic_add_matrix<<<blocks, threads_per_block, 0,
+                               get_kernel_stream(stream)>>>(mat, offset);
+}
+
 static __global__ void kernel_add_scaled(const matrix_view data,
                                          const const_matrix_view other,
                                          const float factor) {
@@ -749,10 +768,6 @@ static __global__ void kernel_backprop_softmax(
             float g_j = kernel::matrix::device_get(output_gradient, row, col);
             kernel::matrix::device_set(softmax_gradient, row, col,
                                        s_j * (g_j - s_dot));
-
-            // std::printf("s_j=%f, g_j=%f, s_dot=%f, grad=%f\n", s_j, g_j,
-            // s_dot,
-            //             s_j * (g_j - s_dot));
         }
     }
 }
