@@ -40,7 +40,7 @@ namespace kernel {
             }
         }
         
-        T get_stream() {
+        T acquire() {
             pool_mutex.lock();
             
             static size_t current_index = 0;
@@ -53,6 +53,7 @@ namespace kernel {
             }
             
             pool_mutex.unlock();
+            return out_stream;
         }
     };
  
