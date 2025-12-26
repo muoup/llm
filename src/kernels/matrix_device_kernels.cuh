@@ -166,7 +166,7 @@ template <auto Mapping>
                 (input.rows + blockSize.y - 1) / blockSize.y);
 
   map_matrix_kernel<Mapping>
-      <<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input, output);
+      <<<gridSize, blockSize, 0, get_kernel_stream(stream)>>>(input, output);
   return output;
 }
 
@@ -177,7 +177,7 @@ void map_matrix_inplace(::matrix &input, kernel_stream_t stream = nullptr) {
                 (input.rows + blockSize.y - 1) / blockSize.y);
 
   map_matrix_kernel<Mapping>
-      <<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input, input);
+      <<<gridSize, blockSize, 0, get_kernel_stream(stream)>>>(input, input);
 }
 
 } // namespace kernel::matrix

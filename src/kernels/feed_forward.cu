@@ -23,7 +23,7 @@ void kernel::feed_forward::add_bias(::matrix& mat, const ::matrix& row_vec, kern
     dim3 grid_size((mat.cols + block_size.x - 1) / block_size.x,
                    (mat.rows + block_size.y - 1) / block_size.y);
 
-    kernel_add_bias<<<grid_size, block_size, 0, from_kernel_stream(stream)>>>(mat, row_vec);
+    kernel_add_bias<<<grid_size, block_size, 0, get_kernel_stream(stream)>>>(mat, row_vec);
 }
 
 __global__ void sum_columns_kernel(const const_matrix_view base,
@@ -47,7 +47,7 @@ matrix kernel::feed_forward::sum_columns(const ::matrix& mat, kernel_stream_t st
     size_t threads_per_block = 256;
     size_t num_blocks = (mat.cols + threads_per_block - 1) / threads_per_block;
 
-    sum_columns_kernel<<<num_blocks, threads_per_block, 0, from_kernel_stream(stream)>>>(mat, result);
+    sum_columns_kernel<<<num_blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(mat, result);
     return result;
 }
 

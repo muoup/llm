@@ -162,7 +162,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
   matrix wo_gradient = concat_heads.t_cross_multiplied(post_layer_gradient);
   matrix attention_concat_gradient = post_layer_gradient.cross_t_multiplied(wo);
 
-  matrix input_gradient(layer_input.rows, layer_input.cols);
+  matrix input_gradient = kernel::matrix::async_allocate(layer_input.rows, layer_input.cols);
 
   for (size_t h = 0; h < head_count; ++h) {
     const matrix &q = result.outputs[2 + h * 4 + 0];
@@ -249,8 +249,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
   }
 
   kernel::optimizer::regularize_weight_gradient(wo_gradient, wo, streams[0]);
-  kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate,
-                                             streams[0]);
+  kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate, streams[0]);
 
   return matrix::construct_vec(input_gradient);
 }

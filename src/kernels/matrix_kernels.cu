@@ -16,6 +16,24 @@
 
 #include <float.h>
 
+template <typename T>
+T* gpu_allocate() {
+    T* ptr;
+    cudaMalloc(&ptr, sizeof(T));
+    return ptr;
+}
+
+template <typename T>
+void gpu_free(T* ptr) {
+    cudaFree(ptr);
+}
+
+using GPUFloatPool = kernel::ObjectPool<float*, 8, nullptr, gpu_allocate<float>, gpu_free<float>>;
+using GPUBoolPool = kernel::ObjectPool<bool*, 8, nullptr, gpu_allocate<bool>, gpu_free<bool>>;
+
+GPUFloatPool global_gpu_float_pool;
+GPUBoolPool global_gpu_bool_pool;
+
 struct CurandGenerator {
     curandGenerator_t gen;
 
@@ -79,7 +97,7 @@ __global__ void test_print() {
 }
 
 void kernel::matrix::test_print(kernel_stream_t stream) {
-    ::test_print<<<1, 1, 0, from_kernel_stream(stream)>>>();
+    ::test_print<<<1, 1, 0, get_kernel_stream(stream)>>>();
 }
 
 void kernel::matrix::check_errors(const char* step) {
@@ -100,9 +118,9 @@ void kernel::matrix::check_errors(const char* step) {
     result.stride = calculate_stride(rows);
 
     cudaMallocAsync(&result.data, result.buffer_size(),
-                    from_kernel_stream(stream));
+                    get_kernel_stream(stream));
     cudaMemsetAsync(result.data, 0, result.buffer_size(),
-                     from_kernel_stream(stream));
+                     get_kernel_stream(stream));
     return result;
 }
 
@@ -115,17 +133,16 @@ float* kernel::matrix::allocate_buffer(const size_t size,
     }
 
     float* data;
-    cudaMallocAsync(&data, size, from_kernel_stream(stream));
-    kernel::wait_for_streams(stream);
-    cudaMemsetAsync(data, 0, size, from_kernel_stream(stream));
+    cudaMallocAsync(&data, size, get_kernel_stream(stream));
+    cudaMemsetAsync(data, 0, size, get_kernel_stream(stream));
     CHECK_ERRORS("Allocating matrix buffer");
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_stream(stream);
     return data;
 }
 
 void kernel::matrix::free_buffer(float* data) {
     auto stream = allocation_pool.acquire();
-    cudaFreeAsync(data, from_kernel_stream(stream));
+    cudaFreeAsync(data, get_kernel_stream(stream));
 }
 
 static __global__ void global_set(const matrix_view data,
@@ -140,7 +157,7 @@ void kernel::matrix::set(::matrix& matrix,
                          const size_t col,
                          const float value,
                          kernel_stream_t stream) {
-    global_set<<<1, 1, 0, from_kernel_stream(stream)>>>(matrix, row, col,
+    global_set<<<1, 1, 0, get_kernel_stream(stream)>>>(matrix, row, col,
                                                         value);
 }
 
@@ -157,12 +174,12 @@ float kernel::matrix::get(const ::matrix& matrix,
                           kernel_stream_t stream) {
     float* storage;
     cudaMalloc(&storage, sizeof(float));
-    global_get<<<1, 1, 0, from_kernel_stream(stream)>>>(matrix, row, col,
+    global_get<<<1, 1, 0, get_kernel_stream(stream)>>>(matrix, row, col,
                                                         storage);
     float value;
     cudaMemcpyAsync(&value, storage, sizeof(float), cudaMemcpyDeviceToHost,
-                    from_kernel_stream(stream));
-    cudaStreamSynchronize(from_kernel_stream(stream));
+                    get_kernel_stream(stream));
+    cudaStreamSynchronize(get_kernel_stream(stream));
     cudaFree(storage);
 
     return value;
@@ -172,21 +189,21 @@ void kernel::matrix::load_into(::matrix& matrix,
                                const float* host_data,
                                kernel_stream_t stream) {
     cudaMemcpyAsync(matrix.data, host_data, matrix.buffer_size(),
-                    cudaMemcpyHostToDevice, from_kernel_stream(stream));
+                    cudaMemcpyHostToDevice, get_kernel_stream(stream));
 }
 
 void kernel::matrix::store_from(const ::matrix& matrix,
                                 float* host_data,
                                 kernel_stream_t stream) {
     cudaMemcpyAsync(host_data, matrix.data, matrix.buffer_size(),
-                    cudaMemcpyDeviceToHost, from_kernel_stream(stream));
+                    cudaMemcpyDeviceToHost, get_kernel_stream(stream));
 }
 
 void kernel::matrix::randomize(::matrix& matrix,
                                const float min,
                                const float max,
                                kernel_stream_t stream) {
-    curandSetStream(global_curand_generator, from_kernel_stream(stream));
+    curandSetStream(global_curand_generator, get_kernel_stream(stream));
     curandGenerateUniform(global_curand_generator, matrix.data,
                           matrix.buffer_size() / sizeof(float));
     const auto range = max - min;
@@ -215,7 +232,7 @@ matrix kernel::matrix::clone(const ::const_matrix_view other,
         (other.rows + threads_per_block.x - 1) / threads_per_block.x,
         (other.cols + threads_per_block.y - 1) / threads_per_block.y);
     copy_matrix_kernel<<<blocks, threads_per_block, 0,
-                         from_kernel_stream(stream)>>>(result, other);
+                         get_kernel_stream(stream)>>>(result, other);
 
     return result;
 }
@@ -244,7 +261,7 @@ void kernel::matrix::set_all(::matrix& mat,
         = (total_size + threads_per_block - 1) / threads_per_block;
 
     kernel_set_all<<<blocks, threads_per_block, 0,
-                     from_kernel_stream(stream)>>>(mat.data, mat.stride,
+                     get_kernel_stream(stream)>>>(mat.data, mat.stride,
                                                    mat.rows, mat.cols, value);
 }
 
@@ -324,8 +341,7 @@ template <__device__ float (*ElementReducer)(float, float),
 float run_reduction(const ::matrix& mat,
                     float identity,
                     kernel::kernel_stream_t stream = nullptr) {
-    float* reduction_result;
-    cudaMalloc(&reduction_result, sizeof(float));
+    float* reduction_result = global_gpu_float_pool.acquire();
     cudaMemcpy(reduction_result, &identity, sizeof(float),
                cudaMemcpyHostToDevice);
 
@@ -336,13 +352,12 @@ float run_reduction(const ::matrix& mat,
                    (num_elements + threads_per_block - 1) / threads_per_block);
 
     matrix_reduce_kernel<ElementReducer, AtomicReducer>
-        <<<num_blocks, threads_per_block, 0, from_kernel_stream(stream)>>>(
+        <<<num_blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
             mat, reduction_result, identity);
 
     float h_result;
     cudaMemcpy(&h_result, reduction_result, sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaFree(reduction_result);
     return h_result;
 }
 
@@ -425,7 +440,7 @@ void kernel::matrix::scale(::matrix& mat,
     dim3 blocks((mat.rows + threads_per_block.x - 1) / threads_per_block.x,
                 (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_scale<<<blocks, threads_per_block, 0, from_kernel_stream(stream)>>>(
+    kernel_scale<<<blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
         mat.data, mat.stride, mat.rows, mat.cols, factor);
 }
 
@@ -451,7 +466,7 @@ void kernel::matrix::transfer_row(::matrix& dest,
         = (src.cols + threads_per_block - 1) / threads_per_block;
 
     kernel_transfer_row<<<blocks, threads_per_block, 0,
-                          from_kernel_stream(stream)>>>(dest, dest_row, src,
+                          get_kernel_stream(stream)>>>(dest, dest_row, src,
                                                         src_row);
 }
 
@@ -477,7 +492,7 @@ void kernel::matrix::set_row_vector(::matrix& mat,
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
     kernel_set_row_vector<<<blocks, threads_per_block, 0,
-                            from_kernel_stream(stream)>>>(mat, mat_row, vec,
+                            get_kernel_stream(stream)>>>(mat, mat_row, vec,
                                                           vec_row);
 }
 
@@ -506,7 +521,7 @@ static __global__ void kernel_get_row_vector(const float* data,
     ::matrix result(1, mat.cols);
 
     kernel_get_row_vector<<<blocks, threads_per_block, 0,
-                            from_kernel_stream(stream)>>>(
+                            get_kernel_stream(stream)>>>(
         mat.data, mat.stride, mat.rows, mat.cols, row, result.data,
         result.stride);
 
@@ -535,7 +550,7 @@ void kernel::matrix::add_row_vector(::matrix& mat,
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
     add_row_vector_kernel<<<blocks, threads_per_block, 0,
-                            from_kernel_stream(stream)>>>(mat, row, vec,
+                            get_kernel_stream(stream)>>>(mat, row, vec,
                                                           vec_row);
 }
 
@@ -567,7 +582,7 @@ void kernel::matrix::set_horizontal_slice(::matrix& mat,
         = (mat.rows + threads_per_block - 1) / threads_per_block;
 
     set_horizontal_slice_kernel<<<blocks, threads_per_block, 0,
-                                  from_kernel_stream(stream)>>>(
+                                  get_kernel_stream(stream)>>>(
         mat.data, mat.stride, mat.rows, start_col, slice.data, slice.cols);
 }
 
@@ -591,7 +606,7 @@ void kernel::matrix::add(::matrix& mat,
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     matrix_add_matrix<<<blocks, threads_per_block, 0,
-                        from_kernel_stream(stream)>>>(mat, offset);
+                        get_kernel_stream(stream)>>>(mat, offset);
 }
 
 static __global__ void kernel_add_scaled(const matrix_view data,
@@ -616,7 +631,7 @@ void kernel::matrix::add_scaled(::matrix& mat,
                 (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_add_scaled<<<blocks, threads_per_block, 0,
-                        from_kernel_stream(stream)>>>(mat, other, factor);
+                        get_kernel_stream(stream)>>>(mat, other, factor);
 }
 
 static __global__ void kernel_add_value(const matrix_view data,
@@ -636,7 +651,7 @@ void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_add_value<<<blocks, threads_per_block, 0,
-                       from_kernel_stream(stream)>>>(mat, value);
+                       get_kernel_stream(stream)>>>(mat, value);
 }
 
 __global__ void kernel_softmax(matrix_view data) {
@@ -697,7 +712,7 @@ void kernel::matrix::softmax(::matrix& mat, kernel_stream_t stream) {
     const size_t shared_mem_size = threads_per_block * sizeof(float);
 
     kernel_softmax<<<blocks, threads_per_block, shared_mem_size,
-                     from_kernel_stream(stream)>>>(mat);
+                     get_kernel_stream(stream)>>>(mat);
 }
 
 static __global__ void kernel_backprop_softmax(
@@ -738,7 +753,7 @@ static __global__ void kernel_backprop_softmax(
         = (gradient.rows + threads_per_block - 1) / threads_per_block;
 
     kernel_backprop_softmax<<<blocks, threads_per_block, 0,
-                              from_kernel_stream(stream)>>>(output, gradient,
+                              get_kernel_stream(stream)>>>(output, gradient,
                                                             softmax_gradient);
 
     return softmax_gradient;
@@ -763,7 +778,7 @@ void kernel::matrix::mask_upper_triangle(::matrix& mat,
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     kernel_mask_upper_triangle<<<blocks, threads_per_block, 0,
-                                 from_kernel_stream(stream)>>>(mat, mask_value);
+                                 get_kernel_stream(stream)>>>(mat, mask_value);
 }
 
 __global__ void matrixDotProductKernel(float* A,
@@ -795,8 +810,8 @@ matrix kernel::matrix::dot_product(const ::matrix& a,
                                    kernel_stream_t stream) {
     ::matrix result(a.rows, b.cols);
     auto handle = matmul_handle_pool.acquire();
-    cublasSetStream(from_matmul_handle(handle), from_kernel_stream(stream));
-    cublasSdot(from_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data,
+    cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
+    cublasSdot(get_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data,
                1, result.data);
     return result;
 }
@@ -810,8 +825,8 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(from_matmul_handle(handle), from_kernel_stream(stream));
-    cublasSgemm(from_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_N, a.rows,
+    cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_N, a.rows,
                 b.cols, a.cols, &alpha, a.data, a.stride, b.data, b.stride,
                 &beta, result.data_ptr(), result.stride);
     CHECK_ERRORS("cross_multiplied");
@@ -828,8 +843,8 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(from_matmul_handle(handle), from_kernel_stream(stream));
-    cublasSgemm(from_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_T, a.rows,
+    cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_T, a.rows,
                 b.rows, a.cols, &alpha, a.data, a.stride, b.data, b.stride,
                 &beta, result.data_ptr(), result.stride);
     CHECK_ERRORS("cross_t_multiplied");
@@ -846,8 +861,8 @@ matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    cublasSetStream(from_matmul_handle(handle), from_kernel_stream(stream));
-    cublasSgemm(from_matmul_handle(handle), CUBLAS_OP_T, CUBLAS_OP_N, a.cols,
+    cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_T, CUBLAS_OP_N, a.cols,
                 b.cols, a.rows, &alpha, a.data, a.stride, b.data, b.stride,
                 &beta, result.data, result.stride);
     CHECK_ERRORS("t_cross_multiplied");
@@ -875,7 +890,7 @@ void kernel::matrix::element_wise_multiply(::matrix& a,
                       (a.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     element_wise_multiply_kernel<<<blocks, threads_per_block, 0,
-                                   from_kernel_stream(stream)>>>(a, b);
+                                   get_kernel_stream(stream)>>>(a, b);
 }
 
 __global__ void compare(const float* a,
@@ -908,19 +923,16 @@ bool kernel::matrix::is_equal(const ::matrix& a,
         return false;
     }
 
-    bool* d_result;
-    cudaMalloc(&d_result, sizeof(bool));
-    cudaMemsetAsync(d_result, 1, sizeof(bool), from_kernel_stream(stream));
+    bool* d_result = global_gpu_bool_pool.acquire();
+    cudaMemsetAsync(d_result, 1, sizeof(bool), get_kernel_stream(stream));
 
     compare<<<(a.rows * a.cols + 255) / 256, 256, 0,
-              from_kernel_stream(stream)>>>(a.data, b.data, a.stride, b.stride,
+              get_kernel_stream(stream)>>>(a.data, b.data, a.stride, b.stride,
                                             a.rows, a.cols, epsilon, d_result);
 
     bool h_result;
     cudaMemcpyAsync(&h_result, d_result, sizeof(bool), cudaMemcpyDeviceToHost,
-                    from_kernel_stream(stream));
-    cudaStreamSynchronize(from_kernel_stream(stream));
-    cudaFree(d_result);
-
+                    get_kernel_stream(stream));
+    cudaStreamSynchronize(get_kernel_stream(stream));
     return h_result;
 }

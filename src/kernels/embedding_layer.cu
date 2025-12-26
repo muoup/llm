@@ -39,5 +39,5 @@ void kernel::embedding::positional_encoding(::matrix& input, kernel_stream_t str
     const dim3 gridSize((input.rows + blockSize.x - 1) / blockSize.x,
                         (input.cols / 2 + blockSize.y - 1) / blockSize.y);
 
-    positional_encoding_kernel<<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input);
+    positional_encoding_kernel<<<gridSize, blockSize, 0, get_kernel_stream(stream)>>>(input);
 }

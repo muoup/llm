@@ -8,6 +8,8 @@ namespace kernel {
     using kernel_stream_t = void*;
     using matmul_handle_t = void*;
     
+    using float_device_ptr_t = void*;
+    
     kernel_stream_t create_kernel_stream();
     void destroy_kernel_stream(kernel_stream_t stream);
     
