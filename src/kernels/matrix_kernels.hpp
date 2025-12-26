@@ -27,7 +27,10 @@ void store_from(const ::matrix &matrix, float *buffer,
 void randomize(::matrix &matrix, const float min, const float max,
                kernel_stream_t stream = nullptr);
 
-float *allocate_buffer(const size_t size);
+::matrix async_allocate(const size_t rows, const size_t cols,
+                         kernel_stream_t stream = nullptr);
+
+float *allocate_buffer(const size_t size, kernel_stream_t stream = nullptr);
 void free_buffer(float *buffer);
 
 float sum(const ::matrix &mat, kernel_stream_t stream = nullptr);

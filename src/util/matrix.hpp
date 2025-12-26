@@ -27,6 +27,14 @@
 struct const_matrix_view;
 struct matrix_view;
 
+constexpr size_t calculate_stride(const size_t i) {
+    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
+    // to or Greater Than i
+    constexpr size_t alignment = 256 / sizeof(float);
+
+    return ((i + alignment - 1) / alignment) * alignment;
+}
+
 struct matrix {
     std::uint64_t rows, cols, stride;
 

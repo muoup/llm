@@ -9,14 +9,6 @@
 #include <sstream>
 #include <utility>
 
-static constexpr size_t calculate_stride(const size_t i) {
-    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
-    // to or Greater Than i
-    constexpr size_t alignment = 256 / sizeof(float);
-
-    return ((i + alignment - 1) / alignment) * alignment;
-}
-
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
     if (this->buffer_size() > 0) {
