@@ -84,7 +84,6 @@ struct matrix {
                                 const size_t slice_cols) const;
 
     matrix& softmax();
-    matrix backprop_softmax(const matrix& output_gradient) const;
 
     matrix& mask_upper_triangular(float mask_value
                                   = -std::numeric_limits<float>::infinity());

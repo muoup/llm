@@ -57,50 +57,6 @@ struct CurandGenerator {
 
 static CurandGenerator global_curand_generator;
 
-void cleanup_cublas();
-
-struct cublas_handle {
-    cublasHandle_t handle;
-    bool initialized = false;
-
-    // The linker does not seem to like this function having undefined behaviour
-    // checks.
-    __attribute__((no_sanitize("address"), no_sanitize("undefined")))
-    cublas_handle() {}
-
-    void initialize() {
-        auto status = cublasCreate(&handle);
-
-        if (status != CUBLAS_STATUS_SUCCESS) {
-            std::puts("Failed to create cuBLAS handle");
-            std::printf("Error Code: %d\n", status);
-            std::fflush(stdout);
-            std::exit(1);
-        }
-
-        initialized = true;
-    }
-
-    ~cublas_handle() { cublasDestroy(handle); }
-    operator cublasHandle_t() {
-        if (!initialized) {
-            initialize();
-        }
-
-        return handle;
-    }
-};
-
-static cublas_handle handle;
-
-__global__ void test_print() {
-    printf("Hello from CUDA kernel!\n");
-}
-
-void kernel::matrix::test_print(kernel_stream_t stream) {
-    ::test_print<<<1, 1, 0, get_kernel_stream(stream)>>>();
-}
-
 void kernel::matrix::check_errors(const char* step) {
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -619,8 +575,9 @@ void kernel::matrix::add(::matrix& mat,
                         get_kernel_stream(stream)>>>(mat, offset);
 }
 
-static __global__ void matrix_atomic_add_matrix(const matrix_view data,
-                                                const const_matrix_view offset) {
+static __global__ void matrix_atomic_add_matrix(
+    const matrix_view data,
+    const const_matrix_view offset) {
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -752,40 +709,46 @@ static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
     const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t row = blockIdx.x;
 
-    if (row < softmax_output.rows) {
-        float s_dot = 0.0f;
+    if (row >= softmax_output.rows)
+        return;
 
-        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
-            float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(output_gradient, row, col);
-            s_dot += s_j * g_j;
-        }
+    float local_dot = 0.0f;
+    for (size_t col = threadIdx.x; col < softmax_output.cols;
+         col += blockDim.x) {
+        float s_j = kernel::matrix::device_get(softmax_output, row, col);
+        float g_j = kernel::matrix::device_get(output_gradient, row, col);
+        local_dot += s_j * g_j;
+    }
+    float row_dot = kernel::matrix::device::block_reduce_sum(local_dot);
 
-        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
-            float s_j = kernel::matrix::device_get(softmax_output, row, col);
-            float g_j = kernel::matrix::device_get(output_gradient, row, col);
-            kernel::matrix::device_set(softmax_gradient, row, col,
-                                       s_j * (g_j - s_dot));
-        }
+    __shared__ float shared_dot;
+    if (threadIdx.x == 0) {
+        shared_dot = row_dot;
+    }
+    __syncthreads();
+    row_dot = shared_dot;
+
+    for (size_t col = threadIdx.x; col < softmax_gradient.cols;
+         col += blockDim.x) {
+        float s_j = kernel::matrix::device_get(softmax_output, row, col);
+        float g_j = kernel::matrix::device_get(output_gradient, row, col);
+        kernel::matrix::device_set(softmax_gradient, row, col,
+                                   s_j * (g_j - row_dot));
     }
 }
 
-::matrix kernel::matrix::backprop_softmax(const ::matrix& output,
-                                          const ::matrix& gradient,
-                                          kernel_stream_t stream) {
-    ::matrix softmax_gradient(gradient.rows, gradient.cols);
-
+void kernel::matrix::backprop_softmax(::matrix& buffer,
+                                      const ::matrix& output,
+                                      const ::matrix& gradient,
+                                      kernel_stream_t stream) {
     const size_t threads_per_block = 256;
-    const size_t blocks
-        = (gradient.rows + threads_per_block - 1) / threads_per_block;
+    const size_t blocks = gradient.rows;
 
     kernel_backprop_softmax<<<blocks, threads_per_block, 0,
                               get_kernel_stream(stream)>>>(output, gradient,
-                                                           softmax_gradient);
-
-    return softmax_gradient;
+                                                           buffer);
 }
 
 void __global__ kernel_mask_upper_triangle(const matrix_view data,

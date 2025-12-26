@@ -225,9 +225,6 @@ matrix& matrix::softmax() {
     return *this;
 }
 
-matrix matrix::backprop_softmax(const matrix& output_gradient) const {
-    return kernel::matrix::backprop_softmax(*this, output_gradient);
-}
 
 matrix& matrix::mask_upper_triangular(const float mask_value) {
     kernel::matrix::mask_upper_triangle(*this, mask_value);

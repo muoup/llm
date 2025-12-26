@@ -88,7 +88,6 @@ inline __device__ float warp_reduce_sum(float val) {
   for (int offset = 16; offset > 0; offset /= 2)
     val += __shfl_down_sync(0xffffffff, val, offset);
 
-  __syncthreads();
   return val;
 }
 
@@ -96,7 +95,6 @@ inline __device__ float warp_reduce_max(float val) {
   for (int offset = 16; offset > 0; offset /= 2)
     val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
 
-  __syncthreads();
   return val;
 }
 

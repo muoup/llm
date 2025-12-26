@@ -64,20 +64,21 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const matrix& activation_output = result.outputs[2];
     const matrix& post_layer_gradient = gradients[0];
 
-    matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
+    matrix b2_gradient
+        = kernel::feed_forward::sum_columns(post_layer_gradient, streams[0]);
     matrix w2_gradient
-        = activation_output.t_cross_multiplied(post_layer_gradient);
-    const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
+        = kernel::matrix::t_cross_multiplied(activation_output, post_layer_gradient, streams[0]);
+    const matrix a1_gradient = kernel::matrix::cross_t_multiplied(post_layer_gradient, w2, streams[0]);
 
     matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
-        activation_input, a1_gradient);
+        activation_input, a1_gradient, streams[0]);
 
-    matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
-    matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
-    auto input_gradient = z1_gradient.cross_t_multiplied(w1);
+    matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient, streams[0]);
+    matrix w1_gradient = kernel::matrix::t_cross_multiplied(layer_input, z1_gradient, streams[0]);
+    auto input_gradient = kernel::matrix::cross_t_multiplied(z1_gradient, w1, streams[0]);
 
     kernel::optimizer::regularize_weight_gradient(w1_gradient, w1, streams[0]);
-    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2, streams[1]);
+    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2, streams[0]);
 
     LOG_DEBUG("  FF Layer Gradients:");
     LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
@@ -85,10 +86,14 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate, streams[0]);
-    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate, streams[1]);
-    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate, streams[2]);
-    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate, streams[3]);
+    kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate,
+                                               streams[0]);
+    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate,
+                                               streams[0]);
+    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate,
+                                               streams[0]);
+    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate,
+                                               streams[0]);
     kernel::optimizer::norm_clip(input_gradient);
 
     return matrix::construct_vec(input_gradient);

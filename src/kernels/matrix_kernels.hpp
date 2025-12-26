@@ -11,7 +11,6 @@
 
 namespace kernel::matrix {
 
-void test_print(kernel_stream_t stream = nullptr);
 void check_errors(const char *step);
 
 float get(const ::matrix &mat, const size_t row, const size_t col,
@@ -68,7 +67,7 @@ void add_scaled(::matrix &mat, const ::matrix &other, const float factor,
 void scale(::matrix &mat, float factor, kernel_stream_t stream = nullptr);
 
 void softmax(::matrix &mat, kernel_stream_t stream = nullptr);
-::matrix backprop_softmax(const ::matrix &output, const ::matrix &gradient,
+void backprop_softmax(::matrix &buffer, const ::matrix &output, const ::matrix &gradient,
                           kernel_stream_t stream = nullptr);
 
 void mask_upper_triangle(::matrix &mat, const float mask_value,

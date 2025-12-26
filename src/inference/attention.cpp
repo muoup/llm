@@ -118,8 +118,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns[2 + h * 4 + 3] = std::move(scores);
     }
 
-    kernel::optimizer::wait_for_operations();
-
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];
 
@@ -165,6 +163,8 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
     matrix input_gradient
         = kernel::matrix::async_allocate(layer_input.rows, layer_input.cols);
+    matrix raw_scores_gradient
+        = kernel::matrix::async_allocate(layer_input.rows, layer_input.rows);
 
     for (size_t h = 0; h < head_count; ++h) {
         const matrix& q = result.outputs[2 + h * 4 + 0];
@@ -183,8 +183,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix scores_gradient = kernel::matrix::cross_t_multiplied(
             attention_gradient, v, streams[head_stream_index + 0]);
 
-        matrix raw_scores_gradient = kernel::matrix::backprop_softmax(
-            scores, scores_gradient, streams[head_stream_index + 0]);
+        kernel::matrix::backprop_softmax(raw_scores_gradient, scores,
+                                         scores_gradient,
+                                         streams[head_stream_index + 0]);
 
         const float scale = 1.0f / std::sqrt(static_cast<float>(q.cols));
         kernel::matrix::scale(raw_scores_gradient, scale,
@@ -241,9 +242,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
                                                    learning_rate);
         kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
                                                    learning_rate);
-        
-        kernel::optimizer::wait_for_operations();
     }
+
+    kernel::optimizer::wait_for_operations();
 
     kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
     kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
