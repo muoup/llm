@@ -646,60 +646,34 @@ void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
 
 __global__ void kernel_softmax(matrix_view data) {
     extern __shared__ float shared_data[];
+    
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
-    const size_t cols = data.cols;
-
-    if (row >= data.rows)
-        return;
-
-    float local_max = -CUDART_INF_F;
-    for (size_t j = tid; j < cols; j += blockDim.x) {
-        local_max = fmaxf(local_max, kernel::matrix::device_get(data, row, j));
+    
+    if (tid == 0) {
+        shared_data[row] = 0.0f;
     }
-
-    shared_data[tid] = local_max;
     __syncthreads();
-
-    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_data[tid] = fmaxf(shared_data[tid], shared_data[tid + s]);
-        }
-        __syncthreads();
+    
+    for (size_t col = tid; col < data.cols; col += blockDim.x) {
+        float val = kernel::matrix::device_get(data, row, col);
+        float exp = __expf(val);
+        
+        kernel::matrix::device_set(data, row, col, exp);
+        atomicAdd(&shared_data[row], exp);
     }
-    float max_val = shared_data[0];
     __syncthreads();
-
-    float local_sum = 0.0f;
-    for (size_t j = tid; j < cols; j += blockDim.x) {
-        float exp_val
-            = expf(kernel::matrix::device_get(data, row, j) - max_val);
-        kernel::matrix::device_set(data, row, j, exp_val);
-        local_sum += exp_val;
-    }
-
-    shared_data[tid] = local_sum;
-    __syncthreads();
-
-    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_data[tid] += shared_data[tid + s];
-        }
-        __syncthreads();
-    }
-    float sum_exp = shared_data[0];
-    __syncthreads();
-
-    for (size_t j = tid; j < cols; j += blockDim.x) {
-        float val = kernel::matrix::device_get(data, row, j);
-        kernel::matrix::device_set(data, row, j, val / sum_exp);
+    
+    for (size_t col = tid; col < data.cols; col += blockDim.x) {
+        float exp = kernel::matrix::device_get(data, row, col);
+        kernel::matrix::device_set(data, row, col, exp / shared_data[row]);
     }
 }
 
 void kernel::matrix::softmax(::matrix& mat, kernel_stream_t stream) {
-    const size_t threads_per_block = 256;
-    const size_t blocks = mat.rows;
-    const size_t shared_mem_size = threads_per_block * sizeof(float);
+    const dim3 threads_per_block = 256;
+    const dim3 blocks = mat.rows;
+    const size_t shared_mem_size = mat.rows * sizeof(float);
 
     kernel_softmax<<<blocks, threads_per_block, shared_mem_size,
                      get_kernel_stream(stream)>>>(mat);
@@ -771,28 +745,6 @@ void kernel::matrix::mask_upper_triangle(::matrix& mat,
 
     kernel_mask_upper_triangle<<<blocks, threads_per_block, 0,
                                  get_kernel_stream(stream)>>>(mat, mask_value);
-}
-
-__global__ void matrixDotProductKernel(float* A,
-                                       float* B,
-                                       float* C,
-                                       int stride_a,
-                                       int stride_b,
-                                       int stride_c,
-                                       int M,
-                                       int N,
-                                       int K) {
-    // Calculate global row and column indices for the current thread
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (row < M && col < N) {
-        float sum = 0.0f;
-        for (int i = 0; i < K; ++i) {
-            sum += A[row + i * stride_a] * B[i + col * stride_b];
-        }
-        C[row + col * stride_c] = sum;
-    }
 }
 
 static kernel::MatmulHandlePool<8> matmul_handle_pool;
