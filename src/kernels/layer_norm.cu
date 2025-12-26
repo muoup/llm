@@ -5,56 +5,63 @@
 #include <inference/layer_normalize.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/matrix_kernels.hpp>
+#include <kernels/optimizer.hpp>
 
-__global__ void layer_norm_fused_forward_kernel(
-    const const_matrix_view input,
-    const const_matrix_view gamma,
-    const const_matrix_view beta,
-    matrix_view normalized_output,
-    matrix_view mean_out,
-    matrix_view inv_var_out,
-    float epsilon) {
-    
-    int row = blockIdx.x;
-    int tid = threadIdx.x;
-    int cols = input.cols;
+static __global__ void row_mean(const const_matrix_view input,
+                         const matrix_view mean) {
+    size_t row_idx = blockIdx.x;
 
-    float local_sum = 0.0f;
-    for (int col = tid; col < cols; col += blockDim.x) {
-        local_sum += kernel::matrix::device_get(input, row, col);
+    float* sum = kernel::matrix::device_get_addr(mean, row_idx, 0);
+    *sum = 0.0f;
+
+    for (size_t j = 0; j < input.cols; ++j) {
+        *sum += kernel::matrix::device_get(input, row_idx, j);
     }
-    
-    float row_sum = kernel::matrix::device::block_reduce_sum(local_sum);
-    __shared__ float shared_mean;
-    if (tid == 0) shared_mean = row_sum / cols;
-    __syncthreads();
-    
-    float row_mean = shared_mean;
 
-    float local_var_sum = 0.0f;
-    for (int col = tid; col < cols; col += blockDim.x) {
-        float val = kernel::matrix::device_get(input, row, col);
-        float diff = val - row_mean;
-        local_var_sum += diff * diff;
-    }
-    float row_var_sum = kernel::matrix::device::block_reduce_sum(local_var_sum);
-    
-    __shared__ float shared_inv_std;
-    if (tid == 0) {
-        float row_var = row_var_sum / cols;
-        shared_inv_std = 1.0f / sqrtf(row_var + epsilon);
-        kernel::matrix::device_set(mean_out, row, 0, row_mean);
-        kernel::matrix::device_set(inv_var_out, row, 0, shared_inv_std);
-    }
-    __syncthreads();
-    float inv_std = shared_inv_std;
+    *sum /= static_cast<float>(input.cols);
+}
 
-    for (int col = tid; col < cols; col += blockDim.x) {
-        float val = kernel::matrix::device_get(input, row, col);
-        float g = kernel::matrix::device_get(gamma, 0, col);
-        float b = kernel::matrix::device_get(beta, 0, col);
-        float norm = (val - row_mean) * inv_std;
-        kernel::matrix::device_set(normalized_output, row, col, norm * g + b);
+static __global__ void row_inv_variance(const const_matrix_view input,
+                                 const const_matrix_view mean,
+                                 const matrix_view inv_variance,
+                                 float epsilon) {
+    size_t row_idx = blockIdx.x;
+
+    float row_mean = kernel::matrix::device_get(mean, row_idx, 0);
+    float variance = 0.0f;
+
+    for (size_t col = 0; col < input.cols; ++col) {
+        float diff = kernel::matrix::device_get(input, row_idx, col) - row_mean;
+        variance += diff * diff;
+    }
+
+    variance /= static_cast<float>(input.cols);
+    // std::printf("Mean: %f | Variance: %f\n", row_mean, variance);
+    
+    kernel::matrix::device_set(inv_variance, row_idx, 0,
+                               1.0f / sqrtf(variance + epsilon));
+}
+
+static __global__ void normalize_and_scale(const const_matrix_view input,
+                                    const const_matrix_view mean,
+                                    const const_matrix_view inv_variance,
+                                    const const_matrix_view gamma,
+                                    const const_matrix_view beta,
+                                    matrix_view normalized_input) {
+    const size_t row = blockIdx.y * blockDim.y + threadIdx.y;
+    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (col < normalized_input.cols && row < normalized_input.rows) {
+        float input_val = kernel::matrix::device_get(input, row, col);
+        float inv_variance_val
+            = kernel::matrix::device_get(inv_variance, row, 0);
+        float gamma_val = kernel::matrix::device_get(gamma, 0, col);
+        float beta_val = kernel::matrix::device_get(beta, 0, col);
+        float row_mean = kernel::matrix::device_get(mean, row, 0);
+
+        float normalized = (input_val - row_mean) * inv_variance_val;
+        float scaled = normalized * gamma_val + beta_val;
+        kernel::matrix::device_set(normalized_input, row, col, scaled);
     }
 }
 
@@ -67,9 +74,20 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     ::matrix mean(input.rows, 1);
     ::matrix inv_variance(input.rows, 1);
 
-    const size_t threads_per_block = 256;
-    layer_norm_fused_forward_kernel<<<input.rows, threads_per_block>>>(
-        input, gamma, beta, normalized_input, mean, inv_variance, epsilon);
+    row_mean<<<input.rows, 1>>>(input, mean);
+    kernel::optimizer::wait_for_operations();
+
+    row_inv_variance<<<input.rows, 1>>>(input, mean, inv_variance, epsilon);
+    kernel::optimizer::wait_for_operations();
+
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (input.cols + threads_per_block.x - 1) / threads_per_block.x,
+        (input.rows + threads_per_block.y - 1) / threads_per_block.y);
+
+    normalize_and_scale<<<blocks, threads_per_block>>>(
+        input, mean, inv_variance, gamma, beta, normalized_input);
+    kernel::optimizer::wait_for_operations();
 
     return { .normalized = std::move(normalized_input),
              .mean = std::move(mean),

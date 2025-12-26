@@ -15,7 +15,8 @@
 #include <float.h>
 
 static cudaStream_t s_from_stream(kernel::matrix::kernel_stream_t stream) {
-    return static_cast<cudaStream_t>(stream);
+    return nullptr;
+    // return static_cast<cudaStream_t>(stream);
 }
 
 struct CurandGenerator {
@@ -49,7 +50,7 @@ void cleanup_cublas();
 struct cuBlasHandlePool {
     cublasHandle_t get_handle() {
         static thread_local cublasHandle_t handle = nullptr;
-        
+
         if (handle == nullptr) {
             auto status = cublasCreate(&handle);
 
@@ -243,29 +244,22 @@ matrix kernel::matrix::clone(const ::const_matrix_view other) {
     return result;
 }
 
-__global__ void kernel_set_all(float* data,
-                               const size_t stride,
-                               const size_t rows,
-                               const size_t cols,
-                               float value) {
-    const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+__global__ void kernel_set_all(const matrix_view matrix, float value) {
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        kernel::matrix::device_set(data, stride, row, col, value);
+    if (row < matrix.rows && col < matrix.cols) {
+        kernel::matrix::device_set(matrix, row, col, value);
     }
 }
 
 void kernel::matrix::set_all(::matrix& mat, float value) {
-    const size_t total_size = mat.rows * mat.cols;
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (total_size + threads_per_block - 1) / threads_per_block;
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks(
+        (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_set_all<<<blocks, threads_per_block>>>(mat.data, mat.stride,
-                                                  mat.rows, mat.cols, value);
+    kernel_set_all<<<blocks, threads_per_block>>>(mat, value);
 }
 
 __device__ float kernel_fadd(float a, float b) {
@@ -642,66 +636,87 @@ void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
 }
 
 __global__ void kernel_softmax(matrix_view data) {
-    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ float shared_data[];
+    const size_t row = blockIdx.x;
+    const size_t tid = threadIdx.x;
+    const size_t cols = data.cols;
 
-    float max_value = -CUDART_INF_F;
+    if (row >= data.rows)
+        return;
 
-    for (size_t col = 0, cols = data.cols; col < cols; ++col) {
-        float val = kernel::matrix::device_get(data, row, col);
-        max_value = fmaxf(max_value, val);
+    float local_max = -CUDART_INF_F;
+    for (size_t j = tid; j < cols; j += blockDim.x) {
+        local_max = fmaxf(local_max, kernel::matrix::device_get(data, row, j));
     }
 
-    float denominator = 0.0f;
-    for (size_t col = 0, cols = data.cols; col < cols; ++col) {
-        float val = kernel::matrix::device_get(data, row, col);
-        denominator += expf(val - max_value);
+    shared_data[tid] = local_max;
+    __syncthreads();
+
+    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            shared_data[tid] = fmaxf(shared_data[tid], shared_data[tid + s]);
+        }
+        __syncthreads();
+    }
+    float max_val = shared_data[0];
+    __syncthreads();
+
+    float local_sum = 0.0f;
+    for (size_t j = tid; j < cols; j += blockDim.x) {
+        float exp_val
+            = expf(kernel::matrix::device_get(data, row, j) - max_val);
+        kernel::matrix::device_set(data, row, j, exp_val);
+        local_sum += exp_val;
     }
 
-    for (size_t col = 0, cols = data.cols; col < cols; ++col) {
-        float val = kernel::matrix::device_get(data, row, col);
-        float softmaxed = expf(val - max_value) / denominator;
-        kernel::matrix::device_set(data, row, col, softmaxed);
+    shared_data[tid] = local_sum;
+    __syncthreads();
+
+    for (size_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            shared_data[tid] += shared_data[tid + s];
+        }
+        __syncthreads();
+    }
+    float sum_exp = shared_data[0];
+    __syncthreads();
+
+    for (size_t j = tid; j < cols; j += blockDim.x) {
+        float val = kernel::matrix::device_get(data, row, j);
+        kernel::matrix::device_set(data, row, j, val / sum_exp);
     }
 }
 
 void kernel::matrix::softmax(::matrix& mat, kernel_stream_t stream) {
     const size_t threads_per_block = 256;
-    const size_t blocks
-        = (mat.rows + threads_per_block - 1) / threads_per_block;
+    const size_t blocks = mat.rows;
+    const size_t shared_mem_size = threads_per_block * sizeof(float);
 
-    kernel_softmax<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(
-        mat);
+    kernel_softmax<<<blocks, threads_per_block, shared_mem_size,
+                     s_from_stream(stream)>>>(mat);
 }
 
 static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
     const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-    const size_t row = blockIdx.x;
-    const size_t tid = threadIdx.x;
-    const size_t cols = softmax_gradient.cols;
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row >= softmax_output.rows)
-        return;
+    if (row < softmax_output.rows) {
+        float s_dot = 0.0f;
 
-    float local_s_dot = 0.0f;
-    for (size_t col = tid; col < cols; col += blockDim.x) {
-        float s_j = kernel::matrix::device_get(softmax_output, row, col);
-        float g_j = kernel::matrix::device_get(output_gradient, row, col);
-        local_s_dot += s_j * g_j;
-    }
+        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
+            float s_j = kernel::matrix::device_get(softmax_output, row, col);
+            float g_j = kernel::matrix::device_get(output_gradient, row, col);
+            s_dot += s_j * g_j;
+        }
 
-    float s_dot = kernel::matrix::device::block_reduce_sum(local_s_dot);
-    __shared__ float shared_s_dot;
-    if (tid == 0)
-        shared_s_dot = s_dot;
-    __syncthreads();
-
-    for (size_t col = tid; col < cols; col += blockDim.x) {
-        float s_j = kernel::matrix::device_get(softmax_output, row, col);
-        float g_j = kernel::matrix::device_get(output_gradient, row, col);
-        kernel::matrix::device_set(softmax_gradient, row, col,
-                                   s_j * (g_j - shared_s_dot));
+        for (size_t col = 0; col < softmax_gradient.cols; ++col) {
+            float s_j = kernel::matrix::device_get(softmax_output, row, col);
+            float g_j = kernel::matrix::device_get(output_gradient, row, col);
+            kernel::matrix::device_set(softmax_gradient, row, col,
+                                       s_j * (g_j - s_dot));
+        }
     }
 }
 
@@ -711,9 +726,11 @@ static __global__ void kernel_backprop_softmax(
     ::matrix softmax_gradient(gradient.rows, gradient.cols);
 
     const size_t threads_per_block = 256;
-    kernel_backprop_softmax<<<gradient.rows, threads_per_block, 0,
-                              s_from_stream(stream)>>>(output, gradient,
-                                                       softmax_gradient);
+    const size_t blocks
+        = (gradient.rows + threads_per_block - 1) / threads_per_block;
+
+    kernel_backprop_softmax<<<blocks, threads_per_block>>>(output, gradient,
+                                                           softmax_gradient);
 
     return softmax_gradient;
 }
@@ -736,8 +753,7 @@ void kernel::matrix::mask_upper_triangle(::matrix& mat,
         (mat.rows + threads_per_block.x - 1) / threads_per_block.x,
         (mat.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel_mask_upper_triangle<<<blocks, threads_per_block, 0,
-                                 s_from_stream(stream)>>>(mat, mask_value);
+    kernel_mask_upper_triangle<<<blocks, threads_per_block, 0, s_from_stream(stream)>>>(mat, mask_value);
 }
 
 matrix kernel::matrix::dot_product(const ::matrix& a, const ::matrix& b) {
@@ -777,7 +793,7 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
 
 matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
                                           const ::const_matrix_view b,
-                                          kernel_stream_t matmul_handle) {
+                                          kernel_stream_t kernel_stream) {
     ::matrix result
         = ::matrix(a.rows, b.rows);  // kernel::matrix::async_create(a.rows,
                                      // b.rows, matmul_handle.stream);
@@ -786,7 +802,7 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
 
     auto handle = cublas_handle_pool.get_handle();
 
-    cublasSetStream(handle, s_from_stream(matmul_handle));
+    cublasSetStream(handle, s_from_stream(kernel_stream));
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, a.rows, b.rows, a.cols,
                 &alpha, a.data, a.stride, b.data, b.stride, &beta,
                 result.data_ptr(), result.stride);

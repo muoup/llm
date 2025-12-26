@@ -52,8 +52,9 @@ void matrix::leaky_kaiming_randomize() {
 
     float n_in = static_cast<float>(this->rows);
     float stddev = std::sqrt(2.0f / ((1 + negative_slope) * n_in));
+    float bound = std::sqrt(3.0f) * stddev;
 
-    kernel::matrix::randomize(*this, -stddev, stddev);
+    kernel::matrix::randomize(*this, -bound, bound);
 }
 
 void matrix::xavier_randomize() {

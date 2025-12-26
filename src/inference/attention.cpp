@@ -83,12 +83,10 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns.emplace_back();  // scores
     }
 
-    kernel::optimizer::wait_for_operations();
-
 #pragma omp parallel for
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
-        size_t stream_offset = h * STREAMS_PER_HEAD;
+        const size_t stream_offset = h * STREAMS_PER_HEAD;
 
         matrix q = kernel::matrix::cross_multiplied(input, head.wq,
                                                     streams[stream_offset + 0]);
@@ -110,7 +108,7 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
 
         if (masked) {
             kernel::matrix::mask_upper_triangle(
-                scores, std::numeric_limits<float>::lowest(),
+                scores, -std::numeric_limits<float>::infinity(),
                 streams[stream_offset + 0]);
             kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
         }
@@ -118,8 +116,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         kernel::matrix::softmax(scores, streams[stream_offset + 0]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
 
-        float abs_max = kernel::matrix::absmax(scores);
-        kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
         matrix weighted_sum = kernel::matrix::cross_multiplied(
             scores, v, streams[stream_offset + 0]);
         kernel::optimizer::wait_for_streams(streams[stream_offset + 0]);
@@ -193,9 +189,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         post_layer_gradient, wo, streams[1]);
     matrix input_gradient(layer_input.rows, layer_input.cols);
     kernel::optimizer::wait_for_streams(streams[0], streams[1]);
-
-    kernel::optimizer::norm_clip(wo_gradient);
-    kernel::optimizer::wait_for_operations();
     
     kernel::optimizer::adjust_regularize_parameter_matrix(wo_gradient, wo,
                                                           learning_rate);
