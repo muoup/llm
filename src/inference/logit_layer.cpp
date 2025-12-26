@@ -50,7 +50,6 @@ std::pair<matrix, float> LogitLayer::backpropogate(
         = loss_result.logit_loss_gradient.cross_t_multiplied(w);
     matrix logit_weight_gradient
         = input.t_cross_multiplied(loss_result.logit_loss_gradient);
-    kernel::optimizer::norm_clip(h_final_gradient);
     kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  Logit Layer Gradients:");

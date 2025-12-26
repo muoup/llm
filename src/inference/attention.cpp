@@ -152,7 +152,6 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
     matrix& concatenated_heads = returns[1];
 
     final_output = concatenated_heads.cross_multiplied(wo);
-    kernel::optimizer::norm_clip(final_output);
 
     LOG_DEBUG("  Attention Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -295,7 +294,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         kernel::matrix::add(input_gradient, grad);
     }
 
-    kernel::optimizer::norm_clip(input_gradient);
     return matrix::construct_vec(input_gradient);
 }
 

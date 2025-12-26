@@ -37,7 +37,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("    output norm: %f", output.norm());
-    
+
     return output;
 }
 
@@ -47,15 +47,15 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     kernel::optimizer::wait_for_operations();
 
-    matrix scaled_x_gradient = x_gradient.clone();
-    scaled_x_gradient.scale(std::sqrt(static_cast<float>(get_dimensions())));
-
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        kernel::matrix::add_row_vector(embedding_gradient, token, scaled_x_gradient,
+        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient,
                                        t);
         kernel::optimizer::wait_for_operations();
     }
+
+    embedding_gradient.scale(
+        std::sqrt(static_cast<float>(this->get_dimensions())));
 
     LOG_DEBUG("  Embedding Layer Gradients:");
     LOG_DEBUG("    embedding_gradient norm: %f", embedding_gradient.norm());
@@ -70,5 +70,5 @@ void EmbeddingLayer::save(std::ostream& out) const {
 }
 
 EmbeddingLayer EmbeddingLayer::load(std::istream& in) {
-    return { matrix::load(in) };
+    return EmbeddingLayer(matrix::load(in));
 }
