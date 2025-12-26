@@ -103,8 +103,7 @@ __global__ void normalize_and_scale(const const_matrix_view input,
 
 kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     const ::matrix& input,
-    const ::matrix& gamma,
-    const ::matrix& beta,
+    const LayerNorm &layer,
     float epsilon,
     kernel_stream_t stream) {
     ::matrix normalized_input(input.rows, input.cols);
