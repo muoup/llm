@@ -229,11 +229,11 @@ std::vector<matrix> AttentionLayer::backpropogate(
         // Input gradient += q_input_gradient + k_input_gradient +
         // v_input_gradient Accumulated locally into q_input_gradient first to
         // minimize atomic operations
-        kernel::matrix::atomic_add(input_gradient, q_input_gradient,
+        kernel::matrix::add(input_gradient, q_input_gradient,
                                    streams[head_stream_index + 0]);
-        kernel::matrix::atomic_add(input_gradient, k_input_gradient,
+        kernel::matrix::add(input_gradient, k_input_gradient,
                                    streams[head_stream_index + 0]);
-        kernel::matrix::atomic_add(input_gradient, v_input_gradient,
+        kernel::matrix::add(input_gradient, v_input_gradient,
                                    streams[head_stream_index + 0]);
 
         kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
