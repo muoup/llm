@@ -19,7 +19,6 @@ void EmbeddingLayer::randomize(float min, float max) {
 
 matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     matrix output = matrix(tokens.size(), this->get_dimensions());
-    kernel::optimizer::wait_for_operations();
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         kernel::matrix::transfer_row(output, i, m_embeddings, tokens[i]);
@@ -31,10 +30,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
     LOG_DEBUG("  Embedding Layer Forward:");
     LOG_DEBUG("    output norm pre pos encoding: %f", output.norm());
 
-    kernel::optimizer::wait_for_operations();
     kernel::embedding::positional_encoding(output);
-    kernel::optimizer::wait_for_operations();
-
     LOG_DEBUG("    output norm: %f", output.norm());
 
     return output;

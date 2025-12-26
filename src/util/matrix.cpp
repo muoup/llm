@@ -1,6 +1,7 @@
 #include "matrix.hpp"
 
 #include <kernels/matrix_kernels.hpp>
+#include <kernels/scheduling.cuh>
 
 #include <cmath>
 #include <cstdlib>
@@ -88,19 +89,19 @@ matrix matrix::clone() const {
 }
 
 float matrix::sum() const {
-    return kernel::matrix::sum(*this);
+    return get_device_ptr(kernel::matrix::sum(*this));
 }
 
 float matrix::max() const {
-    return kernel::matrix::max(*this);
+    return get_device_ptr(kernel::matrix::max(*this));
 }
 
 float matrix::min() const {
-    return kernel::matrix::min(*this);
+    return get_device_ptr(kernel::matrix::min(*this));
 }
 
 float matrix::absmax() const {
-    return kernel::matrix::absmax(*this);
+    return get_device_ptr(kernel::matrix::absmax(*this));
 }
 
 matrix& matrix::set_all(float value) {
@@ -181,15 +182,15 @@ matrix& matrix::element_wise_multiply(const matrix& other) {
 }
 
 float matrix::abssum() const {
-    return kernel::matrix::abssum(*this);
+    return get_device_ptr(kernel::matrix::abssum(*this));
 }
 
 float matrix::variance() const {
-    return kernel::matrix::variance(*this);
+    return get_device_ptr(kernel::matrix::variance(*this));
 }
 
 float matrix::norm() const {
-    return std::sqrt(kernel::matrix::sum_of_squares(*this));
+    return std::sqrt(get_device_ptr(kernel::matrix::sum_of_squares(*this)));
 }
 
 float matrix::stddev() const {

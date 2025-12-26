@@ -68,7 +68,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& activation_input = result.outputs[1];
-    matrix activation_output = result.outputs[2].clone();
+    const matrix& activation_output = result.outputs[2].clone();
     const matrix& post_layer_gradient = gradients[0];
 
     kernel::optimizer::wait_for_operations();

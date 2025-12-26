@@ -33,13 +33,13 @@ void randomize(::matrix &matrix, const float min, const float max,
 float *allocate_buffer(const size_t size, kernel_stream_t stream = nullptr);
 void free_buffer(float *buffer);
 
-float sum(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float sum_of_squares(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float abssum(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float max(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float min(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float absmax(const ::matrix &mat, kernel_stream_t stream = nullptr);
-float variance(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t sum(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t sum_of_squares(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t abssum(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t max(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t min(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t absmax(const ::matrix &mat, kernel_stream_t stream = nullptr);
+float_device_ptr_t variance(const ::matrix &mat, kernel_stream_t stream = nullptr);
 
 ::matrix clone(const ::const_matrix_view mat, kernel_stream_t stream = nullptr);
 

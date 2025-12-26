@@ -1,7 +1,6 @@
-#include "kernels/optimizer.hpp"
+#include "matrix_kernels.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
-#include <kernels/matrix_kernels.hpp>
 #include <kernels/scheduling.cuh>
 #include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
@@ -338,12 +337,12 @@ static __global__ void matrix_reduce_kernel(const const_matrix_view data,
 
 template <__device__ float (*ElementReducer)(float, float),
           __device__ void (*AtomicReducer)(float*, float)>
-float run_reduction(const ::matrix& mat,
+kernel::float_device_ptr_t run_reduction(const ::matrix& mat,
                     float identity,
                     kernel::kernel_stream_t stream = nullptr) {
     float* reduction_result = global_gpu_float_pool.acquire();
-    cudaMemcpy(reduction_result, &identity, sizeof(float),
-               cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(reduction_result, &identity, sizeof(float),
+               cudaMemcpyHostToDevice, get_kernel_stream(stream));
 
     const size_t threads_per_block = 256;
     const size_t num_elements = mat.rows * mat.cols;
@@ -355,13 +354,10 @@ float run_reduction(const ::matrix& mat,
         <<<num_blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
             mat, reduction_result, identity);
 
-    float h_result;
-    cudaMemcpy(&h_result, reduction_result, sizeof(float),
-               cudaMemcpyDeviceToHost);
-    return h_result;
+    return (kernel::float_device_ptr_t) reduction_result;
 }
 
-float kernel::matrix::sum(const ::matrix& mat, kernel_stream_t stream) {
+kernel::float_device_ptr_t kernel::matrix::sum(const ::matrix& mat, kernel_stream_t stream) {
     return run_reduction<kernel_fadd, kernel_atomic_fadd>(mat, 0.0f, stream);
 }
 
@@ -369,7 +365,7 @@ __device__ float abs_val(float a, float b) {
     return a + fabsf(b);
 }
 
-float kernel::matrix::abssum(const ::matrix& mat, kernel_stream_t stream) {
+kernel::float_device_ptr_t kernel::matrix::abssum(const ::matrix& mat, kernel_stream_t stream) {
     return run_reduction<abs_val, kernel_atomic_fadd>(mat, 0.0f, stream);
 }
 
@@ -377,12 +373,12 @@ __device__ float square_val(float a, float b) {
     return a + b * b;
 }
 
-float kernel::matrix::sum_of_squares(const ::matrix& mat,
+kernel::float_device_ptr_t kernel::matrix::sum_of_squares(const ::matrix& mat,
                                      kernel_stream_t stream) {
     return run_reduction<square_val, kernel_atomic_fadd>(mat, 0.0f, stream);
 }
 
-float kernel::matrix::max(const ::matrix& mat, kernel_stream_t stream) {
+kernel::float_device_ptr_t kernel::matrix::max(const ::matrix& mat, kernel_stream_t stream) {
     return run_reduction<kernel_fmaxf, kernel_atomic_fmax>(
         mat, std::numeric_limits<float>::min(), stream);
 }
@@ -402,22 +398,32 @@ __device__ void kernel_atomic_fmin(float* addr, float val) {
     }
 }
 
-float kernel::matrix::min(const ::matrix& mat, kernel_stream_t stream) {
+kernel::float_device_ptr_t kernel::matrix::min(const ::matrix& mat, kernel_stream_t stream) {
     return run_reduction<kernel_fminf, kernel_atomic_fmin>(
         mat, std::numeric_limits<float>::max(), stream);
 }
 
-float kernel::matrix::absmax(const ::matrix& mat, kernel_stream_t stream) {
+kernel::float_device_ptr_t kernel::matrix::absmax(const ::matrix& mat, kernel_stream_t stream) {
     return run_reduction<individual_absmax, kernel_atomic_fmax>(mat, 0.0f,
                                                                 stream);
 }
 
-float kernel::matrix::variance(const ::matrix& mat, kernel_stream_t stream) {
-    float sum = kernel::matrix::sum(mat, stream);
-    float sum_of_squares = kernel::matrix::sum_of_squares(mat, stream);
+__global__ void variance_kernel(float* sum_ptr, float* sum_sq_ptr, float* result, size_t total_elements) {
+    float sum = *sum_ptr;
+    float sum_of_squares = *sum_sq_ptr;
+    float n = (float)total_elements;
+    *result = (sum_of_squares / n) - (sum * sum) / (n * n);
+}
 
-    return (sum_of_squares / (mat.rows * mat.cols))
-           - (sum * sum) / (mat.rows * mat.cols * mat.rows * mat.cols);
+kernel::float_device_ptr_t kernel::matrix::variance(const ::matrix& mat, kernel_stream_t stream) {
+    float_device_ptr_t sum_ptr = kernel::matrix::sum(mat, stream);
+    float_device_ptr_t sum_of_squares_ptr = kernel::matrix::sum_of_squares(mat, stream);
+
+    float* device_result = global_gpu_float_pool.acquire();
+
+    variance_kernel<<<1, 1, 0, get_kernel_stream(stream)>>>((float*)sum_ptr, (float*)sum_of_squares_ptr, device_result, mat.rows * mat.cols);
+
+    return (float_device_ptr_t)device_result;
 }
 
 __global__ void kernel_scale(float* data,
