@@ -54,7 +54,7 @@ let trainingChart = new Chart(ctx, {
                 display: true,
                 position: 'left',
                 beginAtZero: true,
-                suggestedMax: 25,
+                suggestedMax: 5,
                 grid: { color: '#334155' },
                 ticks: { color: '#94a3b8' },
                 title: { display: true, text: 'Loss', color: '#94a3b8' }
@@ -268,7 +268,9 @@ runBtn.addEventListener('click', async () => {
             '--tokenizer',
             document.getElementById('predict-tokenizer-select').value,
             '--length',
-            document.getElementById('predict-length').value
+            document.getElementById('predict-length').value,
+            '--temperature',
+            document.getElementById('predict-temperature').value
         ];
     } else if (activeView === 'train') {
         args = [

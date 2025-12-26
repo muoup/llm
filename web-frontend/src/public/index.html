@@ -1,367 +1,548 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Engine Control Panel</title>
-    <style>
-        :root {
-            --sidebar-width: 260px;
-            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-            --bg-dark: #0f172a;
-            --card-bg: #1e293b;
-            --sidebar-bg: #020617;
-            --text-main: #f8fafc;
-            --text-dim: #94a3b8;
-            --accent: #8b5cf6;
-            --danger: #ef4444;
-            --success: #22c55e;
-            --border: #334155;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>LLM Engine Control Panel</title>
+        <style>
+            :root {
+                --sidebar-width: 260px;
+                --primary-gradient: linear-gradient(
+                    135deg,
+                    #6366f1 0%,
+                    #a855f7 100%
+                );
+                --bg-dark: #0f172a;
+                --card-bg: #1e293b;
+                --sidebar-bg: #020617;
+                --text-main: #f8fafc;
+                --text-dim: #94a3b8;
+                --accent: #8b5cf6;
+                --danger: #ef4444;
+                --success: #22c55e;
+                --border: #334155;
+            }
 
-        body { 
-            font-family: 'Inter', -apple-system, sans-serif;
-            background: var(--bg-dark); 
-            margin: 0; 
-            display: flex;
-            height: 100vh;
-            color: var(--text-main);
-            overflow: hidden;
-        }
+            body {
+                font-family:
+                    "Inter",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-dark);
+                margin: 0;
+                display: flex;
+                height: 100vh;
+                color: var(--text-main);
+                overflow: hidden;
+            }
 
-        /* Sidebar Styles */
-        .sidebar {
-            width: var(--sidebar-width);
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 30px 0;
-            flex-shrink: 0;
-        }
+            /* Sidebar Styles */
+            .sidebar {
+                width: var(--sidebar-width);
+                background: var(--sidebar-bg);
+                border-right: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+                padding: 30px 0;
+                flex-shrink: 0;
+            }
 
-        .sidebar h2 {
-            padding: 0 25px;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 40px;
-            color: var(--accent);
-            font-weight: 800;
-        }
+            .sidebar h2 {
+                padding: 0 25px;
+                font-size: 20px;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                margin-bottom: 40px;
+                background: linear-gradient(135deg, #ffffff 0%, #a855f7 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-weight: 900;
 
-        .nav-item {
-            padding: 14px 25px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            font-size: 15px;
-            color: var(--text-dim);
-            border-left: 3px solid transparent;
-        }
+                filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.2));
+            }
 
-        .nav-item:hover {
-            color: var(--text-main);
-            background: rgba(255, 255, 255, 0.03);
-        }
+            .nav-item {
+                padding: 14px 25px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                font-size: 15px;
+                color: var(--text-dim);
+                border-left: 3px solid transparent;
+            }
 
-        .nav-item.active {
-            color: var(--text-main);
-            background: rgba(99, 102, 241, 0.1);
-            border-left-color: var(--accent);
-        }
+            .nav-item:hover {
+                color: var(--text-main);
+                background: rgba(255, 255, 255, 0.03);
+            }
 
-        /* Main Content Styles */
-        .main-content {
-            flex-grow: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            padding: 40px;
-            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
-        }
+            .nav-item.active {
+                color: var(--text-main);
+                background: rgba(99, 102, 241, 0.1);
+                border-left-color: var(--accent);
+            }
 
-        .view-section {
-            display: none;
-            width: 100%;
-        }
+            /* Main Content Styles */
+            .main-content {
+                flex-grow: 1;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                padding: 40px;
+                background: radial-gradient(
+                    circle at top right,
+                    #1e1b4b,
+                    var(--bg-dark)
+                );
+            }
 
-        .view-section h1 {
-            width: 100%;
-        }
+            .view-section {
+                display: none;
+                width: 100%;
+            }
 
-        .view-section.active {
-            display: flex;
-            flex-direction: column;
-            animation: fadeIn 0.3s ease-out;
-        }
+            .view-section h1 {
+                width: 100%;
+            }
 
-        .main-content {
-            flex-grow: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            padding: 40px;
-            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
-        }
-        
-        .form-card {
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            box-sizing: border-box;
-        }
+            .view-section.active {
+                display: flex;
+                flex-direction: column;
+                animation: fadeIn 0.3s ease-out;
+            }
 
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-dim); }
-        input, select { 
-            width: 100%; 
-            padding: 12px; 
-            background: #0f172a;
-            border: 1px solid var(--border); 
-            border-radius: 8px; 
-            box-sizing: border-box; 
-            color: white;
-            font-size: 14px;
-            transition: border-color 0.2s;
-        }
-        input:focus, select:focus { outline: none; border-color: var(--accent); }
-        
-        .actions { margin-top: 30px; display: flex; gap: 12px; }
-        button { 
-            padding: 12px 28px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-weight: 600; 
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .btn-primary { 
-            background: var(--primary-gradient); 
-            color: white;
-            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
-        }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45); }
-        .btn-primary:active { transform: translateY(0); }
-        .btn-primary:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; opacity: 0.5; }
+            .main-content {
+                flex-grow: 1;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                padding: 40px;
+                background: radial-gradient(
+                    circle at top right,
+                    #1e1b4b,
+                    var(--bg-dark)
+                );
+            }
 
-        .btn-danger { 
-            background: rgba(239, 68, 68, 0.1); 
-            color: var(--danger); 
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-        .btn-danger:hover { background: var(--danger); color: white; }
+            .form-card {
+                background: var(--card-bg);
+                padding: 30px;
+                border-radius: 12px;
+                border: 1px solid var(--border);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                width: 100%;
+                box-sizing: border-box;
+            }
 
-        /* Console and Status */
-        .status-container { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .status-idle .status-dot { background: var(--success); box-shadow: 0 0 10px var(--success); }
-        .status-running .status-dot { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; animation: pulse 1.5s infinite; }
-        .status-text { font-size: 14px; font-weight: 500; color: var(--text-dim); }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            label {
+                display: block;
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: var(--text-dim);
+            }
+            input,
+            select {
+                width: 100%;
+                padding: 12px;
+                background: #0f172a;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                box-sizing: border-box;
+                color: white;
+                font-size: 14px;
+                transition: border-color 0.2s;
+            }
+            input:focus,
+            select:focus {
+                outline: none;
+                border-color: var(--accent);
+            }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
-        }
+            .actions {
+                margin-top: 30px;
+                display: flex;
+                gap: 12px;
+            }
+            button {
+                padding: 12px 28px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 14px;
+                transition: all 0.2s;
+            }
+            .btn-primary {
+                background: var(--primary-gradient);
+                color: white;
+                box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+            }
+            .btn-primary:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+            }
+            .btn-primary:active {
+                transform: translateY(0);
+            }
+            .btn-primary:disabled {
+                background: var(--border);
+                box-shadow: none;
+                cursor: not-allowed;
+                opacity: 0.5;
+            }
 
-        #console { 
-            background: #020617; 
-            color: #cbd5e1; 
-            padding: 20px; 
-            border-radius: 12px; 
-            height: 400px; 
-            min-height: 300px;
-            flex-shrink: 0;
-            overflow-y: auto; 
-            font-family: 'JetBrains Mono', 'Fira Code', monospace; 
-            font-size: 13px; 
-            line-height: 1.6; 
-            white-space: pre-wrap; 
-            margin-top: 40px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-        }
-        .stderr { color: #f87171; }
-        .stdout { color: #cbd5e1; }
+            .btn-danger {
+                background: rgba(239, 68, 68, 0.1);
+                color: var(--danger);
+                border: 1px solid rgba(239, 68, 68, 0.2);
+            }
+            .btn-danger:hover {
+                background: var(--danger);
+                color: white;
+            }
 
-        .train-container {
-            display: flex;
-            gap: 30px;
-            align-items: stretch;
-            margin-bottom: 20px;
-        }
+            /* Console and Status */
+            .status-container {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 30px;
+            }
+            .status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .status-idle .status-dot {
+                background: var(--success);
+                box-shadow: 0 0 10px var(--success);
+            }
+            .status-running .status-dot {
+                background: #f59e0b;
+                box-shadow: 0 0 10px #f59e0b;
+                animation: pulse 1.5s infinite;
+            }
+            .status-text {
+                font-size: 14px;
+                font-weight: 500;
+                color: var(--text-dim);
+            }
 
-        .train-inputs {
-            flex: 1;
-            min-width: 300px;
-        }
+            @keyframes pulse {
+                0% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.4;
+                }
+                100% {
+                    opacity: 1;
+                }
+            }
 
-        #chart-container {
-            background: rgba(2, 6, 23, 0.5);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            flex: 1.5;
-            display: none;
-            min-height: 350px;
-            margin-top: 0;
-        }
-        
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h2>LLM Engine</h2>
-        <div class="nav-item" data-view="train-tokenizer">Train Tokenizer</div>
-        <div class="nav-item" data-view="init-model">Create Model</div>
-        <div class="nav-item" data-view="train">Model Training</div>
-        <div class="nav-item" data-view="perf-model">Performance</div>
-        <div class="nav-item active" data-view="predict">Prediction</div>
-    </div>
+            #console {
+                background: #020617;
+                color: #cbd5e1;
+                padding: 20px;
+                border-radius: 12px;
+                height: 400px;
+                min-height: 300px;
+                flex-shrink: 0;
+                overflow-y: auto;
+                font-family: "JetBrains Mono", "Fira Code", monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                white-space: pre-wrap;
+                margin-top: 40px;
+                margin-bottom: 20px;
+                border: 1px solid var(--border);
+            }
+            .stderr {
+                color: #f87171;
+            }
+            .stdout {
+                color: #cbd5e1;
+            }
 
-    <div class="main-content">
-        <div id="status-container" class="status-container status-idle">
-            <div class="status-dot"></div>
-            <div id="status-text" class="status-text">Status: Idle</div>
+            .train-container {
+                display: flex;
+                gap: 30px;
+                align-items: stretch;
+                margin-bottom: 20px;
+            }
+
+            .train-inputs {
+                flex: 1;
+                min-width: 300px;
+            }
+
+            #chart-container {
+                background: rgba(2, 6, 23, 0.5);
+                padding: 20px;
+                border-radius: 12px;
+                border: 1px solid var(--border);
+                flex: 1.5;
+                display: none;
+                min-height: 350px;
+                margin-top: 0;
+            }
+
+            ::-webkit-scrollbar {
+                width: 8px;
+            }
+            ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 10px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #475569;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="sidebar">
+            <h2>LLM Engine</h2>
+            <div class="nav-item" data-view="train-tokenizer">
+                Train Tokenizer
+            </div>
+            <div class="nav-item" data-view="init-model">Create Model</div>
+            <div class="nav-item" data-view="train">Model Training</div>
+            <div class="nav-item" data-view="perf-model">Performance</div>
+            <div class="nav-item active" data-view="predict">Prediction</div>
         </div>
 
-        <div class="form-card">
-            <!-- Predict View -->
-            <div id="view-predict" class="view-section active">
-                <h1>Inference / Prediction</h1>
-                <div class="form-group">
-                    <label>Prompt</label>
-                    <input type="text" id="predict-prompt" value="Once upon a time">
-                </div>
-                <div class="form-group">
-                    <label>Model</label>
-                    <select id="predict-model-select" class="model-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Tokenizer</label>
-                    <select id="predict-tokenizer-select" class="tokenizer-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Max Tokens</label>
-                    <input type="number" id="predict-length" value="50">
-                </div>
+        <div class="main-content">
+            <div id="status-container" class="status-container status-idle">
+                <div class="status-dot"></div>
+                <div id="status-text" class="status-text">Status: Idle</div>
             </div>
 
-            <!-- Train View -->
-            <div id="view-train" class="view-section">
-                <h1>Train Model</h1>
-                <div class="train-container">
-                    <div class="train-inputs">
-                        <div class="form-group">
-                            <label>Dataset Select</label>
-                            <select id="train-data-select" class="dataset-dropdown"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Model</label>
-                            <select id="train-model-select" class="model-dropdown"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Tokenizer</label>
-                            <select id="train-tokenizer-select" class="tokenizer-dropdown"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Limit Rows (Optional)</label>
-                            <input type="number" id="row-limit" value="">
-                        </div>
+            <div class="form-card">
+                <!-- Predict View -->
+                <div id="view-predict" class="view-section active">
+                    <h1>Inference / Prediction</h1>
+                    <div class="form-group">
+                        <label>Prompt</label>
+                        <input
+                            type="text"
+                            id="predict-prompt"
+                            value="Once upon a time"
+                        />
                     </div>
-                    <div id="chart-container">
-                        <canvas id="training-chart"></canvas>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <select
+                            id="predict-model-select"
+                            class="model-dropdown"
+                        ></select>
                     </div>
-                </div>
-            </div>
-
-            <!-- Train Tokenizer View -->
-            <div id="view-train-tokenizer" class="view-section">
-                <h1>Train Tokenizer</h1>
-                <div class="form-group">
-                    <label>Corpus Select</label>
-                    <select id="tok-corpus-select" class="dataset-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Output Path (.tok)</label>
-                    <input type="text" id="tok-output" value=".models/tokenizer.tok">
-                </div>
-                <div class="form-group">
-                    <label>Vocab Size</label>
-                    <input type="number" id="tok-vocab" value="5000">
-                </div>
-            </div>
-
-            <!-- Init Model View -->
-            <div id="view-init-model" class="view-section">
-                <h1>Initialize Model Shape</h1>
-                <div class="form-group">
-                    <label>Output Path (.lm)</label>
-                    <input type="text" id="init-output" value=".models/new-model.lm">
-                </div>
-                <div class="form-group">
-                    <label>Base Tokenizer (.tok)</label>
-                    <select id="init-tokenizer-select" class="tokenizer-dropdown"></select>
-                </div>
-                <div class="form-group">
-                    <label>Dimensions</label>
-                    <input type="number" id="init-dim" value="128">
-                </div>
-                <div class="form-group">
-                    <label>Attention Heads</label>
-                    <input type="number" id="init-heads" value="4">
-                </div>
-                <div class="form-group">
-                    <label>Layers</label>
-                    <input type="number" id="init-layers" value="4">
-                </div>
-            </div>
-
-            <!-- Performance View -->
-            <div id="view-perf-model" class="view-section">
-                <h1>Performance Diagnostic</h1>
-                <div class="train-container">
-                    <div class="train-inputs">
-                        <div class="form-group">
-                            <label>Model</label>
-                            <select id="perf-model-select" class="model-dropdown"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Tokenizer</label>
-                            <select id="perf-tokenizer-select" class="tokenizer-dropdown"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Dataset Select</label>
-                            <select id="perf-data-select" class="dataset-dropdown"></select>
-                        </div>
+                    <div class="form-group">
+                        <label>Tokenizer</label>
+                        <select
+                            id="predict-tokenizer-select"
+                            class="tokenizer-dropdown"
+                        ></select>
                     </div>
-                    <div id="perf-details-container" style="flex: 1.5; background: rgba(2, 6, 23, 0.8); padding: 20px; border-radius: 12px; border: 1px solid var(--border); display: none; min-height: 350px; max-height: 500px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #cbd5e1;">
-                        <div style="color: var(--accent); margin-bottom: 15px; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Execution Details</div>
-                        <pre id="perf-details-log" style="margin: 0; white-space: pre-wrap;"></pre>
+                    <div class="form-group">
+                        <label>Max Tokens</label>
+                        <input type="number" id="predict-length" value="50" />
+                    </div>
+                    <div class="form-group">
+                        <label>Temperature</label>
+                        <input
+                            type="number"
+                            id="predict-temperature"
+                            value="0.75"
+                            step="0.05"
+                            min="0.0"
+                            max="2.0"
+                        />
                     </div>
                 </div>
+
+                <!-- Train View -->
+                <div id="view-train" class="view-section">
+                    <h1>Train Model</h1>
+                    <div class="train-container">
+                        <div class="train-inputs">
+                            <div class="form-group">
+                                <label>Dataset Select</label>
+                                <select
+                                    id="train-data-select"
+                                    class="dataset-dropdown"
+                                ></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Model</label>
+                                <select
+                                    id="train-model-select"
+                                    class="model-dropdown"
+                                ></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tokenizer</label>
+                                <select
+                                    id="train-tokenizer-select"
+                                    class="tokenizer-dropdown"
+                                ></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Limit Rows (Optional)</label>
+                                <input type="number" id="row-limit" value="" />
+                            </div>
+                        </div>
+                        <div id="chart-container">
+                            <canvas id="training-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Train Tokenizer View -->
+                <div id="view-train-tokenizer" class="view-section">
+                    <h1>Train Tokenizer</h1>
+                    <div class="form-group">
+                        <label>Corpus Select</label>
+                        <select
+                            id="tok-corpus-select"
+                            class="dataset-dropdown"
+                        ></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Output Path (.tok)</label>
+                        <input
+                            type="text"
+                            id="tok-output"
+                            value=".models/tokenizer.tok"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Vocab Size</label>
+                        <input type="number" id="tok-vocab" value="5000" />
+                    </div>
+                </div>
+
+                <!-- Init Model View -->
+                <div id="view-init-model" class="view-section">
+                    <h1>Initialize Model Shape</h1>
+                    <div class="form-group">
+                        <label>Output Path (.lm)</label>
+                        <input
+                            type="text"
+                            id="init-output"
+                            value=".models/new-model.lm"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Base Tokenizer (.tok)</label>
+                        <select
+                            id="init-tokenizer-select"
+                            class="tokenizer-dropdown"
+                        ></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Dimensions</label>
+                        <input type="number" id="init-dim" value="128" />
+                    </div>
+                    <div class="form-group">
+                        <label>Attention Heads</label>
+                        <input type="number" id="init-heads" value="4" />
+                    </div>
+                    <div class="form-group">
+                        <label>Layers</label>
+                        <input type="number" id="init-layers" value="4" />
+                    </div>
+                </div>
+
+                <!-- Performance View -->
+                <div id="view-perf-model" class="view-section">
+                    <h1>Performance Diagnostic</h1>
+                    <div class="train-container">
+                        <div class="train-inputs">
+                            <div class="form-group">
+                                <label>Model</label>
+                                <select
+                                    id="perf-model-select"
+                                    class="model-dropdown"
+                                ></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tokenizer</label>
+                                <select
+                                    id="perf-tokenizer-select"
+                                    class="tokenizer-dropdown"
+                                ></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Dataset Select</label>
+                                <select
+                                    id="perf-data-select"
+                                    class="dataset-dropdown"
+                                ></select>
+                            </div>
+                        </div>
+                        <div
+                            id="perf-details-container"
+                            style="
+                                flex: 1.5;
+                                background: rgba(2, 6, 23, 0.8);
+                                padding: 20px;
+                                border-radius: 12px;
+                                border: 1px solid var(--border);
+                                display: none;
+                                min-height: 350px;
+                                max-height: 500px;
+                                overflow-y: auto;
+                                font-family:
+                                    &quot;JetBrains Mono&quot;, monospace;
+                                font-size: 13px;
+                                color: #cbd5e1;
+                            "
+                        >
+                            <div
+                                style="
+                                    color: var(--accent);
+                                    margin-bottom: 15px;
+                                    font-weight: bold;
+                                    border-bottom: 1px solid var(--border);
+                                    padding-bottom: 8px;
+                                "
+                            >
+                                Execution Details
+                            </div>
+                            <pre
+                                id="perf-details-log"
+                                style="margin: 0; white-space: pre-wrap"
+                            ></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="run-btn" class="btn-primary">
+                        Run Command
+                    </button>
+                    <button
+                        id="stop-btn"
+                        class="btn-danger"
+                        style="display: none"
+                    >
+                        Stop Process
+                    </button>
+                </div>
             </div>
 
-            <div class="actions">
-                <button id="run-btn" class="btn-primary">Run Command</button>
-                <button id="stop-btn" class="btn-danger" style="display:none;">Stop Process</button>
-            </div>
+            <div id="console">Console ready...</div>
         </div>
 
-        <div id="console">Console ready...</div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="app.js"></script>
-</body>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="app.js"></script>
+    </body>
 </html>
