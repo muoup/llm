@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
 #include <tokenizer/token.hpp>
 
@@ -14,5 +15,6 @@ namespace kernel::logit_layer {
     
     LossResult compute_loss_gradient(const matrix& predictions,
                                      const std::span<const token_id_t> actual,
-                                     size_t vocab_size);
+                                     size_t vocab_size,
+                                     kernel_stream_t stream = nullptr);
 }

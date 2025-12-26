@@ -6,6 +6,7 @@
 #include <inference/layer_normalize.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/matrix_kernels.hpp>
+#include <kernels/scheduling.cuh>
 
 // matrix cpu_version(const matrix& input,
 //                    const matrix& gamma,
@@ -104,25 +105,22 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     const ::matrix& input,
     const ::matrix& gamma,
     const ::matrix& beta,
-    float epsilon) {
+    float epsilon,
+    kernel_stream_t stream) {
     ::matrix normalized_input(input.rows, input.cols);
     ::matrix mean(input.rows, 1);
     ::matrix inv_variance(input.rows, 1);
 
-    row_mean<<<input.rows, 1>>>(input, mean);
-    kernel::optimizer::wait_for_operations();
-
-    row_inv_variance<<<input.rows, 1>>>(input, mean, inv_variance, epsilon);
-    kernel::optimizer::wait_for_operations();
+    row_mean<<<input.rows, 1, 0, from_kernel_stream(stream)>>>(input, mean);
+    row_inv_variance<<<input.rows, 1, 0, from_kernel_stream(stream)>>>(input, mean, inv_variance, epsilon);
 
     const dim3 threads_per_block(16, 16);
     const dim3 blocks(
         (input.cols + threads_per_block.x - 1) / threads_per_block.x,
         (input.rows + threads_per_block.y - 1) / threads_per_block.y);
 
-    normalize_and_scale<<<blocks, threads_per_block>>>(
+    normalize_and_scale<<<blocks, threads_per_block, 0, from_kernel_stream(stream)>>>(
         input, mean, inv_variance, gamma, beta, normalized_input);
-    kernel::optimizer::wait_for_operations();
 
     return { .normalized = std::move(normalized_input),
              .mean = std::move(mean),
@@ -231,7 +229,8 @@ kernel::layer_norm::layer_normalization_backward(
     const ::matrix& mean,
     const ::matrix& inv_variance,
     const ::matrix& grad_normalized,
-    float epsilon) {
+    float epsilon,
+    kernel_stream_t stream) {
     ::matrix grad_input(layer_input.rows, layer_input.cols);
     ::matrix grad_gamma(gamma.rows, gamma.cols);
     ::matrix grad_beta(beta.rows, beta.cols);
@@ -240,7 +239,7 @@ kernel::layer_norm::layer_normalization_backward(
     size_t num_blocks
         = (layer_input.rows + threads_per_block - 1) / threads_per_block;
 
-    layer_norm_backward_kernel<<<num_blocks, threads_per_block>>>(
+    layer_norm_backward_kernel<<<num_blocks, threads_per_block, 0, from_kernel_stream(stream)>>>(
         mean, gamma, inv_variance, layer_input, grad_normalized, grad_beta,
         grad_gamma, grad_input);
     CHECK_ERRORS("layer_normalization_backward: kernel launch");

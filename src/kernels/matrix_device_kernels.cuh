@@ -2,6 +2,8 @@
 
 #include <cuda_runtime_api.h>
 #include <util/matrix.hpp>
+#include <kernels/scheduling.hpp>
+#include <kernels/scheduling.cuh>
 
 namespace kernel::matrix {
 
@@ -109,24 +111,24 @@ __global__ void map_matrix_kernel(const const_matrix_view input,
 }
 
 template <auto Mapping>
-::matrix map_matrix(const ::matrix& input) {
+::matrix map_matrix(const ::matrix& input, kernel_stream_t stream = nullptr) {
     ::matrix output(input.rows, input.cols);
 
     dim3 blockSize(16, 16);
     dim3 gridSize((input.cols + blockSize.x - 1) / blockSize.x,
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
-    map_matrix_kernel<Mapping><<<gridSize, blockSize>>>(input, output);
+    map_matrix_kernel<Mapping><<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input, output);
     return output;
 }
 
 template <auto Mapping>
-void map_matrix_inplace(::matrix& input) {
+void map_matrix_inplace(::matrix& input, kernel_stream_t stream = nullptr) {
     dim3 blockSize(16, 16);
     dim3 gridSize((input.cols + blockSize.x - 1) / blockSize.x,
                   (input.rows + blockSize.y - 1) / blockSize.y);
 
-    map_matrix_kernel<Mapping><<<gridSize, blockSize>>>(input, input);
+    map_matrix_kernel<Mapping><<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input, input);
 }
 
 }  // namespace kernel::matrix

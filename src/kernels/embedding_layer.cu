@@ -1,7 +1,7 @@
 #include "embedding_layer.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
-
+#include <kernels/scheduling.cuh>
 
 // static void positional_encoding(matrix& input) {
 //     for (size_t token_i = 0; token_i < input.rows; ++token_i) {
@@ -34,10 +34,10 @@ static __global__ void positional_encoding_kernel(matrix_view input) {
     }
 }
 
-void kernel::embedding::positional_encoding(::matrix& input) {
+void kernel::embedding::positional_encoding(::matrix& input, kernel_stream_t stream) {
     const dim3 blockSize(16, 16);
     const dim3 gridSize((input.rows + blockSize.x - 1) / blockSize.x,
                         (input.cols / 2 + blockSize.y - 1) / blockSize.y);
 
-    positional_encoding_kernel<<<gridSize, blockSize>>>(input);
+    positional_encoding_kernel<<<gridSize, blockSize, 0, from_kernel_stream(stream)>>>(input);
 }
