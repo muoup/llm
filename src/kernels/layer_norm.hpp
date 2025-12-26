@@ -14,8 +14,7 @@ struct LayerNormResult {
 };
 
 LayerNormResult layer_normalization(const ::matrix& input,
-                                    const ::matrix& gamma,
-                                    const ::matrix& beta,
+                                    const LayerNorm& layer,
                                     float epsilon,
                                     kernel_stream_t stream = nullptr);
 
@@ -32,6 +31,7 @@ LayerNormGradients layer_normalization_backward(const ::matrix& input,
                                                 const ::matrix& inv_variance,
                                                 const ::matrix& grad_normalized,
                                                 float epsilon,
-                                                kernel_stream_t stream = nullptr);
+                                                kernel_stream_t stream
+                                                = nullptr);
 
 }  // namespace kernel::layer_norm

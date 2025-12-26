@@ -45,12 +45,12 @@ class AttentionLayer final : public INode {
     static AttentionLayer load(std::istream& in);
 
     AttentionLayer()
-        : dimensions(0), head_size(0), head_count(0), masked(false), wo() {}
+        : dimensions(0), head_size(0), head_count(0), masked(false), wo(), streams(0) {}
 
     size_t dimensions, head_size, head_count;
     bool masked;
 
     std::vector<AttentionHead> heads;
-    std::vector<kernel::kernel_stream_t> streams;
+    kernel::FixedStreamList streams;
     matrix wo;
 };

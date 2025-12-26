@@ -1,5 +1,6 @@
 #include <cuda_runtime_api.h>
 #include "kernels/optimizer.hpp"
+#include "kernels/scheduling.hpp"
 #include "layer_norm.hpp"
 #include "util/logger.hpp"
 
@@ -106,9 +107,10 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     const LayerNorm &layer,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix normalized_input(input.rows, input.cols);
-    ::matrix mean(input.rows, 1);
-    ::matrix inv_variance(input.rows, 1);
+    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, layer.streams[0]);
+    ::matrix mean = matrix::async_allocate(input.rows, 1, layer.streams[1]);
+    ::matrix inv_variance = matrix::async_allocate(input.rows, 1, layer.streams[2]);
+    kernel::wait_for_streams(layer.streams[0], layer.streams[1], layer.streams[2]);
 
     row_mean<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean);
     row_inv_variance<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean, inv_variance, epsilon);
@@ -119,7 +121,7 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
         (input.rows + threads_per_block.y - 1) / threads_per_block.y);
 
     normalize_and_scale<<<blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
-        input, mean, inv_variance, gamma, beta, normalized_input);
+        input, mean, inv_variance, layer.gamma, layer.beta, normalized_input);
 
     return { .normalized = std::move(normalized_input),
              .mean = std::move(mean),
@@ -230,9 +232,9 @@ kernel::layer_norm::layer_normalization_backward(
     const ::matrix& grad_normalized,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix grad_input(layer_input.rows, layer_input.cols);
-    ::matrix grad_gamma(gamma.rows, gamma.cols);
-    ::matrix grad_beta(beta.rows, beta.cols);
+    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols);
+    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols);
+    ::matrix grad_beta = matrix::async_allocate(beta.rows, beta.cols);
 
     constexpr size_t threads_per_block = 256;
     size_t num_blocks

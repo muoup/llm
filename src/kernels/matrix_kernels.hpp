@@ -4,7 +4,7 @@
 #include <util/matrix.hpp>
 
 #ifdef MATRIX_CHECKS
-#define CHECK_ERRORS(step) CHECK_ERRORS(step)
+#define CHECK_ERRORS(step) kernel::matrix::check_errors(step)
 #else
 #define CHECK_ERRORS(step)
 #endif

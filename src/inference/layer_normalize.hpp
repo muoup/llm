@@ -2,13 +2,14 @@
 
 #include <inference/network_node.hpp>
 #include <util/matrix.hpp>
+#include "kernels/scheduling.hpp"
 
 class LayerNorm final : public INode {
    public:
     LayerNorm(std::unique_ptr<INode> inner,
               size_t dimensions,
               float epsilon = 1e-5f);
-    LayerNorm() = default;
+    LayerNorm();
 
     size_t parameterCount() const override;
     NodeType getType() const override;
@@ -32,4 +33,6 @@ class LayerNorm final : public INode {
     size_t dimensions;
     float epsilon;
     std::string context_name = "LayerNorm";
+    
+    kernel::FixedStreamList streams;
 };

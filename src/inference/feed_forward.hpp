@@ -4,6 +4,7 @@
 #include <istream>
 #include <util/matrix.hpp>
 #include <vector>
+#include "kernels/scheduling.hpp"
 
 // Note: The INode forward pass is pure and does not modify layer state.
 // It returns a vector of matrices containing the actual output followed by
@@ -35,6 +36,8 @@ class FeedForwardLayer final : public INode {
     void save(std::ostream& out) const override;
     static FeedForwardLayer load(std::istream& in);
 
+    kernel::FixedStreamList streams;
+    
     matrix w1, b1;
     matrix w2, b2;
 };

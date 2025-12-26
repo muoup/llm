@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <mutex>
+#include <vector>
 
 namespace kernel {
     // Abstracted stream type in case different backends are used later
@@ -64,4 +65,29 @@ namespace kernel {
     
     template <const size_t PoolSize>
     using MatmulHandlePool = ObjectPool<matmul_handle_t, PoolSize, nullptr, create_matmul_handle, destroy_matmul_handle>;
+    
+    struct FixedStreamList {
+        std::vector<kernel_stream_t> streams;
+        
+        FixedStreamList(size_t count) {
+            streams.reserve(count);
+        
+            for (size_t i = 0; i < count; ++i) {
+                streams.push_back(create_kernel_stream());
+            }
+        }
+        
+        FixedStreamList(FixedStreamList&&) = default;
+        FixedStreamList& operator =(FixedStreamList&&) = default;
+        
+        ~FixedStreamList() {
+            for (auto stream : streams) {
+                destroy_kernel_stream(stream);
+            }
+        }
+        
+        constexpr kernel_stream_t operator [](size_t index) const {
+            return streams[index];
+        }
+    };
 }

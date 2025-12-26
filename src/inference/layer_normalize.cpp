@@ -10,6 +10,8 @@
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
 
+constexpr size_t STREAMS_NEEDED = 3;
+
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
                      size_t dimensions,
                      float epsilon)
@@ -17,13 +19,16 @@ LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
       epsilon(epsilon),
       gamma(1, dimensions),
       beta(1, dimensions),
-      inner_node(std::move(inner_node)) {
+      inner_node(std::move(inner_node)),
+      streams(STREAMS_NEEDED) {
     if (this->inner_node) {
         this->context_name = node_type_to_string(this->inner_node->getType());
     } else {
         this->context_name = "LayerNorm";
     }
 }
+
+LayerNorm::LayerNorm() : streams(STREAMS_NEEDED) {}
 
 size_t LayerNorm::parameterCount() const {
     size_t inner_parameters = [&]() -> size_t {
@@ -56,7 +61,7 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
 
     auto start_norm = std::chrono::high_resolution_clock::now();
     auto results
-        = kernel::layer_norm::layer_normalization(input, gamma, beta, epsilon);
+        = kernel::layer_norm::layer_normalization(input, *this, epsilon);
 
     if (!inner_node) {
         auto fr = standardResult(matrix::construct_vec(
@@ -111,7 +116,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     const matrix& mean = result.outputs.rbegin()[1];
     const matrix& inv_variance = result.outputs.rbegin()[0];
 
-    // Maybe unused if no inner node
+    // May be unused if no inner node
     std::vector<matrix> inner_backprop_outputs;
 
     auto start_inner = std::chrono::high_resolution_clock::now();
@@ -182,6 +187,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     if (inner_node) {
         results.grad_input.add(gradients[0]);
     }
+    
     return matrix::construct_vec(results.grad_input);
 }
 
