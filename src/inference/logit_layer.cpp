@@ -23,13 +23,11 @@ void LogitLayer::randomize(const float min, const float max) {
 
 matrix LogitLayer::forward(const matrix& input) const {
     matrix logits = input.cross_multiplied(w);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  Logit Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
 
     kernel::feed_forward::add_bias(logits, b);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("    logits norm: %f", logits.norm());
 

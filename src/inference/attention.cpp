@@ -60,10 +60,12 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
     const size_t seq_len = input.rows;
 
     std::vector<matrix> returns;
+    returns.reserve(2 + head_count * 4);
+    
     // placeholder for the final output to prevent insert(0) additional overhead
     returns.emplace_back();
     // placeholder for the concatenated heads
-    returns.emplace_back(input.rows, head_count * head_size);
+    returns.emplace_back(kernel::matrix::async_allocate(input.rows, head_count * head_size));
 
     for (size_t h = 0; h < head_count; ++h) {
         returns.emplace_back();  // q
@@ -246,8 +248,8 @@ std::vector<matrix> AttentionLayer::backpropogate(
 
     kernel::optimizer::wait_for_operations();
 
-    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo);
-    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
+    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo, streams[0]);
+    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate, streams[0]);
 
     return matrix::construct_vec(input_gradient);
 }

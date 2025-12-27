@@ -1,48 +1,12 @@
 #include <cuda_runtime_api.h>
-#include "kernels/optimizer.hpp"
 #include "kernels/scheduling.hpp"
 #include "layer_norm.hpp"
-#include "util/logger.hpp"
 
 #include <inference/layer_normalize.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/scheduling.cuh>
 
-// matrix cpu_version(const matrix& input,
-//                    const matrix& gamma,
-//                    const matrix& beta,
-//                    float epsilon) {
-//     matrix normalized_input(input.rows, input.cols);
-//     matrix mean(input.rows, 1);
-//     matrix inv_variance(input.rows, 1);
-
-//     for (size_t i = 0; i < input.rows; ++i) {
-//         float row_mean = 0.0f;
-//         for (size_t j = 0; j < input.cols; ++j) {
-//             row_mean += input.get(i, j);
-//         }
-//         row_mean /= static_cast<float>(input.cols);
-//         mean.set(i, 0, row_mean);
-
-//         float variance = 0.0f;
-//         for (size_t j = 0; j < input.cols; ++j) {
-//             float diff = input.get(i, j) - row_mean;
-//             variance += diff * diff;
-//         }
-//         variance /= static_cast<float>(input.cols);
-//         inv_variance.set(i, 0, 1.0f / std::sqrt(variance + epsilon));
-
-//         for (size_t j = 0; j < input.cols; ++j) {
-//             float normalized
-//                 = (input.get(i, j) - row_mean) * inv_variance.get(i, 0);
-//             float scaled = normalized * gamma.get(0, j) + beta.get(0, j);
-//             normalized_input.set(i, j, scaled);
-//         }
-//     }
-
-//     return normalized_input;
-// }
 
 __global__ void row_mean(const const_matrix_view input,
                          const matrix_view mean) {
@@ -73,7 +37,6 @@ __global__ void row_inv_variance(const const_matrix_view input,
     }
 
     variance /= static_cast<float>(input.cols);
-    // std::printf("Mean: %f | Variance: %f\n", row_mean, variance);
     
     kernel::matrix::device_set(inv_variance, row_idx, 0,
                                1.0f / sqrtf(variance + epsilon));
@@ -107,10 +70,9 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     const LayerNorm &layer,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, layer.streams[0]);
-    ::matrix mean = matrix::async_allocate(input.rows, 1, layer.streams[1]);
-    ::matrix inv_variance = matrix::async_allocate(input.rows, 1, layer.streams[2]);
-    kernel::wait_for_streams(layer.streams[0], layer.streams[1], layer.streams[2]);
+    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, stream);
+    ::matrix mean = matrix::async_allocate(input.rows, 1, stream);
+    ::matrix inv_variance = matrix::async_allocate(input.rows, 1, stream);
 
     row_mean<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean);
     row_inv_variance<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean, inv_variance, epsilon);
