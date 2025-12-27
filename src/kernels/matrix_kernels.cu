@@ -193,18 +193,15 @@ matrix kernel::matrix::clone(const ::const_matrix_view other,
     return result;
 }
 
-__global__ void kernel_set_all(float* data,
-                               const size_t stride,
-                               const size_t rows,
-                               const size_t cols,
-                               float value) {
+__global__ void kernel_set_all(const matrix_view data, float value) {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    const size_t total_size = data.rows * data.cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        data[row + col * stride] = value;
+        const size_t row = idx % data.rows;
+        const size_t col = idx / data.rows;
+
+        kernel::matrix::device_set(data, row, col, value);
     }
 }
 
@@ -217,7 +214,7 @@ void kernel::matrix::set_all(::matrix& mat,
         = (total_size + threads_per_block - 1) / threads_per_block;
 
     kernel_set_all<<<blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, value);
+        mat, value);
 }
 
 __device__ float kernel_fadd(float a, float b) {
@@ -645,7 +642,6 @@ void kernel::matrix::add(::matrix& mat, float value, kernel_stream_t stream) {
 }
 
 __global__ void kernel_softmax(matrix_view data) {
-
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
 
@@ -658,13 +654,13 @@ __global__ void kernel_softmax(matrix_view data) {
         local_sum += exp;
     }
     float row_dot = kernel::matrix::device::block_reduce_sum(local_sum);
-    
+
     __shared__ float shared_denom;
     if (tid == 0) {
         shared_denom = row_dot;
     }
     __syncthreads();
-    
+
     row_dot = shared_denom;
 
     for (size_t col = tid; col < data.cols; col += blockDim.x) {
@@ -685,7 +681,6 @@ static __global__ void kernel_backprop_softmax(
     const const_matrix_view softmax_output,
     const const_matrix_view output_gradient,
     matrix_view softmax_gradient) {
-
     const size_t row = blockIdx.x;
 
     float local_dot = 0.0f;
