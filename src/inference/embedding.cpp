@@ -39,8 +39,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
 
 void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
-                                   CentralOptimizer& optimizer,
-                                   float learning_rate) {
+                                   CentralOptimizer& optimizer) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     const float scale = std::sqrt(static_cast<float>(get_dimensions()));
 
@@ -64,7 +63,7 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     // We can simulate the normalization by scaling the gradient before passing to AdamW if needed,
     // but AdamW is adaptive.
     
-    optimizer.update(m_embeddings, embedding_gradient, learning_rate);
+    optimizer.update(m_embeddings, embedding_gradient);
     kernel::wait_for_all_streams();
 }
 

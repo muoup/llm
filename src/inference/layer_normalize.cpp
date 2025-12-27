@@ -116,7 +116,6 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                                              std::span<const matrix> inputs,
                                              std::span<const matrix> gradients,
                                              CentralOptimizer& optimizer,
-                                             float learning_rate,
                                              bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& mean = result.outputs.rbegin()[1];
@@ -135,7 +134,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         if (inner_node) {
             inner_backprop_outputs = inner_node->backpropogate(
                 result, std::span<const matrix>{ &normalized_input, 1 },
-                gradients, optimizer, learning_rate);
+                gradients, optimizer);
             return inner_backprop_outputs[0];
         } else {
             return gradients[0];
@@ -187,8 +186,8 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     LOG_DEBUG("    grad_gamma norm: %f", results.grad_gamma.norm());
     LOG_DEBUG("    grad_beta norm: %f", results.grad_beta.norm());
 
-    optimizer.update(gamma, results.grad_gamma, learning_rate);
-    optimizer.update(beta, results.grad_beta, learning_rate);
+    optimizer.update(gamma, results.grad_gamma);
+    optimizer.update(beta, results.grad_beta);
 
     // Add the gradient from the residual path
     if (inner_node) {

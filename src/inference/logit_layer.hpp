@@ -21,8 +21,7 @@ class LogitLayer {
         const matrix& input,
         const matrix& predictions,
         const std::span<const token_id_t> actual,
-        CentralOptimizer& optimizer,
-        float learning_rate);
+        CentralOptimizer& optimizer);
 
     void save(std::ostream& out) const;
     static LogitLayer load(std::istream& in);

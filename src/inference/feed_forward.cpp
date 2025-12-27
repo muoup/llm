@@ -57,7 +57,6 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
     CentralOptimizer& optimizer,
-    float learning_rate,
     bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& activation_input = result.outputs[1];
@@ -83,10 +82,10 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
-    optimizer.update(w1, w1_gradient, learning_rate);
-    optimizer.update(w2, w2_gradient, learning_rate);
-    optimizer.update(b1, b1_gradient, learning_rate);
-    optimizer.update(b2, b2_gradient, learning_rate);
+    optimizer.update(w1, w1_gradient);
+    optimizer.update(w2, w2_gradient);
+    optimizer.update(b1, b1_gradient);
+    optimizer.update(b2, b2_gradient);
     kernel::optimizer::norm_clip(input_gradient);
 
     kernel::wait_for_all_streams();

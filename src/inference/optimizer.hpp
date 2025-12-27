@@ -13,13 +13,15 @@ struct OptimizerState {
 
 class CentralOptimizer {
 public:
-    CentralOptimizer() = default;
+    CentralOptimizer(float learning_rate) : learning_rate(learning_rate) {}
 
-    void update(matrix& parameter, const matrix& gradient, float learning_rate, float weight_decay = 0.01f);
+    void update(matrix& parameter, const matrix& gradient, float weight_decay = 0.01f);
     
     void clear() {
         states.clear();
     }
+    
+    float learning_rate;
 
 private:
     std::unordered_map<float*, OptimizerState> states;

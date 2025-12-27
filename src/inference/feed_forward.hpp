@@ -29,8 +29,7 @@ class FeedForwardLayer final : public INode {
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
                                       CentralOptimizer& optimizer,
-                                      float learning_rate,
-                                      bool perf) override;
+                                      bool perf = false) override;
 
     void randomize(float min, float max) override;
     void save(std::ostream& out) const override;

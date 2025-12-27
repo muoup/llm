@@ -2,7 +2,7 @@
 #include <kernels/optimizer.hpp>
 #include "kernels/matrix_kernels.hpp"
 
-void CentralOptimizer::update(matrix& parameter, const matrix& gradient, float learning_rate, float weight_decay) {
+void CentralOptimizer::update(matrix& parameter, const matrix& gradient, float weight_decay) {
     auto it = states.find(parameter.data);
     
     if (it == states.end()) {

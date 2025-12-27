@@ -30,7 +30,6 @@ struct INode {
                                               std::span<const matrix> inputs,
                                               std::span<const matrix> gradients,
                                               CentralOptimizer& optimizer,
-                                              float learning_rate,
                                               bool perf = false)
         = 0;
 

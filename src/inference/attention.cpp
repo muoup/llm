@@ -154,7 +154,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
     CentralOptimizer& optimizer,
-    float learning_rate,
     bool perf) {
     constexpr float regularization_strength = 0.01f;
 
@@ -241,13 +240,13 @@ std::vector<matrix> AttentionLayer::backpropogate(
         // Assuming default stream for now for safety as CentralOptimizer update is simple.
         kernel::wait_for_all_streams(); 
 
-        optimizer.update(head.wq, wq_gradient, learning_rate);
-        optimizer.update(head.wk, wk_gradient, learning_rate);
-        optimizer.update(head.wv, wv_gradient, learning_rate);
+        optimizer.update(head.wq, wq_gradient);
+        optimizer.update(head.wk, wk_gradient);
+        optimizer.update(head.wv, wv_gradient);
     }
 
     kernel::wait_for_all_streams();
-    optimizer.update(wo, wo_gradient, learning_rate);
+    optimizer.update(wo, wo_gradient);
 
     return matrix::construct_vec(input_gradient);
 }

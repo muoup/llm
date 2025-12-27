@@ -98,7 +98,7 @@ int handle_train(int argc, char* argv[]) {
 
         const size_t n_rows = dataset->size();
 
-        CentralOptimizer optimizer;
+        CentralOptimizer optimizer(learning_rate);
 
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(_tokenizer, row);
@@ -111,7 +111,7 @@ int handle_train(int argc, char* argv[]) {
                 = std::span{ tokens.begin() + 1, tokens.end() };
             LOG_DEBUG("Training on row %zu with %zu tokens.", i, tokens.size());
             float loss
-                = model.train_on(input_tokens, target_tokens, optimizer, learning_rate);
+                = model.train_on(input_tokens, target_tokens, optimizer);
 
             constexpr size_t ROLLING_AVG_WINDOW = 100;
 

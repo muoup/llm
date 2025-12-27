@@ -26,7 +26,7 @@ struct InferenceModel {
     std::vector<ForwardingResult> forwarding_results(std::span<const token_id_t> tokens, bool perf = false) const;
     
     token_id_t predict(std::span<const token_id_t> tokens, float temperature = 1.0f, bool perf = false) const;
-    float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, CentralOptimizer& optimizer, float learning_rate, bool perf = false);
+    float train_on(std::span<const token_id_t> tokens, std::span<const token_id_t> actual, CentralOptimizer& optimizer, bool perf = false);
     
     size_t parameter_count() const;
     

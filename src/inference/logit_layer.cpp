@@ -38,8 +38,7 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     const matrix& input,
     const matrix& predictions,
     const std::span<const token_id_t> actual,
-    CentralOptimizer& optimizer,
-    float learning_rate) {
+    CentralOptimizer& optimizer) {
     kernel::logit_layer::LossResult loss_result
         = kernel::logit_layer::compute_loss_gradient(predictions, actual,
                                                      vocab_size);
@@ -68,8 +67,8 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     LOG_DEBUG("    logit_bias_gradient norm: %f",
               loss_result.logit_bias_gradient.norm());
 
-    optimizer.update(b, loss_result.logit_bias_gradient, learning_rate);
-    optimizer.update(w, logit_weight_gradient, learning_rate);
+    optimizer.update(b, loss_result.logit_bias_gradient);
+    optimizer.update(w, logit_weight_gradient);
     kernel::wait_for_all_streams();
 
     return { std::move(h_final_gradient), loss_result.average_loss };

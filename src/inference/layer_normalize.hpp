@@ -22,7 +22,6 @@ class LayerNorm final : public INode {
                                       std::span<const matrix> outputs,
                                       std::span<const matrix> gradients,
                                       CentralOptimizer& optimizer,
-                                      float learning_rate,
                                       bool perf = false) override;
 
     void save(std::ostream& out) const override;
