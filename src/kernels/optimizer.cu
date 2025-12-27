@@ -10,9 +10,11 @@ constexpr auto NORM_CLIP_MAX_MAG = 2.5f;
 
 __global__ void norm_clip_kernel(matrix_view gradient,
                                  float* sum_sq_ptr,
-                                 size_t total_elements) {
+                                 size_t total_elements,
+                                 size_t normalization_count) {
     float sum_of_squares = *sum_sq_ptr;
-    float mag = sum_of_squares / (float)total_elements;
+    size_t div = normalization_count > 0 ? normalization_count : total_elements;
+    float mag = sum_of_squares / (float)div;
 
     if (mag > NORM_CLIP_MAX_MAG * NORM_CLIP_MAX_MAG) {
         float scale = sqrtf((NORM_CLIP_MAX_MAG * NORM_CLIP_MAX_MAG) / mag);
@@ -27,7 +29,7 @@ __global__ void norm_clip_kernel(matrix_view gradient,
     }
 }
 
-void kernel::optimizer::norm_clip(::matrix& gradient, kernel_stream_t stream) {
+void kernel::optimizer::norm_clip(::matrix& gradient, kernel_stream_t stream, size_t normalization_count) {
     float_device_ptr_t sum_sq_ptr
         = kernel::matrix::sum_of_squares(gradient, stream);
 
@@ -38,17 +40,19 @@ void kernel::optimizer::norm_clip(::matrix& gradient, kernel_stream_t stream) {
 
     norm_clip_kernel<<<blocks, threads_per_block, 0,
                        get_kernel_stream(stream)>>>(
-        gradient, (float*)sum_sq_ptr, gradient.size());
+        gradient, (float*)sum_sq_ptr, gradient.size(), normalization_count);
     CHECK_ERRORS("After norm_clip_kernel");
 }
 
 static __global__ void regularize_gradient(const matrix_view gradient,
                                            const const_matrix_view parameters,
                                            float* sum_sq_ptr,
-                                           size_t total_elements) {
+                                           size_t total_elements,
+                                           size_t normalization_count) {
     constexpr float regularization_strength = 0.0001f;
     float sum_of_squares = *sum_sq_ptr;
-    float mag = sum_of_squares / (float)total_elements;
+    size_t div = normalization_count > 0 ? normalization_count : total_elements;
+    float mag = sum_of_squares / (float)div;
 
     size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     size_t col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -60,7 +64,7 @@ static __global__ void regularize_gradient(const matrix_view gradient,
     float device_value = kernel::matrix::device_get(gradient, row, col);
 
     if (mag > NORM_CLIP_MAX_MAG * NORM_CLIP_MAX_MAG) {
-        device_value *= (NORM_CLIP_MAX_MAG * NORM_CLIP_MAX_MAG) / mag;
+        device_value *= sqrtf(NORM_CLIP_MAX_MAG * NORM_CLIP_MAX_MAG / mag);
     }
 
     float param_value = kernel::matrix::device_get(parameters, row, col);
@@ -71,7 +75,8 @@ static __global__ void regularize_gradient(const matrix_view gradient,
 
 void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
                                                    const ::matrix& parameters,
-                                                   kernel_stream_t stream) {
+                                                   kernel_stream_t stream,
+                                                   size_t normalization_count) {
     MATRIX_ASSERT(
         gradient.rows == parameters.rows && gradient.cols == parameters.cols,
         "Dimension mismatch in regularize_gradient");
@@ -81,12 +86,11 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
         (gradient.rows + threads_per_block.x - 1) / threads_per_block.x,
         (gradient.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    norm_clip(gradient, stream);
     float_device_ptr_t sum_sq_ptr
         = kernel::matrix::sum_of_squares(gradient, stream);
     regularize_gradient<<<blocks, threads_per_block, 0,
                           get_kernel_stream(stream)>>>(
-        gradient, parameters, (float*)sum_sq_ptr, gradient.size());
+        gradient, parameters, (float*)sum_sq_ptr, gradient.size(), normalization_count);
     CHECK_ERRORS("After regularize_gradient");
 }
 

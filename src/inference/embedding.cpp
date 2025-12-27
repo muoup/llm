@@ -41,19 +41,21 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
                                    float learning_rate) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
-    kernel::wait_for_all_streams();
-
     const float scale = std::sqrt(static_cast<float>(get_dimensions()));
 
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t,
-                                       scale);
-        kernel::wait_for_all_streams();
+        kernel::matrix::atomic_add_row_vector(embedding_gradient, token, x_gradient, t,
+                                              scale);
     }
+    kernel::wait_for_all_streams();
 
     LOG_DEBUG("  Embedding Layer Gradients:");
     LOG_DEBUG("    embedding_gradient norm: %f", embedding_gradient.norm());
+
+    // Sparse normalization: only normalized by the tokens actually updated
+    size_t normalization_count = tokens.size() * get_dimensions();
+    kernel::optimizer::regularize_weight_gradient(embedding_gradient, m_embeddings, nullptr, normalization_count);
 
     kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient,
                                                learning_rate);

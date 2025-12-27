@@ -502,6 +502,34 @@ void kernel::matrix::add_row_vector(::matrix& mat,
                                                          vec_row, scale);
 }
 
+static __global__ void atomic_add_row_vector_kernel(const matrix_view data,
+                                                    size_t data_row,
+                                                    const const_matrix_view row_vec,
+                                                    size_t offset_row,
+                                                    float scale) {
+    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (col < data.cols) {
+        auto val = kernel::matrix::device_get(row_vec, offset_row, col);
+        kernel::matrix::device_offset_elem_atomic(data, data_row, col, val * scale);
+    }
+}
+
+void kernel::matrix::atomic_add_row_vector(::matrix& mat,
+                                           const size_t row,
+                                           const ::matrix& vec,
+                                           size_t vec_row,
+                                           float scale,
+                                           kernel_stream_t stream) {
+    const size_t threads_per_block = 256;
+    const size_t blocks
+        = (mat.cols + threads_per_block - 1) / threads_per_block;
+
+    atomic_add_row_vector_kernel<<<blocks, threads_per_block, 0,
+                                   get_kernel_stream(stream)>>>(mat, row, vec,
+                                                                vec_row, scale);
+}
+
 static __global__ void set_horizontal_slice_kernel(
     const matrix_view data,
     const size_t start_col,

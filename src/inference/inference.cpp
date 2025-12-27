@@ -16,6 +16,7 @@
 
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
+#include "util/logger.hpp"
 
 std::unique_ptr<INode> load_node(std::istream& in) {
     NodeType type;
@@ -370,6 +371,8 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         std::cout << "[PERF] Softmax: " << duration.count() << " ms"
                   << std::endl;
     }
+    
+    LOG_DEBUG("--------------- Beginning backpropagation ---------------");
 
     // Backprop through logit layer
     start = std::chrono::high_resolution_clock::now();
