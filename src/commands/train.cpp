@@ -22,12 +22,14 @@ int handle_train(int argc, char* argv[]) {
     std::string input_model_path = get_arg_value(argc, argv, "--input-model");
     std::string type_str = get_arg_value(argc, argv, "--dataset-type");
     std::string n_str = get_arg_value(argc, argv, "-n");
+    std::string lr_str = get_arg_value(argc, argv, "--learning-rate");
 
     if (data_path.empty() || tokenizer_path.empty()
         || output_model_path.empty()) {
         std::cerr << "Usage: ./llm train --data <path> --tokenizer <path> "
                      "--output-model <path> [--input-model <path>] "
-                     "[--dataset-type raw|row-based] [-n <amount>]"
+                     "[--dataset-type raw|row-based] [-n <amount>] "
+                     "[--learning-rate <value>]"
                   << std::endl;
         return 1;
     }
@@ -93,7 +95,17 @@ int handle_train(int argc, char* argv[]) {
                   << (type == dataset_type::RAW ? "raw" : "row-based")
                   << ". Iterating over rows..." << std::endl;
 
-        constexpr float learning_rate = 0.0001f;
+        float learning_rate = 0.0001f;
+        if (!lr_str.empty()) {
+            try {
+                learning_rate = std::stof(lr_str);
+            } catch (const std::exception& e) {
+                std::cerr << "Error: Invalid value for --learning-rate: " << lr_str
+                          << std::endl;
+                std::exit(1);
+            }
+        }
+
         float rolling_average_loss = 0.0f;
 
         const size_t n_rows = dataset->size();

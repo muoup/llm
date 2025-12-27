@@ -291,6 +291,11 @@ runBtn.addEventListener('click', async () => {
         if (row_limit && parseInt(row_limit) > 0) {
           args = [...args, '-n', row_limit];
         }
+
+        const learningRate = document.getElementById('train-learning-rate').value;
+        if (learningRate) {
+            args = [...args, '--learning-rate', learningRate];
+        }
     } else if (activeView === 'train-tokenizer') {
         args = [
             '--corpus',
