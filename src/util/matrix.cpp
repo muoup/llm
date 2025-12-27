@@ -1,14 +1,13 @@
 #include "matrix.hpp"
 
-#include <kernels/matrix_kernels.hpp>
-#include <kernels/scheduling.cuh>
-
-#include <cmath>
-#include <cstdlib>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
 #include <utility>
+#include <cstddef>
+#include <cmath>
+#include <sstream>
+#include <iomanip>
+
+#include <kernels/matrix_kernels.hpp>
+#include <kernels/scheduling.hpp>
 
 matrix::matrix(const size_t rows, const size_t cols)
     : rows(rows),
@@ -34,6 +33,7 @@ matrix& matrix::operator=(matrix&& other) {
     this->rows = std::exchange(other.rows, 0);
     this->cols = std::exchange(other.cols, 0);
     this->stride = std::exchange(other.stride, 0);
+    
     return *this;
 }
 
@@ -92,19 +92,19 @@ matrix matrix::clone() const {
 }
 
 float matrix::sum() const {
-    return get_device_ptr(kernel::matrix::sum(*this));
+    return kernel::get_device_ptr(kernel::matrix::sum(*this));
 }
 
 float matrix::max() const {
-    return get_device_ptr(kernel::matrix::max(*this));
+    return kernel::get_device_ptr(kernel::matrix::max(*this));
 }
 
 float matrix::min() const {
-    return get_device_ptr(kernel::matrix::min(*this));
+    return kernel::get_device_ptr(kernel::matrix::min(*this));
 }
 
 float matrix::absmax() const {
-    return get_device_ptr(kernel::matrix::absmax(*this));
+    return kernel::get_device_ptr(kernel::matrix::absmax(*this));
 }
 
 matrix& matrix::set_all(float value) {
@@ -186,15 +186,15 @@ matrix& matrix::element_wise_multiply(const matrix& other) {
 }
 
 float matrix::abssum() const {
-    return get_device_ptr(kernel::matrix::abssum(*this));
+    return kernel::get_device_ptr(kernel::matrix::abssum(*this));
 }
 
 float matrix::variance() const {
-    return get_device_ptr(kernel::matrix::variance(*this));
+    return kernel::get_device_ptr(kernel::matrix::variance(*this));
 }
 
 float matrix::norm() const {
-    return std::sqrt(get_device_ptr(kernel::matrix::sum_of_squares(*this)));
+    return std::sqrt(kernel::get_device_ptr(kernel::matrix::sum_of_squares(*this)));
 }
 
 float matrix::stddev() const {

@@ -21,6 +21,7 @@ class LayerNorm final : public INode {
     std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> outputs,
                                       std::span<const matrix> gradients,
+                                      CentralOptimizer& optimizer,
                                       float learning_rate,
                                       bool perf = false) override;
 

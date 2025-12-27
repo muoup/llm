@@ -11,6 +11,8 @@ namespace kernel {
     
     using float_device_ptr_t = void*;
     
+    float get_device_ptr(kernel::float_device_ptr_t ptr);
+    
     kernel_stream_t create_kernel_stream();
     void destroy_kernel_stream(kernel_stream_t stream);
     

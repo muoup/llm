@@ -9,6 +9,7 @@
 #include <tokenizer/tokenizer.hpp>
 #include <inference/inference.hpp>
 #include <dataset/dataset_factory.hpp>
+#include "inference/optimizer.hpp"
 
 int handle_perf_model(int argc, char* argv[]) {
     std::string model_path = get_arg_value(argc, argv, "--model");
@@ -68,14 +69,15 @@ int handle_perf_model(int argc, char* argv[]) {
     
     const auto input_tokens = std::span{ tokens.begin(), tokens.end() - 1 };
     const auto target_tokens = std::span{ tokens.begin() + 1, tokens.end() };
+    CentralOptimizer optimizer;
 
     // Train twice to warm up any caches, etc.
     for (size_t i = 0; i < 5; i++) {
-        model.train_on(input_tokens, target_tokens, 0.0f, false);
+        model.train_on(input_tokens, target_tokens, optimizer, 0.0f, false);
     }
     
     std::cout << "\n--- Starting Performance Diagnostic (Training Step) ---" << std::endl;
-    model.train_on(input_tokens, target_tokens, 0.0f, true);
+    model.train_on(input_tokens, target_tokens, optimizer, 0.0f, true);
 
     std::cout << "\nPerformance diagnostic complete." << std::endl;
     return 0;

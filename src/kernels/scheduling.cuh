@@ -13,8 +13,3 @@ inline cublasHandle_t get_matmul_handle(kernel::matmul_handle_t handle) {
     return (cublasHandle_t) handle;
 }
 
-inline float get_device_ptr(kernel::float_device_ptr_t ptr) {
-    float f;
-    cudaMemcpy(&f, ptr, sizeof(float), cudaMemcpyDeviceToHost);
-    return f;
-}

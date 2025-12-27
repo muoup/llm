@@ -339,6 +339,7 @@ token_id_t InferenceModel::predict(const std::span<const token_id_t> tokens,
 
 float InferenceModel::train_on(const std::span<const token_id_t> tokens,
                                const std::span<const token_id_t> actual,
+                               CentralOptimizer& optimizer,
                                float learning_rate,
                                bool perf) {
     if (!finalized) {
@@ -370,7 +371,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     start = std::chrono::high_resolution_clock::now();
     auto [logit_gradients, loss] = m_logit_layer.backpropogate(
         results.rbegin()[1].outputs[0], results.back().outputs[0], actual,
-        learning_rate);
+        optimizer, learning_rate);
     CHECK_ERRORS("Backpropogating logits...");
     kernel::wait_for_all_streams();
 
@@ -389,7 +390,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         size_t node_idx = execution_order[i];
         start = std::chrono::high_resolution_clock::now();
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
-            results[i + 1], results[i].outputs, gradients.back(), learning_rate,
+            results[i + 1], results[i].outputs, gradients.back(), optimizer, learning_rate,
             perf));
         kernel::wait_for_all_streams();
 
@@ -408,7 +409,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     }
 
     start = std::chrono::high_resolution_clock::now();
-    this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
+    this->m_embedding_layer.backpropogate(tokens, gradients.back()[0], optimizer,
                                           learning_rate);
     kernel::wait_for_all_streams();
     CHECK_ERRORS("Backpropogating embeddings...");

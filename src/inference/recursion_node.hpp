@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <vector>
+#include "inference/optimizer.hpp"
 
 struct RecursionData : INodeData {
     size_t recursionCount;
@@ -51,6 +52,7 @@ class RecursionNode final : public INode {
     std::vector<matrix> backpropogate(const ForwardingResult& results,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
+                                      CentralOptimizer& optimizer,
                                       float learning_rate,
                                       bool perf) override;
 

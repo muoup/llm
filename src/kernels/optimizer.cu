@@ -94,17 +94,69 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
     CHECK_ERRORS("After regularize_gradient");
 }
 
-void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
-                                                ::matrix& gradient,
-                                                float learning_rate,
-                                                kernel_stream_t stream) {
-    MATRIX_ASSERT(adjust.rows == gradient.rows && adjust.cols == gradient.cols,
-                  "Dimension mismatch in adjust_parameter_matrix");
+static __global__ void adamw_step_kernel(matrix_view parameter,
+                                         const const_matrix_view gradient,
+                                         matrix_view m,
+                                         matrix_view v,
+                                         size_t t,
+                                         float learning_rate,
+                                         float beta1,
+                                         float beta2,
+                                         float epsilon,
+                                         float weight_decay) {
+    size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (row >= parameter.rows || col >= parameter.cols) {
+        return;
+    }
+
+    float theta = kernel::matrix::device_get(parameter, row, col);
+    float grad = kernel::matrix::device_get(gradient, row, col);
+    float m_t_minus_1 = kernel::matrix::device_get(m, row, col);
+    float v_t_minus_1 = kernel::matrix::device_get(v, row, col);
+
+    theta -= learning_rate * weight_decay * theta;
+
+    float m_t = beta1 * m_t_minus_1 + (1.0f - beta1) * grad;
+    float v_t = beta2 * v_t_minus_1 + (1.0f - beta2) * grad * grad;
+
+    kernel::matrix::device_set(m, row, col, m_t);
+    kernel::matrix::device_set(v, row, col, v_t);
+
+    float m_hat = m_t / (1.0f - powf(beta1, (float)t));
+    float v_hat = v_t / (1.0f - powf(beta2, (float)t));
+
+    float next_theta = theta - learning_rate * m_hat / (sqrtf(v_hat) + epsilon);
+    
+    kernel::matrix::device_set(parameter, row, col, next_theta);
+}
+
+void kernel::optimizer::adamw_step(::matrix& parameter,
+                                   const ::matrix& gradient,
+                                   ::matrix& m,
+                                   ::matrix& v,
+                                   size_t t,
+                                   float learning_rate,
+                                   float beta1,
+                                   float beta2,
+                                   float epsilon,
+                                   float weight_decay,
+                                   kernel_stream_t stream) {
+    MATRIX_ASSERT(parameter.rows == gradient.rows && parameter.cols == gradient.cols,
+                  "Dimension mismatch in adamw_step: parameter vs gradient");
+    MATRIX_ASSERT(parameter.rows == m.rows && parameter.cols == m.cols,
+                  "Dimension mismatch in adamw_step: parameter vs m");
+    MATRIX_ASSERT(parameter.rows == v.rows && parameter.cols == v.cols,
+                  "Dimension mismatch in adamw_step: parameter vs v");
 
     dim3 threads_per_block(16, 16);
-    dim3 blocks((adjust.rows + threads_per_block.x - 1) / threads_per_block.x,
-                (adjust.cols + threads_per_block.y - 1) / threads_per_block.y);
+    dim3 blocks(
+        (parameter.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (parameter.cols + threads_per_block.y - 1) / threads_per_block.y);
 
-    kernel::matrix::add_scaled(adjust, gradient, -learning_rate, stream);
-    CHECK_ERRORS("After adjust_parameter_matrix");
+    adamw_step_kernel<<<blocks, threads_per_block, 0,
+                        get_kernel_stream(stream)>>>(
+        parameter, gradient, m, v, t, learning_rate, beta1, beta2, epsilon, weight_decay);
+    CHECK_ERRORS("After adamw_step_kernel");
 }

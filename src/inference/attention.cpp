@@ -153,6 +153,7 @@ std::vector<matrix> AttentionLayer::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
+    CentralOptimizer& optimizer,
     float learning_rate,
     bool perf) {
     constexpr float regularization_strength = 0.01f;
@@ -220,12 +221,6 @@ std::vector<matrix> AttentionLayer::backpropogate(
         LOG_DEBUG("    wv_gradient norm: %f", wv_gradient.norm());
 
         AttentionHead& head = heads[h];
-        kernel::optimizer::regularize_weight_gradient(wq_gradient, head.wq,
-                                                      head_stream);
-        kernel::optimizer::regularize_weight_gradient(wk_gradient, head.wk,
-                                                      head_stream);
-        kernel::optimizer::regularize_weight_gradient(wv_gradient, head.wv,
-                                                      head_stream);
 
         matrix q_input_gradient = kernel::matrix::cross_t_multiplied(
             q_gradient, head.wq, head_stream);
@@ -240,19 +235,19 @@ std::vector<matrix> AttentionLayer::backpropogate(
                                    head_stream);
         kernel::matrix::add(input_gradient, v_input_gradient,
                                    head_stream);
+        
+        // Wait for streams before update, or update handles streams?
+        // CentralOptimizer doesn't expose streams yet. AdamW kernel does.
+        // Assuming default stream for now for safety as CentralOptimizer update is simple.
+        kernel::wait_for_all_streams(); 
 
-        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
-                                                   learning_rate, head_stream);
-        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient,
-                                                   learning_rate, head_stream);
-        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
-                                                   learning_rate, head_stream);
+        optimizer.update(head.wq, wq_gradient, learning_rate);
+        optimizer.update(head.wk, wk_gradient, learning_rate);
+        optimizer.update(head.wv, wv_gradient, learning_rate);
     }
 
-    kernel::optimizer::regularize_weight_gradient(wo_gradient, wo,
-                                                  global_stream);
-    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate,
-                                               global_stream);
+    kernel::wait_for_all_streams();
+    optimizer.update(wo, wo_gradient, learning_rate);
 
     return matrix::construct_vec(input_gradient);
 }

@@ -39,6 +39,7 @@ matrix EmbeddingLayer::forward(const std::span<const token_id_t> tokens) const {
 
 void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
+                                   CentralOptimizer& optimizer,
                                    float learning_rate) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     const float scale = std::sqrt(static_cast<float>(get_dimensions()));
@@ -54,11 +55,16 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     LOG_DEBUG("    embedding_gradient norm: %f", embedding_gradient.norm());
 
     // Sparse normalization: only normalized by the tokens actually updated
-    size_t normalization_count = tokens.size() * get_dimensions();
-    kernel::optimizer::regularize_weight_gradient(embedding_gradient, m_embeddings, nullptr, normalization_count);
-
-    kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient,
-                                               learning_rate);
+    // AdamW might be too aggressive for embeddings if we don't scale gradients by frequency.
+    // However, for now, let's stick to standard AdamW update for simplicity.
+    // The previous code had:
+    // size_t normalization_count = tokens.size() * get_dimensions();
+    // kernel::optimizer::regularize_weight_gradient(embedding_gradient, m_embeddings, nullptr, normalization_count);
+    
+    // We can simulate the normalization by scaling the gradient before passing to AdamW if needed,
+    // but AdamW is adaptive.
+    
+    optimizer.update(m_embeddings, embedding_gradient, learning_rate);
     kernel::wait_for_all_streams();
 }
 

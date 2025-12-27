@@ -53,8 +53,8 @@ let trainingChart = new Chart(ctx, {
                 type: 'linear',
                 display: true,
                 position: 'left',
-                beginAtZero: true,
                 suggestedMax: 5,
+                suggestedMin: 2,
                 grid: { color: '#334155' },
                 ticks: { color: '#94a3b8' },
                 title: { display: true, text: 'Loss', color: '#94a3b8' }

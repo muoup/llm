@@ -111,6 +111,7 @@ InferenceModel linearized_attention_model(size_t dimensions,
     return model;
 }
 
+#ifdef UNDEFINED
 InferenceModel standard_recursive_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t num_blocks,
@@ -152,3 +153,4 @@ InferenceModel standard_recursive_model(size_t dimensions,
     model.finalize();
     return model;
 }
+#endif

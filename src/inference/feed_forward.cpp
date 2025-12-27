@@ -56,6 +56,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
+    CentralOptimizer& optimizer,
     float learning_rate,
     bool perf) {
     const matrix& layer_input = inputs[0];
@@ -76,19 +77,16 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     matrix w1_gradient = kernel::matrix::t_cross_multiplied(layer_input, z1_gradient);
     auto input_gradient = kernel::matrix::cross_t_multiplied(z1_gradient, w1);
 
-    kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
-    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
-
     LOG_DEBUG("  FF Layer Gradients:");
     LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
     LOG_DEBUG("    b1_gradient norm: %f", b1_gradient.norm());
     LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
+    optimizer.update(w1, w1_gradient, learning_rate);
+    optimizer.update(w2, w2_gradient, learning_rate);
+    optimizer.update(b1, b1_gradient, learning_rate);
+    optimizer.update(b2, b2_gradient, learning_rate);
     kernel::optimizer::norm_clip(input_gradient);
 
     kernel::wait_for_all_streams();

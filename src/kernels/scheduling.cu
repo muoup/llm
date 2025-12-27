@@ -3,6 +3,12 @@
 #include <cublas_api.h>
 #include <cuda_runtime.h>
 
+float kernel::get_device_ptr(kernel::float_device_ptr_t ptr) {
+    float f;
+    cudaMemcpy(&f, ptr, sizeof(float), cudaMemcpyDeviceToHost);
+    return f;
+}
+
 kernel::kernel_stream_t kernel::create_kernel_stream() {
     kernel_stream_t stream;
     cudaStreamCreate((cudaStream_t*) &stream);

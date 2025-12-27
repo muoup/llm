@@ -54,6 +54,7 @@ struct matrix {
     matrix& operator=(matrix&) = delete;
 
     size_t buffer_size() const;
+
     void randomize(float min = -1, float max = 1);
     void leaky_kaiming_randomize();
     void xavier_randomize();

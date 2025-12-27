@@ -4,7 +4,8 @@
 #include <inference/network_node.hpp>
 #include <kernels/optimizer.hpp>
 
-ForwardingResult RecursionNode::forward(std::span<const matrix> inputs, bool perf) const {
+ForwardingResult RecursionNode::forward(std::span<const matrix> inputs,
+                                        bool perf) const {
     RecursionData recursion_data;
 
     float budget = 0.0f;
@@ -84,6 +85,7 @@ std::vector<matrix> RecursionNode::backpropogate(
     const ForwardingResult& results,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
+    CentralOptimizer& optimizer,
     float learning_rate,
     bool perf) {
     constexpr auto TIME_PENALTY = 0.01f;
@@ -116,7 +118,7 @@ std::vector<matrix> RecursionNode::backpropogate(
         dP_n.set_all(dp_n * chance_acc);
 
         auto dw = y_n.t_cross_multiplied(dP_n);
-        kernel::optimizer::adjust_parameter_matrix(w, dw, learning_rate);
+        optimizer.update(w, dw, learning_rate);
 
         auto db = matrix(1, 1);
         for (size_t r = 0; r < dP_n.cols; r++) {
@@ -124,7 +126,7 @@ std::vector<matrix> RecursionNode::backpropogate(
             db.set(0, 0, db.get(0, 0) + col_sum);
         }
 
-        kernel::optimizer::adjust_parameter_matrix(b, db, learning_rate);
+        optimizer.update(b, db, learning_rate);
 
         auto dy_n = y_gradient.scaled(p_n);
         output_gradient_span = std::span(&dy_n, 1);
@@ -141,9 +143,9 @@ std::vector<matrix> RecursionNode::backpropogate(
                     "RecursionNode::backpropogate: Null node in loop");
             }
 
-            output_gradient_storage
-                = node->backpropogate(node_forwarding_result, node_inputs,
-                                      output_gradient_span, learning_rate);
+            output_gradient_storage = node->backpropogate(
+                node_forwarding_result, node_inputs, output_gradient_span,
+                optimizer, learning_rate);
             output_gradient_span = std::span(output_gradient_storage);
         }
     }

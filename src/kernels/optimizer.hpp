@@ -14,9 +14,16 @@ void regularize_weight_gradient(::matrix& gradient,
                                 kernel_stream_t stream = nullptr,
                                 size_t normalization_count = 0);
 
-void adjust_parameter_matrix(::matrix& adjust,
-                             ::matrix& gradient,
-                             float learning_rate,
-                             kernel_stream_t stream = nullptr);
+void adamw_step(::matrix& parameter,
+                const ::matrix& gradient,
+                ::matrix& m,
+                ::matrix& v,
+                size_t t,
+                float learning_rate,
+                float beta1 = 0.9f,
+                float beta2 = 0.999f,
+                float epsilon = 1e-8f,
+                float weight_decay = 0.01f,
+                kernel_stream_t stream = nullptr);
 
 }  // namespace kernel::optimizer
