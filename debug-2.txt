@@ -1,0 +1,453 @@
+Loading tokenizer from: .models/tinystories.tok
+Loading model from: .models/tinystories-2m.lm
+Instantiating model with vocab size 5000 and dimensions 128.
+Successfully loaded model. Parameter count: 2076296
+Starting training process...
+Loading dataset from: .datasets/tinystories.rows
+Dataset loaded. Type: row-based. Iterating over rows...
+[DEBUG] Training on row 0 with 270 tokens.
+[DEBUG]   Embedding Layer Forward:
+[DEBUG]     output norm pre pos encoding: 101.761551
+[DEBUG]     output norm: 160.685913
+[DEBUG]   Attention Head 0 Forward:
+[DEBUG]     wq norm: 8.099574
+[DEBUG]     wk norm: 8.098012
+[DEBUG]     wv norm: 8.195193
+[DEBUG]     q norm: 217.314560
+[DEBUG]     k norm: 219.896759
+[DEBUG]     v norm: 230.807373
+[DEBUG]     scores norm: 12.511967
+[DEBUG]     weighted_sum norm: 285.418213
+[DEBUG]   Attention Head 1 Forward:
+[DEBUG]     wq norm: 8.109764
+[DEBUG]     wk norm: 8.102153
+[DEBUG]     wv norm: 8.189244
+[DEBUG]     q norm: 220.065964
+[DEBUG]     k norm: 222.175201
+[DEBUG]     v norm: 230.394333
+[DEBUG]     scores norm: 12.178282
+[DEBUG]     weighted_sum norm: 296.471222
+[DEBUG]   Attention Head 2 Forward:
+[DEBUG]     wq norm: 8.159904
+[DEBUG]     wk norm: 8.148355
+[DEBUG]     wv norm: 8.141224
+[DEBUG]     q norm: 227.088974
+[DEBUG]     k norm: 226.642517
+[DEBUG]     v norm: 220.079422
+[DEBUG]     scores norm: 12.662191
+[DEBUG]     weighted_sum norm: 254.480896
+[DEBUG]   Attention Head 3 Forward:
+[DEBUG]     wq norm: 8.327018
+[DEBUG]     wk norm: 8.218366
+[DEBUG]     wv norm: 8.068110
+[DEBUG]     q norm: 261.807739
+[DEBUG]     k norm: 235.867493
+[DEBUG]     v norm: 209.883972
+[DEBUG]     scores norm: 12.165634
+[DEBUG]     weighted_sum norm: 232.822403
+[DEBUG]   Attention Layer Forward:
+[DEBUG]     input norm: 194.424881
+[DEBUG]     concatenated_heads norm: 536.959412
+[DEBUG]     final_output norm: 848.703369
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 160.685913
+[DEBUG]     normalized norm: 194.424896
+[DEBUG]     mean norm: 5.073076
+[DEBUG]     inv_variance norm: 21.403116
+[DEBUG]     post_residual_connection norm: 880.533875
+[DEBUG]   FF Layer Forward:
+[DEBUG]     input norm: 186.844254
+[DEBUG]     activation_input norm: 752.519836
+[DEBUG]     activation_output norm: 524.824707
+[DEBUG]     final_output norm: 405.536865
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 880.533936
+[DEBUG]     normalized norm: 186.844254
+[DEBUG]     mean norm: 9.921498
+[DEBUG]     inv_variance norm: 4.185431
+[DEBUG]     post_residual_connection norm: 1055.442383
+[DEBUG]   Attention Head 0 Forward:
+[DEBUG]     wq norm: 8.110394
+[DEBUG]     wk norm: 8.110389
+[DEBUG]     wv norm: 8.090594
+[DEBUG]     q norm: 213.627899
+[DEBUG]     k norm: 215.388855
+[DEBUG]     v norm: 212.494492
+[DEBUG]     scores norm: 7.660543
+[DEBUG]     weighted_sum norm: 215.966446
+[DEBUG]   Attention Head 1 Forward:
+[DEBUG]     wq norm: 8.110200
+[DEBUG]     wk norm: 8.104005
+[DEBUG]     wv norm: 8.082764
+[DEBUG]     q norm: 219.602524
+[DEBUG]     k norm: 218.897675
+[DEBUG]     v norm: 209.348511
+[DEBUG]     scores norm: 7.484744
+[DEBUG]     weighted_sum norm: 213.326263
+[DEBUG]   Attention Head 2 Forward:
+[DEBUG]     wq norm: 8.184465
+[DEBUG]     wk norm: 8.172947
+[DEBUG]     wv norm: 8.081862
+[DEBUG]     q norm: 277.347534
+[DEBUG]     k norm: 275.474548
+[DEBUG]     v norm: 211.604355
+[DEBUG]     scores norm: 7.365244
+[DEBUG]     weighted_sum norm: 221.816254
+[DEBUG]   Attention Head 3 Forward:
+[DEBUG]     wq norm: 8.172103
+[DEBUG]     wk norm: 8.149720
+[DEBUG]     wv norm: 8.070662
+[DEBUG]     q norm: 265.172150
+[DEBUG]     k norm: 258.552551
+[DEBUG]     v norm: 203.330841
+[DEBUG]     scores norm: 7.430425
+[DEBUG]     weighted_sum norm: 211.375168
+[DEBUG]   Attention Layer Forward:
+[DEBUG]     input norm: 191.793289
+[DEBUG]     concatenated_heads norm: 431.313629
+[DEBUG]     final_output norm: 436.125122
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1055.442383
+[DEBUG]     normalized norm: 191.793289
+[DEBUG]     mean norm: 10.740440
+[DEBUG]     inv_variance norm: 3.247378
+[DEBUG]     post_residual_connection norm: 1139.856445
+[DEBUG]   FF Layer Forward:
+[DEBUG]     input norm: 186.295471
+[DEBUG]     activation_input norm: 747.388245
+[DEBUG]     activation_output norm: 520.572327
+[DEBUG]     final_output norm: 375.514313
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1139.856445
+[DEBUG]     normalized norm: 186.295502
+[DEBUG]     mean norm: 9.958761
+[DEBUG]     inv_variance norm: 2.967869
+[DEBUG]     post_residual_connection norm: 1310.494995
+[DEBUG]   Attention Head 0 Forward:
+[DEBUG]     wq norm: 8.107362
+[DEBUG]     wk norm: 8.107360
+[DEBUG]     wv norm: 8.091429
+[DEBUG]     q norm: 183.749054
+[DEBUG]     k norm: 185.033585
+[DEBUG]     v norm: 180.408127
+[DEBUG]     scores norm: 7.643711
+[DEBUG]     weighted_sum norm: 181.567719
+[DEBUG]   Attention Head 1 Forward:
+[DEBUG]     wq norm: 8.108170
+[DEBUG]     wk norm: 8.104212
+[DEBUG]     wv norm: 8.087087
+[DEBUG]     q norm: 187.067139
+[DEBUG]     k norm: 186.406555
+[DEBUG]     v norm: 180.195038
+[DEBUG]     scores norm: 7.553974
+[DEBUG]     weighted_sum norm: 181.493088
+[DEBUG]   Attention Head 2 Forward:
+[DEBUG]     wq norm: 8.131423
+[DEBUG]     wk norm: 8.125315
+[DEBUG]     wv norm: 8.086110
+[DEBUG]     q norm: 205.227875
+[DEBUG]     k norm: 204.733170
+[DEBUG]     v norm: 181.413757
+[DEBUG]     scores norm: 7.229570
+[DEBUG]     weighted_sum norm: 184.970001
+[DEBUG]   Attention Head 3 Forward:
+[DEBUG]     wq norm: 8.144508
+[DEBUG]     wk norm: 8.124306
+[DEBUG]     wv norm: 8.081328
+[DEBUG]     q norm: 212.567169
+[DEBUG]     k norm: 205.165405
+[DEBUG]     v norm: 175.800949
+[DEBUG]     scores norm: 7.156334
+[DEBUG]     weighted_sum norm: 178.689178
+[DEBUG]   Attention Layer Forward:
+[DEBUG]     input norm: 187.626282
+[DEBUG]     concatenated_heads norm: 363.387268
+[DEBUG]     final_output norm: 388.339325
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1310.495117
+[DEBUG]     normalized norm: 187.626297
+[DEBUG]     mean norm: 11.851921
+[DEBUG]     inv_variance norm: 2.518859
+[DEBUG]     post_residual_connection norm: 1387.105835
+[DEBUG]   FF Layer Forward:
+[DEBUG]     input norm: 186.206543
+[DEBUG]     activation_input norm: 745.597656
+[DEBUG]     activation_output norm: 518.270386
+[DEBUG]     final_output norm: 372.959015
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1387.105835
+[DEBUG]     normalized norm: 186.206512
+[DEBUG]     mean norm: 13.474131
+[DEBUG]     inv_variance norm: 2.364767
+[DEBUG]     post_residual_connection norm: 1569.307861
+[DEBUG]   Attention Head 0 Forward:
+[DEBUG]     wq norm: 8.105284
+[DEBUG]     wk norm: 8.105283
+[DEBUG]     wv norm: 8.094512
+[DEBUG]     q norm: 161.789688
+[DEBUG]     k norm: 162.394318
+[DEBUG]     v norm: 158.190094
+[DEBUG]     scores norm: 7.694242
+[DEBUG]     weighted_sum norm: 157.213120
+[DEBUG]   Attention Head 1 Forward:
+[DEBUG]     wq norm: 8.106469
+[DEBUG]     wk norm: 8.104012
+[DEBUG]     wv norm: 8.090117
+[DEBUG]     q norm: 163.655136
+[DEBUG]     k norm: 163.434387
+[DEBUG]     v norm: 158.557510
+[DEBUG]     scores norm: 7.622399
+[DEBUG]     weighted_sum norm: 157.633301
+[DEBUG]   Attention Head 2 Forward:
+[DEBUG]     wq norm: 8.117602
+[DEBUG]     wk norm: 8.114445
+[DEBUG]     wv norm: 8.089224
+[DEBUG]     q norm: 171.139923
+[DEBUG]     k norm: 170.730148
+[DEBUG]     v norm: 158.921585
+[DEBUG]     scores norm: 7.563663
+[DEBUG]     weighted_sum norm: 158.759659
+[DEBUG]   Attention Head 3 Forward:
+[DEBUG]     wq norm: 8.123155
+[DEBUG]     wk norm: 8.113130
+[DEBUG]     wv norm: 8.086897
+[DEBUG]     q norm: 173.943222
+[DEBUG]     k norm: 171.302032
+[DEBUG]     v norm: 156.112900
+[DEBUG]     scores norm: 7.391625
+[DEBUG]     weighted_sum norm: 155.168930
+[DEBUG]   Attention Layer Forward:
+[DEBUG]     input norm: 186.128998
+[DEBUG]     concatenated_heads norm: 314.398193
+[DEBUG]     final_output norm: 361.412659
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1569.307739
+[DEBUG]     normalized norm: 186.128983
+[DEBUG]     mean norm: 15.769690
+[DEBUG]     inv_variance norm: 2.080769
+[DEBUG]     post_residual_connection norm: 1663.239746
+[DEBUG]   FF Layer Forward:
+[DEBUG]     input norm: 186.144791
+[DEBUG]     activation_input norm: 746.336731
+[DEBUG]     activation_output norm: 518.061279
+[DEBUG]     final_output norm: 370.632324
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 1663.239868
+[DEBUG]     normalized norm: 186.144806
+[DEBUG]     mean norm: 18.195536
+[DEBUG]     inv_variance norm: 1.966785
+[DEBUG]     post_residual_connection norm: 1859.619995
+[DEBUG]   Logit Layer Forward:
+[DEBUG]     input norm: 296.550598
+[DEBUG]     logits norm: 1294.002930
+[DEBUG]   Logit Layer Gradients:
+[DEBUG]     logit_weight_gradient norm: 294.459137
+[DEBUG]     logit_bias_gradient norm: 15.642351
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1859.620239
+[DEBUG]     mean norm: 20.415165
+[DEBUG]     inv_variance norm: 1.757751
+[DEBUG]     grad_normalized norm: 6.188648
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 20.067781
+[DEBUG]     grad_beta norm: 7.103762
+[DEBUG]     grad_input norm: 0.797846
+[DEBUG]   FF Layer Gradients:
+[DEBUG]     w1_gradient norm: 8.441205
+[DEBUG]     b1_gradient norm: 0.613763
+[DEBUG]     w2_gradient norm: 19.745840
+[DEBUG]     b2_gradient norm: 0.556136
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1663.239746
+[DEBUG]     mean norm: 18.195536
+[DEBUG]     inv_variance norm: 1.966785
+[DEBUG]     grad_normalized norm: 1.348160
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 1.216254
+[DEBUG]     grad_beta norm: 0.903711
+[DEBUG]     grad_input norm: 0.172735
+[DEBUG]   Attention Layer Backpropagation:
+[DEBUG]     post_layer_gradient norm: 0.865428
+[DEBUG]   Attention Head 0 Gradients:
+[DEBUG]     scores_gradient norm: 22.131226
+[DEBUG]     raw_scores_gradient norm: 2.1621089429e-02
+[DEBUG]     wq_gradient norm: 1.433037
+[DEBUG]     wk_gradient norm: 1.462237
+[DEBUG]     wv_gradient norm: 5.790023
+[DEBUG]   Attention Head 1 Gradients:
+[DEBUG]     scores_gradient norm: 18.605349
+[DEBUG]     raw_scores_gradient norm: 1.8227100372e-02
+[DEBUG]     wq_gradient norm: 1.035208
+[DEBUG]     wk_gradient norm: 1.048282
+[DEBUG]     wv_gradient norm: 5.051113
+[DEBUG]   Attention Head 2 Gradients:
+[DEBUG]     scores_gradient norm: 19.990652
+[DEBUG]     raw_scores_gradient norm: 1.7835238948e-02
+[DEBUG]     wq_gradient norm: 1.239153
+[DEBUG]     wk_gradient norm: 1.312394
+[DEBUG]     wv_gradient norm: 5.392306
+[DEBUG]   Attention Head 3 Gradients:
+[DEBUG]     scores_gradient norm: 15.613569
+[DEBUG]     raw_scores_gradient norm: 1.6928028315e-02
+[DEBUG]     wq_gradient norm: 1.146808
+[DEBUG]     wk_gradient norm: 1.281330
+[DEBUG]     wv_gradient norm: 5.892806
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1569.307739
+[DEBUG]     mean norm: 15.769690
+[DEBUG]     inv_variance norm: 2.080769
+[DEBUG]     grad_normalized norm: 1.729857
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 2.142581
+[DEBUG]     grad_beta norm: 1.075370
+[DEBUG]     grad_input norm: 0.237698
+[DEBUG]   FF Layer Gradients:
+[DEBUG]     w1_gradient norm: 9.835116
+[DEBUG]     b1_gradient norm: 0.679266
+[DEBUG]     w2_gradient norm: 22.066074
+[DEBUG]     b2_gradient norm: 0.591561
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1387.105835
+[DEBUG]     mean norm: 13.474131
+[DEBUG]     inv_variance norm: 2.364767
+[DEBUG]     grad_normalized norm: 1.571154
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 1.278179
+[DEBUG]     grad_beta norm: 0.953991
+[DEBUG]     grad_input norm: 0.243700
+[DEBUG]   Attention Layer Backpropagation:
+[DEBUG]     post_layer_gradient norm: 1.050319
+[DEBUG]   Attention Head 0 Gradients:
+[DEBUG]     scores_gradient norm: 28.518805
+[DEBUG]     raw_scores_gradient norm: 3.0320910737e-02
+[DEBUG]     wq_gradient norm: 1.776153
+[DEBUG]     wk_gradient norm: 1.958302
+[DEBUG]     wv_gradient norm: 6.945695
+[DEBUG]   Attention Head 1 Gradients:
+[DEBUG]     scores_gradient norm: 25.140366
+[DEBUG]     raw_scores_gradient norm: 2.4073222652e-02
+[DEBUG]     wq_gradient norm: 1.394902
+[DEBUG]     wk_gradient norm: 1.467494
+[DEBUG]     wv_gradient norm: 5.735758
+[DEBUG]   Attention Head 2 Gradients:
+[DEBUG]     scores_gradient norm: 25.500387
+[DEBUG]     raw_scores_gradient norm: 2.6587843895e-02
+[DEBUG]     wq_gradient norm: 1.948174
+[DEBUG]     wk_gradient norm: 2.093898
+[DEBUG]     wv_gradient norm: 5.430486
+[DEBUG]   Attention Head 3 Gradients:
+[DEBUG]     scores_gradient norm: 19.108995
+[DEBUG]     raw_scores_gradient norm: 1.6941508278e-02
+[DEBUG]     wq_gradient norm: 1.350798
+[DEBUG]     wk_gradient norm: 1.641691
+[DEBUG]     wv_gradient norm: 6.793601
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1310.495117
+[DEBUG]     mean norm: 11.851921
+[DEBUG]     inv_variance norm: 2.518859
+[DEBUG]     grad_normalized norm: 2.117350
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 2.448411
+[DEBUG]     grad_beta norm: 1.243961
+[DEBUG]     grad_input norm: 0.350760
+[DEBUG]   FF Layer Gradients:
+[DEBUG]     w1_gradient norm: 13.219414
+[DEBUG]     b1_gradient norm: 0.890619
+[DEBUG]     w2_gradient norm: 28.415462
+[DEBUG]     b2_gradient norm: 0.712539
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1139.856445
+[DEBUG]     mean norm: 9.958761
+[DEBUG]     inv_variance norm: 2.967869
+[DEBUG]     grad_normalized norm: 2.021515
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 1.702070
+[DEBUG]     grad_beta norm: 1.224579
+[DEBUG]     grad_input norm: 0.403227
+[DEBUG]   Attention Layer Backpropagation:
+[DEBUG]     post_layer_gradient norm: 1.437300
+[DEBUG]   Attention Head 0 Gradients:
+[DEBUG]     scores_gradient norm: 44.593849
+[DEBUG]     raw_scores_gradient norm: 4.2584992945e-02
+[DEBUG]     wq_gradient norm: 3.426662
+[DEBUG]     wk_gradient norm: 4.045357
+[DEBUG]     wv_gradient norm: 9.507472
+[DEBUG]   Attention Head 1 Gradients:
+[DEBUG]     scores_gradient norm: 37.800446
+[DEBUG]     raw_scores_gradient norm: 3.1584557146e-02
+[DEBUG]     wq_gradient norm: 2.340757
+[DEBUG]     wk_gradient norm: 2.753350
+[DEBUG]     wv_gradient norm: 8.155047
+[DEBUG]   Attention Head 2 Gradients:
+[DEBUG]     scores_gradient norm: 33.102116
+[DEBUG]     raw_scores_gradient norm: 3.2656915486e-02
+[DEBUG]     wq_gradient norm: 1.793157
+[DEBUG]     wk_gradient norm: 2.036894
+[DEBUG]     wv_gradient norm: 6.966443
+[DEBUG]   Attention Head 3 Gradients:
+[DEBUG]     scores_gradient norm: 27.648827
+[DEBUG]     raw_scores_gradient norm: 2.3547708988e-02
+[DEBUG]     wq_gradient norm: 1.275806
+[DEBUG]     wk_gradient norm: 1.740010
+[DEBUG]     wv_gradient norm: 9.593311
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 1055.442261
+[DEBUG]     mean norm: 10.740440
+[DEBUG]     inv_variance norm: 3.247378
+[DEBUG]     grad_normalized norm: 2.628065
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 2.827871
+[DEBUG]     grad_beta norm: 1.599158
+[DEBUG]     grad_input norm: 0.530621
+[DEBUG]   FF Layer Gradients:
+[DEBUG]     w1_gradient norm: 20.315769
+[DEBUG]     b1_gradient norm: 1.269206
+[DEBUG]     w2_gradient norm: 41.202503
+[DEBUG]     b2_gradient norm: 0.957807
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 880.533936
+[DEBUG]     mean norm: 9.921498
+[DEBUG]     inv_variance norm: 4.185431
+[DEBUG]     grad_normalized norm: 2.935766
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 2.891209
+[DEBUG]     grad_beta norm: 1.850029
+[DEBUG]     grad_input norm: 0.882836
+[DEBUG]   Attention Layer Backpropagation:
+[DEBUG]     post_layer_gradient norm: 2.255846
+[DEBUG]   Attention Head 0 Gradients:
+[DEBUG]     scores_gradient norm: 140.696594
+[DEBUG]     raw_scores_gradient norm: 9.4155490398e-02
+[DEBUG]     wq_gradient norm: 15.282737
+[DEBUG]     wk_gradient norm: 8.697047
+[DEBUG]     wv_gradient norm: 19.134144
+[DEBUG]   Attention Head 1 Gradients:
+[DEBUG]     scores_gradient norm: 83.224442
+[DEBUG]     raw_scores_gradient norm: 9.3497261405e-02
+[DEBUG]     wq_gradient norm: 20.017555
+[DEBUG]     wk_gradient norm: 11.384263
+[DEBUG]     wv_gradient norm: 15.984464
+[DEBUG]   Attention Head 2 Gradients:
+[DEBUG]     scores_gradient norm: 87.080208
+[DEBUG]     raw_scores_gradient norm: 8.8689327240e-02
+[DEBUG]     wq_gradient norm: 10.199661
+[DEBUG]     wk_gradient norm: 7.487326
+[DEBUG]     wv_gradient norm: 17.654844
+[DEBUG]   Attention Head 3 Gradients:
+[DEBUG]     scores_gradient norm: 53.330719
+[DEBUG]     raw_scores_gradient norm: 8.6695976555e-02
+[DEBUG]     wq_gradient norm: 8.859053
+[DEBUG]     wk_gradient norm: 8.486165
+[DEBUG]     wv_gradient norm: 15.131387
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 160.685928
+[DEBUG]     mean norm: 5.073076
+[DEBUG]     inv_variance norm: 21.403116
+[DEBUG]     grad_normalized norm: 9.238365
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 8.726267
+[DEBUG]     grad_beta norm: 7.984035
+[DEBUG]     grad_input norm: 13.824900
+[DEBUG]   Embedding Layer Gradients:
+[DEBUG]     embedding_gradient norm: 194.040146
+Training complete. Saving model to: .models/tinystories-2m.lm

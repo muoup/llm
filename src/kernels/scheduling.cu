@@ -17,6 +17,10 @@ void kernel::wait_for_stream(kernel_stream_t stream) {
     cudaStreamSynchronize((cudaStream_t) stream);
 }
 
+void kernel::wait_for_all_streams() {
+    cudaDeviceSynchronize();
+}
+
 kernel::matmul_handle_t kernel::create_matmul_handle() {
     matmul_handle_t handle;
     

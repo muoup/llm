@@ -67,7 +67,7 @@ InferenceModel standard_attention_model(size_t dimensions,
     
     model.randomize();
     model.finalize();
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     return model;
 }
 

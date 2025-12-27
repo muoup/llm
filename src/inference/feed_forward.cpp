@@ -47,7 +47,7 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
     LOG_DEBUG("    activation_output norm: %f", activation_output.norm());
     LOG_DEBUG("    final_output norm: %f", final_output.norm());
     
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     return standardResult(matrix::construct_vec(final_output, activation_input,
                                                 activation_output));
 }
@@ -91,7 +91,7 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
     kernel::optimizer::norm_clip(input_gradient);
 
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     return matrix::construct_vec(input_gradient);
 }
 

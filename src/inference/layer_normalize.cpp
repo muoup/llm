@@ -75,7 +75,7 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
     auto inner_node_outputs
         = inner_node->forward(std::span(&results.normalized, 1), perf);
     
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     inner_node_outputs.outputs[0].add(input);
 
     if (perf) {
@@ -140,7 +140,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     }();
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
         auto end_inner = std::chrono::high_resolution_clock::now();
         if (inner_node) {
             std::chrono::duration<double, std::milli> duration

@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include <util/logger.hpp>
+#include "kernels/scheduling.hpp"
 
 size_t EmbeddingLayer::parameterCount() const {
     return m_embeddings.size();
@@ -40,7 +41,7 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
                                    const matrix& x_gradient,
                                    float learning_rate) {
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     const float scale = std::sqrt(static_cast<float>(get_dimensions()));
 
@@ -48,7 +49,7 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
         const auto& token = tokens[t];
         kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t,
                                        scale);
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
     }
 
     LOG_DEBUG("  Embedding Layer Gradients:");
@@ -56,7 +57,7 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
 
     kernel::optimizer::adjust_parameter_matrix(m_embeddings, embedding_gradient,
                                                learning_rate);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 }
 
 void EmbeddingLayer::save(std::ostream& out) const {

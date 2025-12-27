@@ -121,7 +121,7 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns[2 + h * 4 + 3] = std::move(scores);
     }
 
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];

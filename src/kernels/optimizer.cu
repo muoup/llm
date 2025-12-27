@@ -104,7 +104,3 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
     kernel::matrix::add_scaled(adjust, gradient, -learning_rate, stream);
     CHECK_ERRORS("After adjust_parameter_matrix");
 }
-
-void kernel::optimizer::wait_for_operations() {
-    cudaDeviceSynchronize();
-}

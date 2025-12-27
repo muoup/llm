@@ -213,7 +213,7 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
 
     auto start = std::chrono::high_resolution_clock::now();
     matrix embeddings = m_embedding_layer.forward(tokens);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     
     CHECK_ERRORS("Forwarding embeddings...");
     if (perf) {
@@ -235,7 +235,7 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
         results.emplace_back(std::move(forward_result));
         std::string msg = std::format("Forwarding layer {}", node_idx + 1);
         CHECK_ERRORS(msg.data());
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
 
         if (perf) {
             auto end = std::chrono::high_resolution_clock::now();
@@ -251,7 +251,7 @@ std::vector<ForwardingResult> InferenceModel::forwarding_results(
     start = std::chrono::high_resolution_clock::now();
     auto logits = m_logit_layer.forward(results.back().outputs[0]);
     CHECK_ERRORS("Forwarding logits...");
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     
     if (perf) {
         auto end = std::chrono::high_resolution_clock::now();
@@ -358,11 +358,11 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         = this->forwarding_results(tokens, perf);
 
     auto start = std::chrono::high_resolution_clock::now();
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     // Apply softmax to logits for cross-entropy loss backprop
     results.back().outputs[0].softmax();
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     
     if (perf) {
         auto end = std::chrono::high_resolution_clock::now();
@@ -377,7 +377,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         results.rbegin()[1].outputs[0], results.back().outputs[0], actual,
         learning_rate);
     CHECK_ERRORS("Backpropogating logits...");
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     
     if (perf) {
         auto end = std::chrono::high_resolution_clock::now();
@@ -396,7 +396,7 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
         gradients.emplace_back(m_layers[node_idx]->backpropogate(
             results[i + 1], results[i].outputs, gradients.back(),
             learning_rate, perf));
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
 
         std::string msg = std::string("Backpropogating layer ")
                           + std::to_string(i + 1) + "...";
@@ -415,10 +415,10 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     start = std::chrono::high_resolution_clock::now();
     this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
                                           learning_rate);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     CHECK_ERRORS("Backpropogating embeddings...");
     if (perf) {
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration = end - start;
         std::cout << "[PERF] Embedding backprop: " << duration.count() << " ms"

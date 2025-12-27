@@ -21,6 +21,8 @@ namespace kernel {
         (wait_for_stream(args), ...);
     }
     
+    void wait_for_all_streams();
+    
     matmul_handle_t create_matmul_handle();
     void destroy_matmul_handle(matmul_handle_t handle);
     

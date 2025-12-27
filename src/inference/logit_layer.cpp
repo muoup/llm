@@ -42,7 +42,7 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     kernel::logit_layer::LossResult loss_result
         = kernel::logit_layer::compute_loss_gradient(predictions, actual,
                                                      vocab_size);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     matrix h_final_gradient
         = loss_result.logit_loss_gradient.cross_t_multiplied(w);
@@ -50,7 +50,7 @@ std::pair<matrix, float> LogitLayer::backpropogate(
         = input.t_cross_multiplied(loss_result.logit_loss_gradient);
     kernel::optimizer::norm_clip(h_final_gradient);
     kernel::optimizer::regularize_weight_gradient(logit_weight_gradient, w);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     LOG_DEBUG("  Logit Layer Gradients:");
     LOG_DEBUG("    logit_weight_gradient norm: %f",
@@ -62,7 +62,7 @@ std::pair<matrix, float> LogitLayer::backpropogate(
         b, loss_result.logit_bias_gradient, learning_rate);
     kernel::optimizer::adjust_parameter_matrix(w, logit_weight_gradient,
                                                learning_rate);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     return { std::move(h_final_gradient), loss_result.average_loss };
 }
