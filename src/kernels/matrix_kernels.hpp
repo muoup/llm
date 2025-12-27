@@ -55,7 +55,7 @@ void set_row_vector(::matrix &mat, const size_t mat_row, const ::matrix &vec,
 ::matrix get_row_vector(const ::matrix &mat, const size_t row,
                         kernel_stream_t stream = nullptr);
 void add_row_vector(::matrix &mat, const size_t row, const ::matrix &vec,
-                    const size_t vec_row = 0, kernel_stream_t stream = nullptr);
+                    const size_t vec_row = 0, float scale = 0, kernel_stream_t stream = nullptr);
 void set_horizontal_slice(::matrix &mat, const size_t start_col,
                           const ::matrix &slice,
                           kernel_stream_t stream = nullptr);

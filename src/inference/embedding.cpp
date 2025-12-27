@@ -42,13 +42,12 @@ void EmbeddingLayer::backpropogate(const std::span<const token_id_t> tokens,
     matrix embedding_gradient(m_embeddings.rows, m_embeddings.cols);
     kernel::optimizer::wait_for_operations();
 
-    matrix scaled_x_gradient = x_gradient.clone();
-    scaled_x_gradient.scale(std::sqrt(static_cast<float>(get_dimensions())));
+    const float scale = std::sqrt(static_cast<float>(get_dimensions()));
 
     for (size_t t = 0; t < tokens.size(); t++) {
         const auto& token = tokens[t];
-        kernel::matrix::add_row_vector(embedding_gradient, token, scaled_x_gradient,
-                                       t);
+        kernel::matrix::add_row_vector(embedding_gradient, token, x_gradient, t,
+                                       scale);
         kernel::optimizer::wait_for_operations();
     }
 

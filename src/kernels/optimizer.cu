@@ -6,7 +6,7 @@
 #include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
 
-constexpr auto NORM_CLIP_MAX_MAG = 5.0f;
+constexpr auto NORM_CLIP_MAX_MAG = 2.5f;
 
 __global__ void norm_clip_kernel(matrix_view gradient,
                                  float* sum_sq_ptr,
@@ -81,6 +81,7 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
         (gradient.rows + threads_per_block.x - 1) / threads_per_block.x,
         (gradient.cols + threads_per_block.y - 1) / threads_per_block.y);
 
+    norm_clip(gradient, stream);
     float_device_ptr_t sum_sq_ptr
         = kernel::matrix::sum_of_squares(gradient, stream);
     regularize_gradient<<<blocks, threads_per_block, 0,
@@ -89,18 +90,12 @@ void kernel::optimizer::regularize_weight_gradient(::matrix& gradient,
     CHECK_ERRORS("After regularize_gradient");
 }
 
-kernel::KernelStreamPool<4> parameter_optimization_pool;
-
 void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
                                                 ::matrix& gradient,
                                                 float learning_rate,
                                                 kernel_stream_t stream) {
     MATRIX_ASSERT(adjust.rows == gradient.rows && adjust.cols == gradient.cols,
                   "Dimension mismatch in adjust_parameter_matrix");
-
-    if (stream == nullptr) {
-        stream = parameter_optimization_pool.acquire();
-    }
 
     dim3 threads_per_block(16, 16);
     dim3 blocks((adjust.rows + threads_per_block.x - 1) / threads_per_block.x,
@@ -110,6 +105,6 @@ void kernel::optimizer::adjust_parameter_matrix(::matrix& adjust,
     CHECK_ERRORS("After adjust_parameter_matrix");
 }
 
-void kernel::optimizer::wait_for_operations(kernel_stream_t stream) {
-    cudaStreamSynchronize(get_kernel_stream(stream));
+void kernel::optimizer::wait_for_operations() {
+    cudaDeviceSynchronize();
 }

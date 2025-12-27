@@ -121,10 +121,14 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns[2 + h * 4 + 3] = std::move(scores);
     }
 
+    kernel::optimizer::wait_for_operations();
+
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];
 
-    final_output = concatenated_heads.cross_multiplied(wo);
+    final_output
+        = kernel::matrix::cross_multiplied(concatenated_heads, wo, streams[0]);
+    kernel::wait_for_stream(streams[0]);
 
     LOG_DEBUG("  Attention Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -160,15 +164,18 @@ std::vector<matrix> AttentionLayer::backpropogate(
     LOG_DEBUG("  Attention Layer Backpropagation:");
     LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
-    matrix wo_gradient
-        = kernel::matrix::async_allocate(wo.rows, wo.cols, streams[0]);
+    matrix wo_gradient = kernel::matrix::t_cross_multiplied(
+        concat_heads, post_layer_gradient, streams[0]);
     matrix attention_concat_gradient = kernel::matrix::cross_t_multiplied(
         post_layer_gradient, wo, streams[0]);
 
+    // Ensure attention_concat_gradient is ready before heads start reading it
+    kernel::wait_for_stream(streams[0]);
+
     matrix input_gradient
         = kernel::matrix::async_allocate(layer_input.rows, layer_input.cols);
-    matrix raw_scores_gradient
-        = kernel::matrix::async_allocate(layer_input.rows, layer_input.rows);
+    matrix raw_scores_gradient = kernel::matrix::async_allocate(
+        layer_input.rows, layer_input.rows, streams[0]);
 
     for (size_t h = 0; h < head_count; ++h) {
         const matrix& q = result.outputs[2 + h * 4 + 0];

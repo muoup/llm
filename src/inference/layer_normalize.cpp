@@ -9,6 +9,7 @@
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
+#include "kernels/scheduling.hpp"
 
 constexpr size_t STREAMS_NEEDED = 3;
 
@@ -61,7 +62,8 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
 
     auto start_norm = std::chrono::high_resolution_clock::now();
     auto results
-        = kernel::layer_norm::layer_normalization(input, *this, epsilon);
+        = kernel::layer_norm::layer_normalization(input, *this, epsilon, streams[0]);
+    kernel::wait_for_streams(streams[0]);
 
     if (!inner_node) {
         auto fr = standardResult(matrix::construct_vec(
@@ -72,10 +74,11 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
     auto start_inner = std::chrono::high_resolution_clock::now();
     auto inner_node_outputs
         = inner_node->forward(std::span(&results.normalized, 1), perf);
+    
+    kernel::optimizer::wait_for_operations();
     inner_node_outputs.outputs[0].add(input);
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
         auto end_inner = std::chrono::high_resolution_clock::now();
 
         auto end_norm = start_inner;
@@ -159,10 +162,10 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     kernel::layer_norm::LayerNormGradients results
         = kernel::layer_norm::layer_normalization_backward(
             layer_input, gamma, beta, mean, inv_variance, grad_normalized,
-            epsilon);
+            epsilon, streams[0]);
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_streams(streams[0]);
         auto end_norm = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration
             = end_norm - start_norm;
@@ -177,17 +180,17 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     LOG_DEBUG("    grad_input norm: %f", results.grad_input.norm());
 
     kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,
-                                               learning_rate);
-    CHECK_ERRORS("pre adjust beta");
+                                               learning_rate, streams[0]);
     kernel::optimizer::adjust_parameter_matrix(beta, results.grad_beta,
-                                               learning_rate);
-    CHECK_ERRORS("post adjust beta");
+                                               learning_rate, streams[0]);
 
     // Add the gradient from the residual path
     if (inner_node) {
+        kernel::wait_for_stream(streams[0]);
         results.grad_input.add(gradients[0]);
     }
     
+    kernel::wait_for_stream(streams[0]);
     return matrix::construct_vec(results.grad_input);
 }
 

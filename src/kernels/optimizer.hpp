@@ -14,6 +14,6 @@ void adjust_parameter_matrix(::matrix& adjust,
                              float learning_rate,
                              kernel_stream_t stream = nullptr);
 
-void wait_for_operations(kernel_stream_t stream = nullptr);
+void wait_for_operations();
 
 }  // namespace kernel::optimizer

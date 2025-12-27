@@ -476,13 +476,14 @@ void kernel::matrix::set_row_vector(::matrix& mat,
 
 static __global__ void add_row_vector_kernel(const matrix_view data,
                                              size_t data_row,
-                                             const const_matrix_view offset,
-                                             size_t offset_row) {
+                                             const const_matrix_view row_vec,
+                                             size_t offset_row,
+                                             float scale) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < data.cols) {
-        auto val = kernel::matrix::device_get(offset, offset_row, col);
-        kernel::matrix::device_offset_elem(data, data_row, col, val);
+        auto val = kernel::matrix::device_get(row_vec, offset_row, col);
+        kernel::matrix::device_offset_elem(data, data_row, col, val * scale);
     }
 }
 
@@ -490,6 +491,7 @@ void kernel::matrix::add_row_vector(::matrix& mat,
                                     const size_t row,
                                     const ::matrix& vec,
                                     size_t vec_row,
+                                    float scale,
                                     kernel_stream_t stream) {
     const size_t threads_per_block = 256;
     const size_t blocks
@@ -497,7 +499,7 @@ void kernel::matrix::add_row_vector(::matrix& mat,
 
     add_row_vector_kernel<<<blocks, threads_per_block, 0,
                             get_kernel_stream(stream)>>>(mat, row, vec,
-                                                         vec_row);
+                                                         vec_row, scale);
 }
 
 static __global__ void set_horizontal_slice_kernel(
@@ -623,29 +625,36 @@ __global__ void kernel_softmax(matrix_view data) {
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
 
-    // float local_max = -CUDART_INF_F;
-    // for (size_t col = tid; col < data.cols; col += blockDim.x) {
-    //     float val = kernel::matrix::device_get(data, row, col);
-    //     local_max = fmaxf(local_max, val);
-    // }
+    float local_max = -CUDART_INF_F;
+    for (size_t col = tid; col < data.cols; col += blockDim.x) {
+        float val = kernel::matrix::device_get(data, row, col);
+        local_max = fmaxf(local_max, val);
+    }
     
-    // float row_max = kernel::matrix::device::block_reduce_max(local_max);
+    float row_max = kernel::matrix::device::block_reduce_max(local_max);
     
-    // __shared__ float shared_max;
-    // if (tid == 0) {
-    //     shared_max = row_max;
-    // }
+    __shared__ float shared_max;
+    if (tid == 0) {
+        shared_max = row_max;
+    }
     
     __syncthreads();
 
     float local_sum = 0.0f;
-    for (size_t col = tid; col < data.cols; col += blockDim.x) {
-        float val = kernel::matrix::device_get(data, row, col);
-        float exp = __expf(val);
+    if (shared_max > -CUDART_INF_F) {
+        for (size_t col = tid; col < data.cols; col += blockDim.x) {
+            float val = kernel::matrix::device_get(data, row, col);
+            float exp = __expf(val - shared_max);
 
-        kernel::matrix::device_set(data, row, col, exp);
-        local_sum += exp;
+            kernel::matrix::device_set(data, row, col, exp);
+            local_sum += exp;
+        }
+    } else {
+        for (size_t col = tid; col < data.cols; col += blockDim.x) {
+            kernel::matrix::device_set(data, row, col, 0.0f);
+        }
     }
+    __syncthreads();
     
     float row_dot = kernel::matrix::device::block_reduce_sum(local_sum);
 
@@ -655,11 +664,11 @@ __global__ void kernel_softmax(matrix_view data) {
     }
     __syncthreads();
 
-    row_dot = shared_denom;
-
-    for (size_t col = tid; col < data.cols; col += blockDim.x) {
-        float exp = kernel::matrix::device_get(data, row, col);
-        kernel::matrix::device_set(data, row, col, exp / shared_denom);
+    if (shared_denom > 0.0f) {
+        for (size_t col = tid; col < data.cols; col += blockDim.x) {
+            float val = kernel::matrix::device_get(data, row, col);
+            kernel::matrix::device_set(data, row, col, val / shared_denom);
+        }
     }
 }
 
