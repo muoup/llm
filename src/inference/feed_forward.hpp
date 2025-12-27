@@ -28,13 +28,13 @@ class FeedForwardLayer final : public INode {
     std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
-                                      float learning_rate,
-                                      bool perf) override;
+                                      CentralOptimizer& optimizer,
+                                      bool perf = false) override;
 
     void randomize(float min, float max) override;
     void save(std::ostream& out) const override;
     static FeedForwardLayer load(std::istream& in);
-
+    
     matrix w1, b1;
     matrix w2, b2;
 };

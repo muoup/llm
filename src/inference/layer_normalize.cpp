@@ -9,6 +9,9 @@
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
+#include "kernels/scheduling.hpp"
+
+constexpr size_t STREAMS_NEEDED = 3;
 
 LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
                      size_t dimensions,
@@ -17,13 +20,16 @@ LayerNorm::LayerNorm(std::unique_ptr<INode> inner_node,
       epsilon(epsilon),
       gamma(1, dimensions),
       beta(1, dimensions),
-      inner_node(std::move(inner_node)) {
+      inner_node(std::move(inner_node)),
+      streams(STREAMS_NEEDED) {
     if (this->inner_node) {
         this->context_name = node_type_to_string(this->inner_node->getType());
     } else {
         this->context_name = "LayerNorm";
     }
 }
+
+LayerNorm::LayerNorm() : streams(STREAMS_NEEDED) {}
 
 size_t LayerNorm::parameterCount() const {
     size_t inner_parameters = [&]() -> size_t {
@@ -55,8 +61,9 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
     const matrix& input = inputs[0];
 
     auto start_norm = std::chrono::high_resolution_clock::now();
-    auto results
-        = kernel::layer_norm::layer_normalization(input, gamma, beta, epsilon);
+    auto results = kernel::layer_norm::layer_normalization(input, *this,
+                                                           epsilon, streams[0]);
+    kernel::wait_for_streams(streams[0]);
 
     if (!inner_node) {
         auto fr = standardResult(matrix::construct_vec(
@@ -67,10 +74,11 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
     auto start_inner = std::chrono::high_resolution_clock::now();
     auto inner_node_outputs
         = inner_node->forward(std::span(&results.normalized, 1), perf);
+
+    kernel::wait_for_all_streams();
     inner_node_outputs.outputs[0].add(input);
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
         auto end_inner = std::chrono::high_resolution_clock::now();
 
         auto end_norm = start_inner;
@@ -88,6 +96,8 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
     }
 
     LOG_DEBUG("  LayerNorm Forward:");
+    LOG_DEBUG("    gamma norm: %f", gamma.norm());
+    LOG_DEBUG("    beta norm: %f", beta.norm());
     LOG_DEBUG("    input norm: %f", input.norm());
     LOG_DEBUG("    normalized norm: %f", results.normalized.norm());
     LOG_DEBUG("    mean norm: %f", results.mean.norm());
@@ -105,13 +115,13 @@ ForwardingResult LayerNorm::forward(std::span<const matrix> inputs,
 std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                                              std::span<const matrix> inputs,
                                              std::span<const matrix> gradients,
-                                             float learning_rate,
+                                             CentralOptimizer& optimizer,
                                              bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& mean = result.outputs.rbegin()[1];
     const matrix& inv_variance = result.outputs.rbegin()[0];
 
-    // Maybe unused if no inner node
+    // May be unused if no inner node
     std::vector<matrix> inner_backprop_outputs;
 
     auto start_inner = std::chrono::high_resolution_clock::now();
@@ -124,7 +134,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
         if (inner_node) {
             inner_backprop_outputs = inner_node->backpropogate(
                 result, std::span<const matrix>{ &normalized_input, 1 },
-                gradients, learning_rate);
+                gradients, optimizer);
             return inner_backprop_outputs[0];
         } else {
             return gradients[0];
@@ -132,7 +142,7 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     }();
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_all_streams();
         auto end_inner = std::chrono::high_resolution_clock::now();
         if (inner_node) {
             std::chrono::duration<double, std::milli> duration
@@ -154,10 +164,10 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
     kernel::layer_norm::LayerNormGradients results
         = kernel::layer_norm::layer_normalization_backward(
             layer_input, gamma, beta, mean, inv_variance, grad_normalized,
-            epsilon);
+            epsilon, streams[0]);
 
     if (perf) {
-        kernel::optimizer::wait_for_operations();
+        kernel::wait_for_streams(streams[0]);
         auto end_norm = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration
             = end_norm - start_norm;
@@ -166,22 +176,25 @@ std::vector<matrix> LayerNorm::backpropogate(const ForwardingResult& result,
                   << std::endl;
     }
 
-    LOG_DEBUG("  LayerNorm Layer Gradients:");
+    kernel::optimizer::norm_clip(results.grad_gamma, streams[0]);
+    kernel::optimizer::norm_clip(results.grad_beta, streams[0]);
+    kernel::optimizer::norm_clip(results.grad_input, streams[0]);
+    kernel::wait_for_all_streams();
+    
+    LOG_DEBUG("  Layer Norm Gradients:");
+    LOG_DEBUG("    grad_input norm: %f", results.grad_input.norm());
     LOG_DEBUG("    grad_gamma norm: %f", results.grad_gamma.norm());
     LOG_DEBUG("    grad_beta norm: %f", results.grad_beta.norm());
-    LOG_DEBUG("    grad_input norm: %f", results.grad_input.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(gamma, results.grad_gamma,
-                                               learning_rate);
-    kernel::matrix::check_errors("pre adjust beta");
-    kernel::optimizer::adjust_parameter_matrix(beta, results.grad_beta,
-                                               learning_rate);
-    kernel::matrix::check_errors("post adjust beta");
+    optimizer.update(gamma, results.grad_gamma);
+    optimizer.update(beta, results.grad_beta);
 
     // Add the gradient from the residual path
     if (inner_node) {
         results.grad_input.add(gradients[0]);
     }
+
+    kernel::wait_for_all_streams();
     return matrix::construct_vec(results.grad_input);
 }
 

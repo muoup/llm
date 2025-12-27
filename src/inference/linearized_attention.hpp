@@ -27,7 +27,7 @@ class LinearizedAttention : public INode {
     std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
-                                      float learning_rate,
+                                      CentralOptimizer& optimizer,
                                       bool perf = false) override;
 
     void randomize(float min, float max) override;

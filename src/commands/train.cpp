@@ -9,10 +9,11 @@
 
 #include <commands/arg_parser.hpp>
 #include <inference/inference.hpp>
+#include <inference/optimizer.hpp>
 #include <tokenizer/tokenizer.hpp>
 
 #include <dataset/dataset_factory.hpp>
-#include "model_factories/standard_model.hpp"
+#include "util/logger.hpp"
 
 int handle_train(int argc, char* argv[]) {
     std::string data_path = get_arg_value(argc, argv, "--data");
@@ -97,6 +98,8 @@ int handle_train(int argc, char* argv[]) {
 
         const size_t n_rows = dataset->size();
 
+        CentralOptimizer optimizer(learning_rate);
+
         dataset->enumerate([&](size_t i, std::string_view row) {
             auto tokens = encode(_tokenizer, row);
             if (tokens.size() < 2) {
@@ -106,8 +109,9 @@ int handle_train(int argc, char* argv[]) {
                 = std::span{ tokens.begin(), tokens.end() - 1 };
             const auto target_tokens
                 = std::span{ tokens.begin() + 1, tokens.end() };
+            LOG_DEBUG("Training on row %zu with %zu tokens.", i, tokens.size());
             float loss
-                = model.train_on(input_tokens, target_tokens, learning_rate);
+                = model.train_on(input_tokens, target_tokens, optimizer);
 
             constexpr size_t ROLLING_AVG_WINDOW = 100;
 

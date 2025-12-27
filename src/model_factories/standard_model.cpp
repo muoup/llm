@@ -67,7 +67,7 @@ InferenceModel standard_attention_model(size_t dimensions,
     
     model.randomize();
     model.finalize();
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
     return model;
 }
 
@@ -102,12 +102,16 @@ InferenceModel linearized_attention_model(size_t dimensions,
 
         last_layer_idx = ff_block_idx;
     }
+    
+    size_t standardized_norm = model.add_layer(std::make_unique<LayerNorm>(nullptr, dimensions));
+    model.add_connection(last_layer_idx, standardized_norm);
 
     model.randomize();
     model.finalize();
     return model;
 }
 
+#ifdef UNDEFINED
 InferenceModel standard_recursive_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t num_blocks,
@@ -149,3 +153,4 @@ InferenceModel standard_recursive_model(size_t dimensions,
     model.finalize();
     return model;
 }
+#endif

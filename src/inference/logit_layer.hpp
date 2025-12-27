@@ -2,6 +2,7 @@
 
 #include <tokenizer/token.hpp>
 #include <util/matrix.hpp>
+#include <inference/optimizer.hpp>
 
 #include <iostream>
 #include <span>
@@ -20,7 +21,7 @@ class LogitLayer {
         const matrix& input,
         const matrix& predictions,
         const std::span<const token_id_t> actual,
-        float learning_rate);
+        CentralOptimizer& optimizer);
 
     void save(std::ostream& out) const;
     static LogitLayer load(std::istream& in);

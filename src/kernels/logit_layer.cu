@@ -2,19 +2,7 @@
 
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>
-
-// for (size_t i = 0; i < predictions.rows; ++i) {
-//         for (size_t j = 0; j < predictions.cols; ++j) {
-//             const auto delta_loss = predictions.get(i, j) -
-//                  (j == actual[i + 1] ? 1.0f : 0.0f);
-//             logit_loss_gradient.set(i, j, delta_loss);
-//             logit_bias_gradient.offset(0, j, delta_loss);
-//             if (j == actual[i + 1]) {
-//                 average_loss -= (std::log(predictions.get(i, j) + 1e-10f)) /
-//                 predictions.rows;
-//             }
-//         }
-//     }
+#include <kernels/scheduling.cuh>
 
 static __global__ void compute_loss_gradient_kernel(
     const token_id_t actual[],
@@ -45,30 +33,31 @@ static __global__ void compute_loss_gradient_kernel(
 kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     const ::matrix& predictions,
     const std::span<const token_id_t> actual,
-    size_t vocab_size) {
+    size_t vocab_size,
+    kernel_stream_t stream) {
     ::matrix logit_loss_gradient(predictions.rows, predictions.cols);
     ::matrix logit_bias_gradient(1, vocab_size);
     
     float* device_average_loss;
     cudaMalloc(&device_average_loss, sizeof(float));
-    cudaMemset(device_average_loss, 0, sizeof(float));
+    cudaMemsetAsync(device_average_loss, 0, sizeof(float), get_kernel_stream(stream));
 
     token_id_t* d_actual;
     cudaMalloc(&d_actual, actual.size() * sizeof(token_id_t));
-    cudaMemcpy(d_actual, actual.data(), actual.size() * sizeof(token_id_t),
-               cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_actual, actual.data(), actual.size() * sizeof(token_id_t),
+               cudaMemcpyHostToDevice, get_kernel_stream(stream));
 
     dim3 block_size(16, 16);
     dim3 grid_size((predictions.cols + block_size.x - 1) / block_size.x,
                    (predictions.rows + block_size.y - 1) / block_size.y);
 
-    compute_loss_gradient_kernel<<<grid_size, block_size>>>(
+    compute_loss_gradient_kernel<<<grid_size, block_size, 0, get_kernel_stream(stream)>>>(
         d_actual, predictions, logit_loss_gradient, logit_bias_gradient,
         device_average_loss);
-    kernel::optimizer::wait_for_operations();
 
     float host_loss;
-    cudaMemcpy(&host_loss, device_average_loss, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(&host_loss, device_average_loss, sizeof(float), cudaMemcpyDeviceToHost, get_kernel_stream(stream));
+    cudaStreamSynchronize(get_kernel_stream(stream));
     cudaFree(device_average_loss);
     cudaFree(d_actual);
 

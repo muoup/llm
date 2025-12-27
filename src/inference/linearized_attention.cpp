@@ -98,7 +98,7 @@ std::vector<matrix> LinearizedAttention::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate,
+    CentralOptimizer& optimizer,
     bool perf) {
     constexpr float regularization_strength = 0.01f;
 
@@ -111,7 +111,7 @@ std::vector<matrix> LinearizedAttention::backpropogate(
     matrix attention_concat_gradient
         = post_layer_gradient.cross_t_multiplied(wo);
 
-    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate);
+    optimizer.update(wo, wo_gradient);
 
     matrix input_gradient(layer_input.rows, layer_input.cols);
 
@@ -148,12 +148,9 @@ std::vector<matrix> LinearizedAttention::backpropogate(
         matrix wv_gradient = layer_input.t_cross_multiplied(v_gradient);
 
         LinearAttentionHead& head = heads[h];
-        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
-                                                   learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient,
-                                                   learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
-                                                   learning_rate);
+        optimizer.update(head.wq, wq_gradient);
+        optimizer.update(head.wk, wk_gradient);
+        optimizer.update(head.wv, wv_gradient);
 
         // Gradient of the input: sum of contributions via each projection +
         matrix head_input_gradient = q_gradient.cross_t_multiplied(head.wq);

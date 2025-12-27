@@ -1,24 +1,19 @@
 #include "matrix.hpp"
 
-#include <kernels/matrix_kernels.hpp>
-
-#include <cmath>
-#include <cstdlib>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
 #include <utility>
+#include <cstddef>
+#include <cmath>
+#include <sstream>
+#include <iomanip>
 
-static constexpr size_t calculate_stride(const size_t i) {
-    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
-    // to or Greater Than i
-    constexpr size_t alignment = 256 / sizeof(float);
-
-    return ((i + alignment - 1) / alignment) * alignment;
-}
+#include <kernels/matrix_kernels.hpp>
+#include <kernels/scheduling.hpp>
 
 matrix::matrix(const size_t rows, const size_t cols)
-    : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
+    : rows(rows),
+      cols(cols),
+      stride(calculate_stride(rows, cols)),
+      data(nullptr) {
     if (this->buffer_size() > 0) {
         this->data = kernel::matrix::allocate_buffer(this->buffer_size());
     }
@@ -38,13 +33,14 @@ matrix& matrix::operator=(matrix&& other) {
     this->rows = std::exchange(other.rows, 0);
     this->cols = std::exchange(other.cols, 0);
     this->stride = std::exchange(other.stride, 0);
+    
     return *this;
 }
 
 matrix::~matrix() {
     // If data is nullptr, free_buffer will handle it gracefully
     kernel::matrix::free_buffer(std::exchange(this->data, nullptr));
-    kernel::matrix::check_errors("matrix::~matrix");
+    CHECK_ERRORS("matrix::~matrix");
 }
 
 void matrix::randomize(const float min, const float max) {
@@ -71,7 +67,7 @@ void matrix::xavier_randomize() {
 }
 
 size_t matrix::buffer_size() const {
-    return stride * cols * sizeof(float);
+    return stride * rows * sizeof(float);
 }
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
@@ -96,19 +92,19 @@ matrix matrix::clone() const {
 }
 
 float matrix::sum() const {
-    return kernel::matrix::sum(*this);
+    return kernel::get_device_ptr(kernel::matrix::sum(*this));
 }
 
 float matrix::max() const {
-    return kernel::matrix::max(*this);
+    return kernel::get_device_ptr(kernel::matrix::max(*this));
 }
 
 float matrix::min() const {
-    return kernel::matrix::min(*this);
+    return kernel::get_device_ptr(kernel::matrix::min(*this));
 }
 
 float matrix::absmax() const {
-    return kernel::matrix::absmax(*this);
+    return kernel::get_device_ptr(kernel::matrix::absmax(*this));
 }
 
 matrix& matrix::set_all(float value) {
@@ -146,8 +142,8 @@ const_matrix_view matrix::get_row_vector(const size_t row) const {
     MATRIX_ASSERT(row < this->rows,
                   "Row index out of bounds for getting row vector");
 
-    return const_matrix_view(1, this->cols, this->rows + this->stride - 1,
-                             this->data + row);
+    return const_matrix_view(1, this->cols, this->stride,
+                             this->data + row * this->stride);
 }
 
 void matrix::set_row_vector(const size_t row, const matrix& row_vector) {
@@ -176,7 +172,8 @@ const_matrix_view matrix::get_horizontal_slice(const size_t col_start,
     MATRIX_ASSERT(col_start + slice_cols <= this->cols,
                   "Slice dimensions do not match for getting horizontal slice");
 
-    return const_matrix_view(this->rows, slice_cols, this->stride, this->data + col_start * this->stride);
+    return const_matrix_view(this->rows, slice_cols, this->stride,
+                             this->data + col_start);
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {
@@ -189,15 +186,15 @@ matrix& matrix::element_wise_multiply(const matrix& other) {
 }
 
 float matrix::abssum() const {
-    return kernel::matrix::abssum(*this);
+    return kernel::get_device_ptr(kernel::matrix::abssum(*this));
 }
 
 float matrix::variance() const {
-    return kernel::matrix::variance(*this);
+    return kernel::get_device_ptr(kernel::matrix::variance(*this));
 }
 
 float matrix::norm() const {
-    return std::sqrt(kernel::matrix::sum_of_squares(*this));
+    return std::sqrt(kernel::get_device_ptr(kernel::matrix::sum_of_squares(*this)));
 }
 
 float matrix::stddev() const {
@@ -230,10 +227,6 @@ std::string matrix::to_string(std::uint8_t precision) const {
 matrix& matrix::softmax() {
     kernel::matrix::softmax(*this);
     return *this;
-}
-
-matrix matrix::backprop_softmax(const matrix& output_gradient) const {
-    return kernel::matrix::backprop_softmax(*this, output_gradient);
 }
 
 matrix& matrix::mask_upper_triangular(const float mask_value) {
@@ -300,12 +293,12 @@ matrix matrix::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
 
     matrix new_matrix = matrix(new_rows, new_cols);
-    kernel::matrix::check_errors("pre2 matrix::load");
+    CHECK_ERRORS("pre2 matrix::load");
     float* buffer_data = new float[new_matrix.buffer_size() / sizeof(float)];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);
     delete[] buffer_data;
-    kernel::matrix::check_errors("matrix::load");
+    CHECK_ERRORS("matrix::load");
 
     return new_matrix;
 }

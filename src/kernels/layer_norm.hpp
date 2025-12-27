@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
 
 class LayerNorm;
@@ -13,9 +14,9 @@ struct LayerNormResult {
 };
 
 LayerNormResult layer_normalization(const ::matrix& input,
-                                    const ::matrix& gamma,
-                                    const ::matrix& beta,
-                                    float epsilon);
+                                    const LayerNorm& layer,
+                                    float epsilon,
+                                    kernel_stream_t stream = nullptr);
 
 struct LayerNormGradients {
     ::matrix grad_input;
@@ -29,6 +30,8 @@ LayerNormGradients layer_normalization_backward(const ::matrix& input,
                                                 const ::matrix& mean,
                                                 const ::matrix& inv_variance,
                                                 const ::matrix& grad_normalized,
-                                                float epsilon);
+                                                float epsilon,
+                                                kernel_stream_t stream
+                                                = nullptr);
 
 }  // namespace kernel::layer_norm

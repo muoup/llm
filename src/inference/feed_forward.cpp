@@ -34,28 +34,20 @@ ForwardingResult FeedForwardLayer::forward(std::span<const matrix> inputs,
                                            bool perf) const {
     const matrix& input = inputs[0];
 
-    matrix activation_input = input.cross_multiplied(w1);
-    kernel::optimizer::wait_for_operations();
-
+    matrix activation_input = kernel::matrix::cross_multiplied(input, w1);
     kernel::feed_forward::add_bias(activation_input, b1);
-    kernel::optimizer::wait_for_operations();
-
     matrix activation_output
         = kernel::feed_forward::leaky_relu_activation(activation_input);
-    kernel::optimizer::wait_for_operations();
-
-    matrix final_output = activation_output.cross_multiplied(w2);
-    kernel::optimizer::wait_for_operations();
-
+    matrix final_output = kernel::matrix::cross_multiplied(activation_output, w2);
     kernel::feed_forward::add_bias(final_output, b2);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  FF Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
     LOG_DEBUG("    activation_input norm: %f", activation_input.norm());
     LOG_DEBUG("    activation_output norm: %f", activation_output.norm());
     LOG_DEBUG("    final_output norm: %f", final_output.norm());
-
+    
+    kernel::wait_for_all_streams();
     return standardResult(matrix::construct_vec(final_output, activation_input,
                                                 activation_output));
 }
@@ -64,32 +56,25 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     const ForwardingResult& result,
     std::span<const matrix> inputs,
     std::span<const matrix> gradients,
-    float learning_rate,
+    CentralOptimizer& optimizer,
     bool perf) {
     const matrix& layer_input = inputs[0];
     const matrix& activation_input = result.outputs[1];
-    matrix activation_output = result.outputs[2].clone();
+    const matrix& activation_output = result.outputs[2];
     const matrix& post_layer_gradient = gradients[0];
 
-    kernel::optimizer::wait_for_operations();
-
-    matrix b2_gradient = kernel::feed_forward::sum_columns(post_layer_gradient);
+    matrix b2_gradient
+        = kernel::feed_forward::sum_columns(post_layer_gradient);
     matrix w2_gradient
-        = activation_output.t_cross_multiplied(post_layer_gradient);
-    const matrix a1_gradient = post_layer_gradient.cross_t_multiplied(w2);
-    kernel::optimizer::wait_for_operations();
+        = kernel::matrix::t_cross_multiplied(activation_output, post_layer_gradient);
+    const matrix a1_gradient = kernel::matrix::cross_t_multiplied(post_layer_gradient, w2);
 
     matrix z1_gradient = kernel::feed_forward::leaky_relu_activation_backprop(
         activation_input, a1_gradient);
-    kernel::optimizer::wait_for_operations();
 
     matrix b1_gradient = kernel::feed_forward::sum_columns(z1_gradient);
-    matrix w1_gradient = layer_input.t_cross_multiplied(z1_gradient);
-    auto input_gradient = z1_gradient.cross_t_multiplied(w1);
-
-    kernel::optimizer::regularize_weight_gradient(w2_gradient, w2);
-    kernel::optimizer::regularize_weight_gradient(w1_gradient, w1);
-    kernel::optimizer::wait_for_operations();
+    matrix w1_gradient = kernel::matrix::t_cross_multiplied(layer_input, z1_gradient);
+    auto input_gradient = kernel::matrix::cross_t_multiplied(z1_gradient, w1);
 
     LOG_DEBUG("  FF Layer Gradients:");
     LOG_DEBUG("    w1_gradient norm: %f", w1_gradient.norm());
@@ -97,14 +82,13 @@ std::vector<matrix> FeedForwardLayer::backpropogate(
     LOG_DEBUG("    w2_gradient norm: %f", w2_gradient.norm());
     LOG_DEBUG("    b2_gradient norm: %f", b2_gradient.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(b2, b2_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w2, w2_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(b1, b1_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w1, w1_gradient, learning_rate);
-
+    optimizer.update(w1, w1_gradient);
+    optimizer.update(w2, w2_gradient);
+    optimizer.update(b1, b1_gradient);
+    optimizer.update(b2, b2_gradient);
     kernel::optimizer::norm_clip(input_gradient);
-    kernel::optimizer::wait_for_operations();
 
+    kernel::wait_for_all_streams();
     return matrix::construct_vec(input_gradient);
 }
 
@@ -116,19 +100,19 @@ void FeedForwardLayer::save(std::ostream& out) const {
 }
 
 FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
-    kernel::matrix::check_errors("FeedForwardLayer Load - Start");
+    CHECK_ERRORS("FeedForwardLayer Load - Start");
 
     FeedForwardLayer layer(0, 0);
     auto matrix = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1 pre-move");
+    CHECK_ERRORS("FeedForwardLayer Load - w1 pre-move");
     layer.w1 = std::move(matrix);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w1");
+    CHECK_ERRORS("FeedForwardLayer Load - w1");
     layer.b1 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b1");
+    CHECK_ERRORS("FeedForwardLayer Load - b1");
     layer.w2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - w2");
+    CHECK_ERRORS("FeedForwardLayer Load - w2");
     layer.b2 = matrix::load(in);
-    kernel::matrix::check_errors("FeedForwardLayer Load - b2");
+    CHECK_ERRORS("FeedForwardLayer Load - b2");
 
     return layer;
 }

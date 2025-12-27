@@ -5,6 +5,7 @@ datasets/*
 perf.*
 
 !.gitignore
+!.clang-format
 
 web-frontend/node_modules/
 web-frontend/dist/

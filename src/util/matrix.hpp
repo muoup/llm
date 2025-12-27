@@ -27,6 +27,14 @@
 struct const_matrix_view;
 struct matrix_view;
 
+constexpr size_t calculate_stride(const size_t rows, const size_t cols) {
+    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
+    // to or Greater Than i
+    constexpr size_t alignment = 256 / sizeof(float);
+
+    return ((cols + alignment - 1) / alignment) * alignment;
+}
+
 struct matrix {
     std::uint64_t rows, cols, stride;
 
@@ -46,6 +54,7 @@ struct matrix {
     matrix& operator=(matrix&) = delete;
 
     size_t buffer_size() const;
+
     void randomize(float min = -1, float max = 1);
     void leaky_kaiming_randomize();
     void xavier_randomize();
@@ -76,7 +85,6 @@ struct matrix {
                                 const size_t slice_cols) const;
 
     matrix& softmax();
-    matrix backprop_softmax(const matrix& output_gradient) const;
 
     matrix& mask_upper_triangular(float mask_value
                                   = -std::numeric_limits<float>::infinity());

@@ -23,13 +23,11 @@ void LogitLayer::randomize(const float min, const float max) {
 
 matrix LogitLayer::forward(const matrix& input) const {
     matrix logits = input.cross_multiplied(w);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("  Logit Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
 
     kernel::feed_forward::add_bias(logits, b);
-    kernel::optimizer::wait_for_operations();
 
     LOG_DEBUG("    logits norm: %f", logits.norm());
 
@@ -40,19 +38,28 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     const matrix& input,
     const matrix& predictions,
     const std::span<const token_id_t> actual,
-    float learning_rate) {
+    CentralOptimizer& optimizer) {
     kernel::logit_layer::LossResult loss_result
         = kernel::logit_layer::compute_loss_gradient(predictions, actual,
                                                      vocab_size);
-    kernel::optimizer::wait_for_operations();
+    kernel::wait_for_all_streams();
 
     matrix h_final_gradient
         = loss_result.logit_loss_gradient.cross_t_multiplied(w);
     matrix logit_weight_gradient
         = input.t_cross_multiplied(loss_result.logit_loss_gradient);
     kernel::optimizer::norm_clip(h_final_gradient);
-    kernel::optimizer::regularize_weight_gradient(logit_weight_gradient, w);
-    kernel::optimizer::wait_for_operations();
+    
+    // Regularize weight gradient is now handled by AdamW implicitly via weight decay (decoupled)
+    // But if we want to keep explicit regularization logic separate:
+    // AdamW implements weight decay directly. The old regularize_weight_gradient was doing 2*strength*param.
+    // The new AdamW step handles weight decay.
+    // However, the old implementation might have been doing L2 regularization on top of gradient.
+    // AdamW decouples weight decay from gradient update.
+    // If the old one was L2 loss added to gradient, then AdamW weight decay parameter covers it.
+    // I will remove explicit regularization call here and let AdamW handle it.
+    
+    kernel::wait_for_all_streams();
 
     LOG_DEBUG("  Logit Layer Gradients:");
     LOG_DEBUG("    logit_weight_gradient norm: %f",
@@ -60,11 +67,9 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     LOG_DEBUG("    logit_bias_gradient norm: %f",
               loss_result.logit_bias_gradient.norm());
 
-    kernel::optimizer::adjust_parameter_matrix(
-        b, loss_result.logit_bias_gradient, learning_rate);
-    kernel::optimizer::adjust_parameter_matrix(w, logit_weight_gradient,
-                                               learning_rate);
-    kernel::optimizer::wait_for_operations();
+    optimizer.update(b, loss_result.logit_bias_gradient);
+    optimizer.update(w, logit_weight_gradient);
+    kernel::wait_for_all_streams();
 
     return { std::move(h_final_gradient), loss_result.average_loss };
 }

@@ -1,9 +1,8 @@
 #pragma once
 
-#include <iostream>
-#include <span>
 #include <tokenizer/token.hpp>
 #include <util/matrix.hpp>
+#include <inference/optimizer.hpp>
 
 // Forward declaration
 struct InferenceModel;
@@ -20,7 +19,7 @@ public:
     size_t parameterCount() const;
 
     matrix forward(const std::span<const token_id_t> inputs) const;
-    void backpropogate(const std::span<const token_id_t> tokens, const matrix &x_gradient, float learning_rate);
+    void backpropogate(const std::span<const token_id_t> tokens, const matrix &x_gradient, CentralOptimizer& optimizer);
     
     void randomize(float min, float max);
 

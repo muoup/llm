@@ -1,8 +1,10 @@
 #pragma once
 
+#include <kernels/scheduling.hpp>
 #include <inference/network_node.hpp>
-#include <istream>
 #include <util/matrix.hpp>
+
+#include <istream>
 #include <vector>
 
 // Note: The INode forward pass is pure and does not modify layer state.
@@ -26,12 +28,14 @@ class AttentionLayer final : public INode {
 
     size_t parameterCount() const override;
     NodeType getType() const override;
+    size_t headCount() const { return head_count; }
+    
     ForwardingResult forward(std::span<const matrix> inputs,
                              bool perf = false) const override;
     std::vector<matrix> backpropogate(const ForwardingResult& result,
                                       std::span<const matrix> inputs,
                                       std::span<const matrix> gradients,
-                                      float learning_rate,
+                                      CentralOptimizer& optimizer,
                                       bool perf = false) override;
 
     void randomize(float min, float max) override;
@@ -40,13 +44,13 @@ class AttentionLayer final : public INode {
     // Static load function for deserialization via a factory
     static AttentionLayer load(std::istream& in);
 
-   private:
     AttentionLayer()
-        : dimensions(0), head_size(0), head_count(0), masked(false), wo() {}
+        : dimensions(0), head_size(0), head_count(0), masked(false), wo(), streams(0) {}
 
     size_t dimensions, head_size, head_count;
     bool masked;
 
     std::vector<AttentionHead> heads;
+    kernel::FixedStreamList streams;
     matrix wo;
 };

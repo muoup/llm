@@ -1,6 +1,7 @@
 #pragma once
 
 #include <inference/node_type.hpp>
+#include <inference/optimizer.hpp>
 #include <span>
 #include <util/matrix.hpp>
 #include <vector>
@@ -28,7 +29,7 @@ struct INode {
     virtual std::vector<matrix> backpropogate(const ForwardingResult& result,
                                               std::span<const matrix> inputs,
                                               std::span<const matrix> gradients,
-                                              float learning_rate,
+                                              CentralOptimizer& optimizer,
                                               bool perf = false)
         = 0;
 
