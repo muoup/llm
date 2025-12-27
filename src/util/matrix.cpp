@@ -11,7 +11,10 @@
 #include <utility>
 
 matrix::matrix(const size_t rows, const size_t cols)
-    : rows(rows), cols(cols), stride(calculate_stride(rows)), data(nullptr) {
+    : rows(rows),
+      cols(cols),
+      stride(calculate_stride(rows, cols)),
+      data(nullptr) {
     if (this->buffer_size() > 0) {
         this->data = kernel::matrix::allocate_buffer(this->buffer_size());
     }
@@ -64,7 +67,7 @@ void matrix::xavier_randomize() {
 }
 
 size_t matrix::buffer_size() const {
-    return stride * cols * sizeof(float);
+    return stride * rows * sizeof(float);
 }
 
 void matrix::verify_bounds(const size_t row, const size_t col) const {
@@ -165,11 +168,11 @@ void matrix::set_horizontal_slice(const size_t col_start, const matrix& slice) {
 }
 
 const_matrix_view matrix::get_horizontal_slice(const size_t col_start,
-                                               const size_t slice_cols) const {
+                                    const size_t slice_cols) const {
     MATRIX_ASSERT(col_start + slice_cols <= this->cols,
                   "Slice dimensions do not match for getting horizontal slice");
 
-    return const_matrix_view(this->rows, slice_cols, this->stride, this->data + col_start * this->stride);
+    return const_matrix_view(this->rows, slice_cols, this->cols - slice_cols, this->data + col_start);
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {
@@ -224,7 +227,6 @@ matrix& matrix::softmax() {
     kernel::matrix::softmax(*this);
     return *this;
 }
-
 
 matrix& matrix::mask_upper_triangular(const float mask_value) {
     kernel::matrix::mask_upper_triangle(*this, mask_value);

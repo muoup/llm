@@ -10,11 +10,13 @@
 
 namespace kernel::matrix {
 
+#define MATRIX_PROJECT(row, col, stride) ((row) * stride + (col))
+    
 inline __device__ float* device_get_addr(float* data,
                                          const size_t stride,
                                          const size_t row,
                                          const size_t col) {
-    return &(data[row + col * stride]);
+    return &data[MATRIX_PROJECT(row, col, stride)];
 }
 
 inline __device__ float* device_get_addr(matrix_view data,
@@ -27,7 +29,7 @@ inline __device__ const float* device_get_addr(const float* data,
                                                const size_t stride,
                                                const size_t row,
                                                const size_t col) {
-    return &(data[row + col * stride]);
+    return &data[MATRIX_PROJECT(row, col, stride)];
 }
 
 inline __device__ const float* device_get_addr(const const_matrix_view data,

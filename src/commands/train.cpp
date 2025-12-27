@@ -12,7 +12,7 @@
 #include <tokenizer/tokenizer.hpp>
 
 #include <dataset/dataset_factory.hpp>
-#include "model_factories/standard_model.hpp"
+#include "util/logger.hpp"
 
 int handle_train(int argc, char* argv[]) {
     std::string data_path = get_arg_value(argc, argv, "--data");
@@ -106,6 +106,7 @@ int handle_train(int argc, char* argv[]) {
                 = std::span{ tokens.begin(), tokens.end() - 1 };
             const auto target_tokens
                 = std::span{ tokens.begin() + 1, tokens.end() };
+            LOG_DEBUG("Training on row %zu with %zu tokens.", i, tokens.size());
             float loss
                 = model.train_on(input_tokens, target_tokens, learning_rate);
 

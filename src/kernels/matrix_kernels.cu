@@ -72,7 +72,7 @@ void kernel::matrix::check_errors(const char* step) {
     ::matrix result;
     result.rows = rows;
     result.cols = cols;
-    result.stride = calculate_stride(rows);
+    result.stride = calculate_stride(rows, cols);
 
     cudaMallocAsync(&result.data, result.buffer_size(),
                     get_kernel_stream(stream));
@@ -109,6 +109,18 @@ static __global__ void global_set(const matrix_view data,
     kernel::matrix::device_set(data, row, col, value);
 }
 
+float* kernel::matrix::get_addr(::matrix& matrix,
+                                const size_t row,
+                                const size_t col) {
+    return &matrix.data[MATRIX_PROJECT(row, col, matrix.stride)];
+}
+
+const float* kernel::matrix::get_addr(const ::matrix& matrix,
+                                      const size_t row,
+                                      const size_t col) {
+    return &matrix.data[MATRIX_PROJECT(row, col, matrix.stride)];
+}
+
 void kernel::matrix::set(::matrix& matrix,
                          const size_t row,
                          const size_t col,
@@ -128,15 +140,14 @@ float kernel::matrix::get(const ::matrix& matrix,
                           const size_t row,
                           const size_t col,
                           kernel_stream_t stream) {
-    float* storage;
-    cudaMalloc(&storage, sizeof(float));
+    float* storage = global_gpu_float_pool.acquire();
     global_get<<<1, 1, 0, get_kernel_stream(stream)>>>(matrix, row, col,
                                                        storage);
+    
     float value;
     cudaMemcpyAsync(&value, storage, sizeof(float), cudaMemcpyDeviceToHost,
                     get_kernel_stream(stream));
     cudaStreamSynchronize(get_kernel_stream(stream));
-    cudaFree(storage);
 
     return value;
 }
@@ -198,8 +209,8 @@ __global__ void kernel_set_all(const matrix_view data, float value) {
     const size_t total_size = data.rows * data.cols;
 
     if (idx < total_size) {
-        const size_t row = idx % data.rows;
-        const size_t col = idx / data.rows;
+        const size_t row = idx / data.cols;
+        const size_t col = idx % data.cols;
 
         kernel::matrix::device_set(data, row, col, value);
     }
@@ -257,8 +268,8 @@ static __global__ void matrix_reduce_kernel(const const_matrix_view data,
     float local_acc = identity;
     for (size_t i = blockIdx.x * total_threads + tid; i < size;
          i += gridDim.x * total_threads) {
-        size_t r = i % data.rows;
-        size_t c = i / data.rows;
+        size_t r = i / data.cols;
+        size_t c = i % data.cols;
         local_acc
             = ElementReducer(local_acc, kernel::matrix::device_get(data, r, c));
     }
@@ -439,30 +450,15 @@ void kernel::matrix::transfer_row(::matrix& dest,
                                                        src_row);
 }
 
-static __global__ void kernel_set_row_vector(const matrix_view data,
-                                             size_t data_row,
-                                             const const_matrix_view row_vector,
-                                             size_t vector_row) {
-    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (col < data.cols) {
-        auto val = kernel::matrix::device_get(row_vector, vector_row, col);
-        kernel::matrix::device_set(data, data_row, col, val);
-    }
-}
-
 void kernel::matrix::set_row_vector(::matrix& mat,
                                     const size_t mat_row,
                                     const ::matrix& vec,
                                     const size_t vec_row,
                                     kernel_stream_t stream) {
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (mat.cols + threads_per_block - 1) / threads_per_block;
-
-    kernel_set_row_vector<<<blocks, threads_per_block, 0,
-                            get_kernel_stream(stream)>>>(mat, mat_row, vec,
-                                                         vec_row);
+    cudaMemcpyAsync(kernel::matrix::get_addr(mat, mat_row, 0),
+                    kernel::matrix::get_addr(vec, vec_row, 0),
+                    vec.cols * sizeof(float), cudaMemcpyDeviceToDevice,
+                    get_kernel_stream(stream));
 }
 
 static __global__ void kernel_get_row_vector(const float* data,
@@ -748,12 +744,16 @@ static kernel::MatmulHandlePool<8> matmul_handle_pool;
 matrix kernel::matrix::dot_product(const ::matrix& a,
                                    const ::matrix& b,
                                    kernel_stream_t stream) {
-    ::matrix result(a.rows, b.cols);
-    auto handle = matmul_handle_pool.acquire();
-    cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    cublasSdot(get_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data, 1,
-               result.data);
-    return result;
+    throw std::runtime_error("Deprecated: Use element-wise operations");
+                                       
+    // ::matrix result = async_allocate(1, 1, stream);
+    // auto handle = matmul_handle_pool.acquire();
+    // cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
+
+    // cublasSdot(get_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data, 1,
+    //            result.data);
+
+    // return result;
 }
 
 matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
@@ -766,8 +766,12 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_N, a.rows,
-                b.cols, a.cols, &alpha, a.data, a.stride, b.data, b.stride,
+    // C = A * B -> C^T = B^T * A^T
+    // cuBLAS (col-major) sees A^T and B^T.
+    // We want B^T * A^T.
+    // So pass B (as A) and A (as B) with NoTrans.
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_N, b.cols,
+                a.rows, a.cols, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data_ptr(), result.stride);
     CHECK_ERRORS("cross_multiplied");
 
@@ -784,8 +788,13 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_T, a.rows,
-                b.rows, a.cols, &alpha, a.data, a.stride, b.data, b.stride,
+    // C = A * B^T -> C^T = B * A^T
+    // We have A^T and B^T available.
+    // We need B * A^T.
+    // B from B^T -> Transpose.
+    // A^T from A^T -> NoTrans.
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_T, CUBLAS_OP_N, b.rows,
+                a.rows, a.cols, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data_ptr(), result.stride);
     CHECK_ERRORS("cross_t_multiplied");
 
@@ -802,8 +811,13 @@ matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_T, CUBLAS_OP_N, a.cols,
-                b.cols, a.rows, &alpha, a.data, a.stride, b.data, b.stride,
+    // C = A^T * B -> C^T = B^T * A
+    // We have A^T and B^T available.
+    // We need B^T * A.
+    // B^T from B^T -> NoTrans.
+    // A from A^T -> Transpose.
+    cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_T, b.cols,
+                a.cols, a.rows, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data, result.stride);
     CHECK_ERRORS("t_cross_multiplied");
 
@@ -845,10 +859,12 @@ __global__ void compare(const float* a,
     const size_t total_size = rows * cols;
 
     if (idx < total_size) {
-        const size_t row = idx % rows;
-        const size_t col = idx / rows;
-        float val_a = a[row + col * stride_a];
-        float val_b = b[row + col * stride_b];
+        const size_t row = idx / cols;
+        const size_t col = idx % cols;
+
+        float val_a = kernel::matrix::device_get(a, stride_a, row, col);
+        float val_b = kernel::matrix::device_get(b, stride_b, row, col);
+
         if (fabsf(val_a - val_b) > epsilon) {
             *result = false;
         }

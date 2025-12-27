@@ -13,6 +13,9 @@ namespace kernel::matrix {
 
 void check_errors(const char *step);
 
+float* get_addr(::matrix &mat, const size_t row, const size_t col);
+const float *get_addr(const ::matrix &mat, const size_t row,
+                         const size_t col);
 float get(const ::matrix &mat, const size_t row, const size_t col,
           kernel_stream_t stream = nullptr);
 void set(::matrix &mat, const size_t row, const size_t col, const float value,
