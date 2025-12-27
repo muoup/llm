@@ -90,98 +90,126 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
              .inv_variance = std::move(inv_variance) };
 }
 
-// void cpu_snippet() {
-//     for (size_t i = 0; i < layer_input.rows; i++) {
-//             float row_mean = mean.get(i, 0);
-//             float row_inv_var = inv_variance.get(i, 0);
-
-//             float d_norm_sum = 0.0f;
-//             float d_norm_dot_x_norm = 0.0f;
-
-//             for (size_t j = 0; j < layer_input.cols; j++) {
-//                 float grad_norm_val = grad_normalized.get(i, j);
-//                 float normalized_val
-//                     = (layer_input.get(i, j) - row_mean) * row_inv_var;
-
-//                 grad_beta.offset(0, j, grad_norm_val);
-//                 grad_gamma.offset(0, j, grad_norm_val * normalized_val);
-
-//                 float d_norm = grad_norm_val * gamma.get(0, j);
-//                 d_norm_sum += d_norm;
-//                 d_norm_dot_x_norm += d_norm * normalized_val;
-//             }
-
-//             for (size_t j = 0; j < layer_input.cols; j++) {
-//                 float normalized_val
-//                     = (layer_input.get(i, j) - row_mean) * row_inv_var;
-//                 float d_norm = grad_normalized.get(i, j) * gamma.get(0, j);
-
-//                 float grad_in = (dimensions * d_norm) - d_norm_sum
-//                                 - (normalized_val * d_norm_dot_x_norm);
-//                 grad_in *= row_inv_var / static_cast<float>(dimensions);
-
-//                 grad_input.set(i, j, grad_in);
-//             }
-//         }
-// }
-
-__global__ void layer_norm_backward_kernel(
+__global__ void layer_norm_grad_input_kernel(
     const const_matrix_view mean,
     const const_matrix_view gamma,
     const const_matrix_view inv_variance,
     const const_matrix_view layer_input,
     const const_matrix_view grad_normalized,
-    matrix_view grad_beta,
-    matrix_view grad_gamma,
     matrix_view grad_input) {
-    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    // One block per row
+    const size_t row = blockIdx.x;
+    if (row >= layer_input.rows) return;
 
-    if (row >= layer_input.rows) {
-        return;
-    }
+    const size_t cols = layer_input.cols;
+    const float row_mean = kernel::matrix::device_get(mean, row, 0);
+    const float row_inv_var = kernel::matrix::device_get(inv_variance, row, 0);
 
-    size_t dimensions = gamma.cols;
+    float local_d_norm_sum = 0.0f;
+    float local_d_norm_dot_x_norm = 0.0f;
 
-    float row_mean = kernel::matrix::device_get(mean, row, 0);
-    float row_inv_var = kernel::matrix::device_get(inv_variance, row, 0);
-
-    float d_norm_sum = 0.0f;
-    float d_norm_dot_x_norm = 0.0f;
-
-    for (size_t col = 0; col < layer_input.cols; col++) {
-        float grad_norm_val
-            = kernel::matrix::device_get(grad_normalized, row, col);
-        float layer_input_val
-            = kernel::matrix::device_get(layer_input, row, col);
+    // First pass: Compute reductions
+    for (size_t col = threadIdx.x; col < cols; col += blockDim.x) {
+        float grad_norm_val = kernel::matrix::device_get(grad_normalized, row, col);
+        float layer_input_val = kernel::matrix::device_get(layer_input, row, col);
+        float gamma_val = kernel::matrix::device_get(gamma, 0, col);
+        
         float normalized_val = (layer_input_val - row_mean) * row_inv_var;
+        float d_norm = grad_norm_val * gamma_val;
 
-        kernel::matrix::device_offset_elem_atomic(grad_beta, 0, col,
-                                                  grad_norm_val);
-        kernel::matrix::device_offset_elem_atomic(
-            grad_gamma, 0, col, grad_norm_val * normalized_val);
-
-        float d_norm
-            = grad_norm_val * kernel::matrix::device_get(gamma, 0, col);
-        d_norm_sum += d_norm;
-        d_norm_dot_x_norm += d_norm * normalized_val;
+        local_d_norm_sum += d_norm;
+        local_d_norm_dot_x_norm += d_norm * normalized_val;
     }
 
-    for (size_t col = 0; col < layer_input.cols; col++) {
-        float layer_input_val
-            = kernel::matrix::device_get(layer_input, row, col);
-        float grad_norm_val
-            = kernel::matrix::device_get(grad_normalized, row, col);
+    // Block-wide reductions
+    float d_norm_sum = kernel::matrix::device::block_reduce_sum(local_d_norm_sum);
+    float d_norm_dot_x_norm = kernel::matrix::device::block_reduce_sum(local_d_norm_dot_x_norm);
+
+    // Broadcast results (since block_reduce_sum returns result to all threads if implemented that way, 
+    // but looking at matrix_device_kernels.cuh, it syncs. 
+    // Wait, block_reduce_sum in matrix_device_kernels.cuh returns the value. 
+    // We should assume it returns the sum to all threads or we need shared mem?
+    // Looking at the implementation provided in context:
+    // It does `if (threadIdx.x < blockDim.x / 32.0f) ? shared[lane] : 0` then warp reduce.
+    // It returns the result to ALL threads in the block?
+    // The implementation:
+    // ...
+    // if (wid == 0) val = warp_reduce_sum(val);
+    // __syncthreads();
+    // return val; 
+    // It seems to return the value to thread 0 of wid 0? No, `val` is local.
+    // The final `val` is only correct for `wid==0`'s lane 0?
+    // Let's re-read the provided block_reduce_sum.
+    // `val = warp_reduce_sum(val)` -> all threads in warp have sum? No, usually lane 0.
+    // `if (lane == 0) shared[wid] = val` -> Shared has partial sums.
+    // `__syncthreads()`
+    // `val = ...` -> threads load from shared.
+    // `if (wid == 0) val = warp_reduce_sum(val)` -> Lane 0 of Warp 0 has total sum.
+    // `__syncthreads()` -> Needed?
+    // It does NOT broadcast to all threads. It returns valid value only on thread 0 (or first warp?).
+    // We need to broadcast it via shared memory.
+    
+    __shared__ float s_d_norm_sum;
+    __shared__ float s_d_norm_dot_x_norm;
+
+    if (threadIdx.x == 0) {
+        s_d_norm_sum = d_norm_sum;
+        s_d_norm_dot_x_norm = d_norm_dot_x_norm;
+    }
+    __syncthreads();
+
+    d_norm_sum = s_d_norm_sum;
+    d_norm_dot_x_norm = s_d_norm_dot_x_norm;
+
+    // Second pass: Compute grad_input
+    for (size_t col = threadIdx.x; col < cols; col += blockDim.x) {
+        float grad_norm_val = kernel::matrix::device_get(grad_normalized, row, col);
+        float layer_input_val = kernel::matrix::device_get(layer_input, row, col);
         float gamma_val = kernel::matrix::device_get(gamma, 0, col);
 
         float normalized_val = (layer_input_val - row_mean) * row_inv_var;
         float d_norm = grad_norm_val * gamma_val;
 
-        float grad_in = (dimensions * d_norm) - d_norm_sum
+        float grad_in = (static_cast<float>(cols) * d_norm) - d_norm_sum
                         - (normalized_val * d_norm_dot_x_norm);
-        grad_in *= row_inv_var / static_cast<float>(dimensions);
+        grad_in *= row_inv_var / static_cast<float>(cols);
 
         kernel::matrix::device_set(grad_input, row, col, grad_in);
     }
+}
+
+__global__ void layer_norm_grad_params_kernel(
+    const const_matrix_view mean,
+    const const_matrix_view inv_variance,
+    const const_matrix_view layer_input,
+    const const_matrix_view grad_normalized,
+    matrix_view grad_beta,
+    matrix_view grad_gamma) {
+
+    // One thread per column (feature)
+    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= layer_input.cols) return;
+
+    float sum_beta = 0.0f;
+    float sum_gamma = 0.0f;
+    const size_t rows = layer_input.rows;
+
+    // Loop over rows - Coalesced reads because adjacent threads read adjacent columns
+    for (size_t row = 0; row < rows; ++row) {
+        float grad_norm_val = kernel::matrix::device_get(grad_normalized, row, col);
+        float input_val = kernel::matrix::device_get(layer_input, row, col);
+        float row_mean = kernel::matrix::device_get(mean, row, 0);
+        float row_inv_var = kernel::matrix::device_get(inv_variance, row, 0);
+
+        float normalized_val = (input_val - row_mean) * row_inv_var;
+
+        sum_beta += grad_norm_val;
+        sum_gamma += grad_norm_val * normalized_val;
+    }
+
+    kernel::matrix::device_set(grad_beta, 0, col, sum_beta);
+    kernel::matrix::device_set(grad_gamma, 0, col, sum_gamma);
 }
 
 kernel::layer_norm::LayerNormGradients
@@ -194,18 +222,24 @@ kernel::layer_norm::layer_normalization_backward(
     const ::matrix& grad_normalized,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols);
-    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols);
-    ::matrix grad_beta = matrix::async_allocate(beta.rows, beta.cols);
+    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols, stream);
+    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols, stream);
+    ::matrix grad_beta = matrix::async_allocate(beta.rows, beta.cols, stream);
 
     constexpr size_t threads_per_block = 256;
-    size_t num_blocks
-        = (layer_input.rows + threads_per_block - 1) / threads_per_block;
 
-    layer_norm_backward_kernel<<<num_blocks, threads_per_block, 0, get_kernel_stream(stream)>>>(
-        mean, gamma, inv_variance, layer_input, grad_normalized, grad_beta,
-        grad_gamma, grad_input);
-    CHECK_ERRORS("layer_normalization_backward: kernel launch");
+    // 1. Compute grad_input
+    // Grid size = number of rows (one block per row)
+    layer_norm_grad_input_kernel<<<layer_input.rows, threads_per_block, 0, get_kernel_stream(stream)>>>(
+        mean, gamma, inv_variance, layer_input, grad_normalized, grad_input);
+    CHECK_ERRORS("layer_normalization_backward: grad_input kernel launch");
+
+    // 2. Compute grad_params (beta/gamma)
+    // Grid size = sufficient to cover all columns (one thread per column)
+    size_t num_blocks_params = (layer_input.cols + threads_per_block - 1) / threads_per_block;
+    layer_norm_grad_params_kernel<<<num_blocks_params, threads_per_block, 0, get_kernel_stream(stream)>>>(
+        mean, inv_variance, layer_input, grad_normalized, grad_beta, grad_gamma);
+    CHECK_ERRORS("layer_normalization_backward: grad_params kernel launch");
 
     return { .grad_input = std::move(grad_input),
              .grad_gamma = std::move(grad_gamma),

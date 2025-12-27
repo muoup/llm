@@ -62,6 +62,8 @@ int handle_predict(int argc, char* argv[]) {
         return 1;
     }
     
+    std::cout << "Generating with temperature: " << temp << std::endl;
+    
     std::vector<token_id_t> tokens = encode(_tokenizer, prompt);
     std::cout << "Generating: " << prompt << std::flush;
     

@@ -73,7 +73,7 @@ void kernel::matrix::check_errors(const char* step) {
     result.rows = rows;
     result.cols = cols;
     result.stride = calculate_stride(rows, cols);
-
+ 
     cudaMallocAsync(&result.data, result.buffer_size(),
                     get_kernel_stream(stream));
     cudaMemsetAsync(result.data, 0, result.buffer_size(),
@@ -81,14 +81,8 @@ void kernel::matrix::check_errors(const char* step) {
     return result;
 }
 
-kernel::KernelStreamPool<8> allocation_pool;
-
 float* kernel::matrix::allocate_buffer(const size_t size,
                                        kernel_stream_t stream) {
-    if (stream == nullptr) {
-        stream = allocation_pool.acquire();
-    }
-
     float* data;
     cudaMallocAsync(&data, size, get_kernel_stream(stream));
     cudaMemsetAsync(data, 0, size, get_kernel_stream(stream));
@@ -98,8 +92,7 @@ float* kernel::matrix::allocate_buffer(const size_t size,
 }
 
 void kernel::matrix::free_buffer(float* data) {
-    auto stream = allocation_pool.acquire();
-    cudaFreeAsync(data, get_kernel_stream(stream));
+    cudaFreeAsync(data, nullptr);
 }
 
 static __global__ void global_set(const matrix_view data,
