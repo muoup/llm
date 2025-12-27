@@ -142,8 +142,8 @@ const_matrix_view matrix::get_row_vector(const size_t row) const {
     MATRIX_ASSERT(row < this->rows,
                   "Row index out of bounds for getting row vector");
 
-    return const_matrix_view(1, this->cols, this->rows + this->stride - 1,
-                             this->data + row);
+    return const_matrix_view(1, this->cols, this->stride,
+                             this->data + row * this->stride);
 }
 
 void matrix::set_row_vector(const size_t row, const matrix& row_vector) {
@@ -168,11 +168,12 @@ void matrix::set_horizontal_slice(const size_t col_start, const matrix& slice) {
 }
 
 const_matrix_view matrix::get_horizontal_slice(const size_t col_start,
-                                    const size_t slice_cols) const {
+                                               const size_t slice_cols) const {
     MATRIX_ASSERT(col_start + slice_cols <= this->cols,
                   "Slice dimensions do not match for getting horizontal slice");
 
-    return const_matrix_view(this->rows, slice_cols, this->cols - slice_cols, this->data + col_start);
+    return const_matrix_view(this->rows, slice_cols, this->stride,
+                             this->data + col_start);
 }
 
 matrix& matrix::element_wise_multiply(const matrix& other) {

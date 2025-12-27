@@ -143,7 +143,7 @@ float kernel::matrix::get(const ::matrix& matrix,
     float* storage = global_gpu_float_pool.acquire();
     global_get<<<1, 1, 0, get_kernel_stream(stream)>>>(matrix, row, col,
                                                        storage);
-    
+
     float value;
     cudaMemcpyAsync(&value, storage, sizeof(float), cudaMemcpyDeviceToHost,
                     get_kernel_stream(stream));
@@ -461,34 +461,15 @@ void kernel::matrix::set_row_vector(::matrix& mat,
                     get_kernel_stream(stream));
 }
 
-static __global__ void kernel_get_row_vector(const float* data,
-                                             const size_t stride,
-                                             const size_t rows,
-                                             const size_t cols,
-                                             const size_t row,
-                                             float* vec,
-                                             size_t vec_stride) {
-    const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (col < cols) {
-        const float val = kernel::matrix::device_get(data, stride, row, col);
-        kernel::matrix::device_set(vec, vec_stride, 0, col, val);
-    }
-}
-
 ::matrix kernel::matrix::get_row_vector(const ::matrix& mat,
                                         const size_t row,
                                         kernel_stream_t stream) {
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (mat.cols + threads_per_block - 1) / threads_per_block;
-
     ::matrix result(1, mat.cols);
 
-    kernel_get_row_vector<<<blocks, threads_per_block, 0,
-                            get_kernel_stream(stream)>>>(
-        mat.data, mat.stride, mat.rows, mat.cols, row, result.data,
-        result.stride);
+    cudaMemcpyAsync(kernel::matrix::get_addr(result, 0, 0),
+                    kernel::matrix::get_addr(mat, row, 0),
+                    mat.cols * sizeof(float), cudaMemcpyDeviceToDevice,
+                    get_kernel_stream(stream));
 
     return result;
 }
@@ -523,12 +504,13 @@ static __global__ void set_horizontal_slice_kernel(
     const matrix_view data,
     const size_t start_col,
     const const_matrix_view slice) {
+        
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < slice.rows) {
-        for (size_t col = 0; col < slice.cols; ++col) {
-            auto val = kernel::matrix::device_get(slice, row, col);
-            kernel::matrix::device_set(data, row, start_col + col, val);
-        }
+    const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (row < slice.rows && col < slice.cols) {
+        auto val = kernel::matrix::device_get(slice, row, col);
+        kernel::matrix::device_set(data, row, start_col + col, val);
     }
 }
 
@@ -536,9 +518,9 @@ void kernel::matrix::set_horizontal_slice(::matrix& mat,
                                           const size_t start_col,
                                           const ::matrix& slice,
                                           kernel_stream_t stream) {
-    const size_t threads_per_block = 256;
-    const size_t blocks
-        = (mat.rows + threads_per_block - 1) / threads_per_block;
+    const dim3 threads_per_block(16, 16);
+    const dim3 blocks ((slice.rows + threads_per_block.x - 1) / threads_per_block.x,
+                       (slice.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     set_horizontal_slice_kernel<<<blocks, threads_per_block, 0,
                                   get_kernel_stream(stream)>>>(mat, start_col,
@@ -641,6 +623,21 @@ __global__ void kernel_softmax(matrix_view data) {
     const size_t row = blockIdx.x;
     const size_t tid = threadIdx.x;
 
+    // float local_max = -CUDART_INF_F;
+    // for (size_t col = tid; col < data.cols; col += blockDim.x) {
+    //     float val = kernel::matrix::device_get(data, row, col);
+    //     local_max = fmaxf(local_max, val);
+    // }
+    
+    // float row_max = kernel::matrix::device::block_reduce_max(local_max);
+    
+    // __shared__ float shared_max;
+    // if (tid == 0) {
+    //     shared_max = row_max;
+    // }
+    
+    __syncthreads();
+
     float local_sum = 0.0f;
     for (size_t col = tid; col < data.cols; col += blockDim.x) {
         float val = kernel::matrix::device_get(data, row, col);
@@ -649,6 +646,7 @@ __global__ void kernel_softmax(matrix_view data) {
         kernel::matrix::device_set(data, row, col, exp);
         local_sum += exp;
     }
+    
     float row_dot = kernel::matrix::device::block_reduce_sum(local_sum);
 
     __shared__ float shared_denom;
@@ -745,12 +743,13 @@ matrix kernel::matrix::dot_product(const ::matrix& a,
                                    const ::matrix& b,
                                    kernel_stream_t stream) {
     throw std::runtime_error("Deprecated: Use element-wise operations");
-                                       
+
     // ::matrix result = async_allocate(1, 1, stream);
     // auto handle = matmul_handle_pool.acquire();
     // cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
 
-    // cublasSdot(get_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data, 1,
+    // cublasSdot(get_matmul_handle(handle), a.rows * a.cols, a.data, 1, b.data,
+    // 1,
     //            result.data);
 
     // return result;

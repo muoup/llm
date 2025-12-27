@@ -61,11 +61,12 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
 
     std::vector<matrix> returns;
     returns.reserve(2 + head_count * 4);
-    
+
     // placeholder for the final output to prevent insert(0) additional overhead
     returns.emplace_back();
     // placeholder for the concatenated heads
-    returns.emplace_back(kernel::matrix::async_allocate(input.rows, head_count * head_size));
+    returns.emplace_back(
+        kernel::matrix::async_allocate(input.rows, head_count * head_size));
 
     for (size_t h = 0; h < head_count; ++h) {
         returns.emplace_back();  // q
@@ -159,9 +160,10 @@ std::vector<matrix> AttentionLayer::backpropogate(
     LOG_DEBUG("  Attention Layer Backpropagation:");
     LOG_DEBUG("    post_layer_gradient norm: %f", post_layer_gradient.norm());
 
-    matrix wo_gradient = concat_heads.t_cross_multiplied(post_layer_gradient);
-    matrix attention_concat_gradient
-        = post_layer_gradient.cross_t_multiplied(wo);
+    matrix wo_gradient
+        = kernel::matrix::async_allocate(wo.rows, wo.cols, streams[0]);
+    matrix attention_concat_gradient = kernel::matrix::cross_t_multiplied(
+        post_layer_gradient, wo, streams[0]);
 
     matrix input_gradient
         = kernel::matrix::async_allocate(layer_input.rows, layer_input.cols);
@@ -228,28 +230,30 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix v_input_gradient = kernel::matrix::cross_t_multiplied(
             v_gradient, head.wv, streams[head_stream_index + 0]);
 
-        // Input gradient += q_input_gradient + k_input_gradient +
-        // v_input_gradient Accumulated locally into q_input_gradient first to
-        // minimize atomic operations
-        kernel::matrix::add(input_gradient, q_input_gradient,
+        kernel::matrix::atomic_add(input_gradient, q_input_gradient,
                                    streams[head_stream_index + 0]);
-        kernel::matrix::add(input_gradient, k_input_gradient,
+        kernel::matrix::atomic_add(input_gradient, k_input_gradient,
                                    streams[head_stream_index + 0]);
-        kernel::matrix::add(input_gradient, v_input_gradient,
+        kernel::matrix::atomic_add(input_gradient, v_input_gradient,
                                    streams[head_stream_index + 0]);
 
-        kernel::optimizer::adjust_parameter_matrix(head.wq, wq_gradient,
-                                                   learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wk, wk_gradient,
-                                                   learning_rate);
-        kernel::optimizer::adjust_parameter_matrix(head.wv, wv_gradient,
-                                                   learning_rate);
+        kernel::optimizer::adjust_parameter_matrix(
+            head.wq, wq_gradient, learning_rate,
+            streams[head_stream_index + 0]);
+        kernel::optimizer::adjust_parameter_matrix(
+            head.wk, wk_gradient, learning_rate,
+            streams[head_stream_index + 0]);
+        kernel::optimizer::adjust_parameter_matrix(
+            head.wv, wv_gradient, learning_rate,
+            streams[head_stream_index + 0]);
+
+        kernel::wait_for_stream(streams[head_stream_index + 0]);
     }
 
-    kernel::optimizer::wait_for_operations();
-
     kernel::optimizer::regularize_weight_gradient(wo_gradient, wo, streams[0]);
-    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate, streams[0]);
+    kernel::optimizer::adjust_parameter_matrix(wo, wo_gradient, learning_rate,
+                                               streams[0]);
+    kernel::wait_for_stream(streams[0]);
 
     return matrix::construct_vec(input_gradient);
 }
