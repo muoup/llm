@@ -18,7 +18,7 @@
 template <typename T>
 T* gpu_allocate() {
     T* ptr;
-    cudaMalloc(&ptr, sizeof(T));
+    cudaMallocManaged(&ptr, sizeof(T));
     return ptr;
 }
 
@@ -136,13 +136,9 @@ float kernel::matrix::get(const ::matrix& matrix,
     float* storage = global_gpu_float_pool.acquire();
     global_get<<<1, 1, 0, get_kernel_stream(stream)>>>(matrix, row, col,
                                                        storage);
-
-    float value;
-    cudaMemcpyAsync(&value, storage, sizeof(float), cudaMemcpyDeviceToHost,
-                    get_kernel_stream(stream));
     cudaStreamSynchronize(get_kernel_stream(stream));
 
-    return value;
+    return *storage;
 }
 
 void kernel::matrix::load_into(::matrix& matrix,

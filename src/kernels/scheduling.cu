@@ -4,9 +4,9 @@
 #include <cuda_runtime.h>
 
 float kernel::get_device_ptr(kernel::float_device_ptr_t ptr) {
-    float f;
-    cudaMemcpy(&f, ptr, sizeof(float), cudaMemcpyDeviceToHost);
-    return f;
+    // float f;
+    // cudaMemcpy(&f, ptr, sizeof(float), cudaMemcpyDeviceToHost);
+    return *(float*) ptr;
 }
 
 kernel::kernel_stream_t kernel::create_kernel_stream() {
