@@ -791,10 +791,6 @@ matrix kernel::matrix::cross_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    // C = A * B -> C^T = B^T * A^T
-    // cuBLAS (col-major) sees A^T and B^T.
-    // We want B^T * A^T.
-    // So pass B (as A) and A (as B) with NoTrans.
     cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_N, b.cols,
                 a.rows, a.cols, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data_ptr(), result.stride);
@@ -813,11 +809,6 @@ matrix kernel::matrix::cross_t_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    // C = A * B^T -> C^T = B * A^T
-    // We have A^T and B^T available.
-    // We need B * A^T.
-    // B from B^T -> Transpose.
-    // A^T from A^T -> NoTrans.
     cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_T, CUBLAS_OP_N, b.rows,
                 a.rows, a.cols, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data_ptr(), result.stride);
@@ -836,11 +827,6 @@ matrix kernel::matrix::t_cross_multiplied(const ::const_matrix_view a,
     const float beta = 0.0f;
 
     cublasSetStream(get_matmul_handle(handle), get_kernel_stream(stream));
-    // C = A^T * B -> C^T = B^T * A
-    // We have A^T and B^T available.
-    // We need B^T * A.
-    // B^T from B^T -> NoTrans.
-    // A from A^T -> Transpose.
     cublasSgemm(get_matmul_handle(handle), CUBLAS_OP_N, CUBLAS_OP_T, b.cols,
                 a.cols, a.rows, &alpha, b.data, b.stride, a.data, a.stride,
                 &beta, result.data, result.stride);
@@ -905,15 +891,11 @@ bool kernel::matrix::is_equal(const ::matrix& a,
     }
 
     bool* d_result = global_gpu_bool_pool.acquire();
-    cudaMemsetAsync(d_result, 1, sizeof(bool), get_kernel_stream(stream));
+    *d_result = true;
 
     compare<<<(a.rows * a.cols + 255) / 256, 256, 0,
               get_kernel_stream(stream)>>>(a.data, b.data, a.stride, b.stride,
                                            a.rows, a.cols, epsilon, d_result);
 
-    bool h_result;
-    cudaMemcpyAsync(&h_result, d_result, sizeof(bool), cudaMemcpyDeviceToHost,
-                    get_kernel_stream(stream));
-    cudaStreamSynchronize(get_kernel_stream(stream));
-    return h_result;
+    return *d_result;
 }
