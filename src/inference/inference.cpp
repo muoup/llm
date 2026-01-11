@@ -1,7 +1,6 @@
 #include "inference.hpp"
 
 #include <chrono>
-#include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -11,8 +10,8 @@
 #include <inference/attention.hpp>
 #include <inference/feed_forward.hpp>
 #include <inference/layer_normalize.hpp>
-#include <inference/linearized_attention.hpp>
 #include <inference/network_node.hpp>
+#include <inference/rms_normalize.hpp>
 
 #include <kernels/matrix_kernels.hpp>
 #include <kernels/optimizer.hpp>
@@ -30,9 +29,8 @@ std::unique_ptr<INode> load_node(std::istream& in) {
                 FeedForwardLayer::load(in));
         case NodeType::LayerNorm:
             return std::make_unique<LayerNorm>(LayerNorm::load(in));
-        case NodeType::LinearizedAttention:
-            return std::make_unique<LinearizedAttention>(
-                LinearizedAttention::load(in));
+        case NodeType::RMSNorm:
+            return std::make_unique<RMSNorm>(RMSNorm::load(in));
         default:
             // Handle error: unknown node type
             std::cerr << "Error: Unknown node type during loading: "
@@ -408,7 +406,8 @@ float InferenceModel::train_on(const std::span<const token_id_t> tokens,
     }
 
     start = std::chrono::high_resolution_clock::now();
-    this->m_embedding_layer.backpropogate(tokens, gradients.back()[0], optimizer);
+    this->m_embedding_layer.backpropogate(tokens, gradients.back()[0],
+                                          optimizer);
     kernel::wait_for_all_streams();
     CHECK_ERRORS("Backpropogating embeddings...");
     if (perf) {

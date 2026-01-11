@@ -1,0 +1,96 @@
+Loading tokenizer from: .models/tinystories.tok
+Loading existing model from: .models/tinystories-1m.lm
+Instantiating model with vocab size 5000 and dimensions 128.
+Loading Embedding Layer
+Loading Model Layer
+Loading Model Layer
+Loading Model Layer
+Loading Logit Layer
+Successfully loaded model. Parameter count: 1483016
+Starting training process...
+Loading dataset from: datasets/tinystories/full.txt
+Dataset loaded. Type: row-based. Iterating over rows...
+[DEBUG]   Embedding Layer Forward:
+[DEBUG]     output norm pre pos encoding: 186.617447
+[DEBUG]     output norm: 215.856201
+[DEBUG]   Attention Head 0 Forward:
+[DEBUG]     wq norm: 16.149382
+[DEBUG]     wk norm: 16.134197
+[DEBUG]     wv norm: 15.728266
+[DEBUG]     q norm: 301.813080
+[DEBUG]     k norm: 303.116425
+[DEBUG]     v norm: 244.473419
+[DEBUG]     scores norm: 13.763006
+[DEBUG]     weighted_sum norm: 258.517578
+[DEBUG]   Attention Layer Forward:
+[DEBUG]     input norm: 185.924805
+[DEBUG]     concatenated_heads norm: 258.517578
+[DEBUG]     final_output norm: 284.925232
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 215.856171
+[DEBUG]     normalized norm: 185.924805
+[DEBUG]     mean norm: 5.010124
+[DEBUG]     inv_variance norm: 18.377712
+[DEBUG]     post_residual_connection norm: 321.518494
+[DEBUG]   FF Layer Forward:
+[DEBUG]     input norm: 209.917206
+[DEBUG]     activation_input norm: 787.828918
+[DEBUG]     activation_output norm: 540.767151
+[DEBUG]     final_output norm: 542.420288
+[DEBUG]   LayerNorm Forward:
+[DEBUG]     input norm: 321.518494
+[DEBUG]     normalized norm: 209.917191
+[DEBUG]     mean norm: 6.616631
+[DEBUG]     inv_variance norm: 11.152318
+[DEBUG]     post_residual_connection norm: 581.434082
+[DEBUG]   Logit Layer Forward:
+[DEBUG]     input norm: 79.185814
+[DEBUG]     logits norm pre-softmax: 654.927856
+[DEBUG]     logits norm post-softmax: 4.932697
+[DEBUG]   Logit Layer Gradients:
+[DEBUG]     logit_weight_gradient norm: 20.644663
+[DEBUG]     logit_bias_gradient norm: 23.509050
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 581.434021
+[DEBUG]     mean norm: 4.500465
+[DEBUG]     inv_variance norm: 5.916951
+[DEBUG]     grad_normalized norm: 25.579361
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 38.732185
+[DEBUG]     grad_beta norm: 36.500187
+[DEBUG]     grad_input norm: 2.734493
+[DEBUG]   FF Layer Gradients:
+[DEBUG]     w1_gradient norm: 59.900558
+[DEBUG]     b1_gradient norm: 5.442934
+[DEBUG]     w2_gradient norm: 49.055004
+[DEBUG]     b2_gradient norm: 4.113972
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 321.518494
+[DEBUG]     mean norm: 6.616631
+[DEBUG]     inv_variance norm: 11.152318
+[DEBUG]     grad_normalized norm: 7.971161
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 8.500652
+[DEBUG]     grad_beta norm: 10.553968
+[DEBUG]     grad_input norm: 6.510145
+[DEBUG]   Attention Layer Backpropagation:
+[DEBUG]     post_layer_gradient norm: 6.711995
+[DEBUG]   Attention Head 0 Gradients:
+[DEBUG]     scores_gradient norm: 203.380798
+[DEBUG]     raw_scores_gradient norm: 2.8139030933e-01
+[DEBUG]     wq_gradient norm: 48.333591
+[DEBUG]     wk_gradient norm: 43.282436
+[DEBUG]     wv_gradient norm: 112.757469
+[DEBUG]   LayerNorm Inputs: 
+[DEBUG]     layer_input norm: 215.856186
+[DEBUG]     mean norm: 5.010124
+[DEBUG]     inv_variance norm: 18.377712
+[DEBUG]     grad_normalized norm: 16.594957
+[DEBUG]   LayerNorm Layer Gradients:
+[DEBUG]     grad_gamma norm: 16.270693
+[DEBUG]     grad_beta norm: 17.839390
+[DEBUG]     grad_input norm: 22.262541
+[DEBUG]   Embedding Layer Gradients:
+[DEBUG]     embedding_gradient norm: 267.327087
+Row 0 / 1 processed. Rolling Avg Loss: 5.38 | As Accuracy: 0.462%
+Training complete. Saving model to: .models/tinystories-1m.lm

@@ -73,3 +73,57 @@ matrix kernel::feed_forward::leaky_relu_activation_backprop(
 
     return z1_mapped;
 }
+
+__device__ float gelu(float x) {
+    float sqrt_2_over_pi = 0.7978845608f;
+    float coeff = 0.044715f;
+    return 0.5f * x * (1.0f + tanhf(sqrt_2_over_pi * (x + coeff * x * x * x)));
+}
+
+matrix kernel::feed_forward::gelu_activation(const ::matrix& z1, kernel_stream_t stream) {
+    return kernel::matrix::map_matrix<gelu>(z1, stream);
+}
+
+__device__ float gelu_derivative(float x) {
+    float sqrt_2_over_pi = 0.7978845608f;
+    float coeff = 0.044715f;
+    float arg = sqrt_2_over_pi * (x + coeff * x * x * x);
+    float cdf = 0.5f * (1.0f + tanhf(arg));
+    float pdf = 0.3989422804f * expf(-0.5f * x * x);
+    return cdf + x * pdf;
+}
+
+matrix kernel::feed_forward::gelu_activation_backprop(
+    const ::matrix& activation_input,
+    const ::matrix& a1_gradient,
+    kernel_stream_t stream) {
+    ::matrix z1_mapped
+        = kernel::matrix::map_matrix<gelu_derivative>(activation_input, stream);
+    kernel::matrix::element_wise_multiply(z1_mapped, a1_gradient, stream);
+
+    return z1_mapped;
+}
+
+__device__ float silu(float x) {
+    return x / (1.0f + expf(-x));
+}
+
+matrix kernel::feed_forward::silu_activation(const ::matrix& z1, kernel_stream_t stream) {
+    return kernel::matrix::map_matrix<silu>(z1, stream);
+}
+
+__device__ float silu_derivative(float x) {
+    float sigm = 1.0f / (1.0f + expf(-x));
+    return sigm * (1.0f + x * (1.0f - sigm));
+}
+
+matrix kernel::feed_forward::silu_activation_backprop(
+    const ::matrix& activation_input,
+    const ::matrix& a1_gradient,
+    kernel_stream_t stream) {
+    ::matrix z1_mapped
+        = kernel::matrix::map_matrix<silu_derivative>(activation_input, stream);
+    kernel::matrix::element_wise_multiply(z1_mapped, a1_gradient, stream);
+
+    return z1_mapped;
+}

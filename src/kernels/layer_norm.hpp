@@ -34,4 +34,27 @@ LayerNormGradients layer_normalization_backward(const ::matrix& input,
                                                 kernel_stream_t stream
                                                 = nullptr);
 
+struct RMSNormResult {
+    ::matrix normalized;
+    ::matrix inv_rms;
+};
+
+RMSNormResult rms_normalization(const ::matrix& input,
+                                 const ::matrix& gamma,
+                                 float epsilon,
+                                 kernel_stream_t stream = nullptr);
+
+struct RMSNormGradients {
+    ::matrix grad_input;
+    ::matrix grad_gamma;
+};
+
+RMSNormGradients rms_normalization_backward(const ::matrix& input,
+                                             const ::matrix& gamma,
+                                             const ::matrix& inv_rms,
+                                             const ::matrix& grad_normalized,
+                                             float epsilon,
+                                             kernel_stream_t stream
+                                             = nullptr);
+
 }  // namespace kernel::layer_norm

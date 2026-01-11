@@ -84,7 +84,7 @@ void train_tokenizer(tokenizer& tokenizer, std::string_view corpus, size_t max_v
         tokenizer.merges.push_back(most_frequent_pair.combo);
         
         if (tokenizer.token_map.size() % 100 == 0) {
-            std::printf("Tokenizer training: vocabulary size %zu / %zu\r", tokenizer.token_map.size(), max_vocab_size);
+            std::printf("Tokenizer training: vocabulary size %zu / %zu\n", tokenizer.token_map.size(), max_vocab_size);
             std::fflush(stdout);
         }
 

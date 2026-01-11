@@ -73,7 +73,7 @@ void kernel::matrix::check_errors(const char* step) {
     result.rows = rows;
     result.cols = cols;
     result.stride = calculate_stride(rows, cols);
- 
+
     cudaMallocAsync(&result.data, result.buffer_size(),
                     get_kernel_stream(stream));
     cudaMemsetAsync(result.data, 0, result.buffer_size(),
@@ -487,20 +487,22 @@ void kernel::matrix::add_row_vector(::matrix& mat,
         = (mat.cols + threads_per_block - 1) / threads_per_block;
 
     add_row_vector_kernel<<<blocks, threads_per_block, 0,
-                            get_kernel_stream(stream)>>>(mat, row, vec,
-                                                         vec_row, scale);
+                            get_kernel_stream(stream)>>>(mat, row, vec, vec_row,
+                                                         scale);
 }
 
-static __global__ void atomic_add_row_vector_kernel(const matrix_view data,
-                                                    size_t data_row,
-                                                    const const_matrix_view row_vec,
-                                                    size_t offset_row,
-                                                    float scale) {
+static __global__ void atomic_add_row_vector_kernel(
+    const matrix_view data,
+    size_t data_row,
+    const const_matrix_view row_vec,
+    size_t offset_row,
+    float scale) {
     const size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (col < data.cols) {
         auto val = kernel::matrix::device_get(row_vec, offset_row, col);
-        kernel::matrix::device_offset_elem_atomic(data, data_row, col, val * scale);
+        kernel::matrix::device_offset_elem_atomic(data, data_row, col,
+                                                  val * scale);
     }
 }
 
@@ -523,10 +525,9 @@ static __global__ void set_horizontal_slice_kernel(
     const matrix_view data,
     const size_t start_col,
     const const_matrix_view slice) {
-        
     const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t col = blockIdx.y * blockDim.y + threadIdx.y;
-    
+
     if (row < slice.rows && col < slice.cols) {
         auto val = kernel::matrix::device_get(slice, row, col);
         kernel::matrix::device_set(data, row, start_col + col, val);
@@ -538,8 +539,9 @@ void kernel::matrix::set_horizontal_slice(::matrix& mat,
                                           const ::matrix& slice,
                                           kernel_stream_t stream) {
     const dim3 threads_per_block(16, 16);
-    const dim3 blocks ((slice.rows + threads_per_block.x - 1) / threads_per_block.x,
-                       (slice.cols + threads_per_block.y - 1) / threads_per_block.y);
+    const dim3 blocks(
+        (slice.rows + threads_per_block.x - 1) / threads_per_block.x,
+        (slice.cols + threads_per_block.y - 1) / threads_per_block.y);
 
     set_horizontal_slice_kernel<<<blocks, threads_per_block, 0,
                                   get_kernel_stream(stream)>>>(mat, start_col,
@@ -647,14 +649,14 @@ __global__ void kernel_softmax(matrix_view data) {
         float val = kernel::matrix::device_get(data, row, col);
         local_max = fmaxf(local_max, val);
     }
-    
+
     float row_max = kernel::matrix::device::block_reduce_max(local_max);
-    
+
     __shared__ float shared_max;
     if (tid == 0) {
         shared_max = row_max;
     }
-    
+
     __syncthreads();
 
     float local_sum = 0.0f;
@@ -672,7 +674,7 @@ __global__ void kernel_softmax(matrix_view data) {
         }
     }
     __syncthreads();
-    
+
     float row_dot = kernel::matrix::device::block_reduce_sum(local_sum);
 
     __shared__ float shared_denom;
@@ -858,23 +860,19 @@ void kernel::matrix::element_wise_multiply(::matrix& a,
                                    get_kernel_stream(stream)>>>(a, b);
 }
 
-__global__ void compare(const float* a,
-                        const float* b,
-                        const size_t stride_a,
-                        const size_t stride_b,
-                        const size_t rows,
-                        const size_t cols,
-                        const float epsilon,
+__global__ void compare(const_matrix_view a,
+                        const_matrix_view b,
+                        float epsilon,
                         bool* result) {
     const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total_size = rows * cols;
+    const size_t total_size = a.rows * a.cols;
 
     if (idx < total_size) {
-        const size_t row = idx / cols;
-        const size_t col = idx % cols;
+        const size_t row = idx / a.cols;
+        const size_t col = idx % a.cols;
 
-        float val_a = kernel::matrix::device_get(a, stride_a, row, col);
-        float val_b = kernel::matrix::device_get(b, stride_b, row, col);
+        float val_a = kernel::matrix::device_get(a, row, col);
+        float val_b = kernel::matrix::device_get(b, row, col);
 
         if (fabsf(val_a - val_b) > epsilon) {
             *result = false;
@@ -894,8 +892,7 @@ bool kernel::matrix::is_equal(const ::matrix& a,
     *d_result = true;
 
     compare<<<(a.rows * a.cols + 255) / 256, 256, 0,
-              get_kernel_stream(stream)>>>(a.data, b.data, a.stride, b.stride,
-                                           a.rows, a.cols, epsilon, d_result);
+              get_kernel_stream(stream)>>>(a, b, epsilon, d_result);
 
     return *d_result;
 }
