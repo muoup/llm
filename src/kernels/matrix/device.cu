@@ -2,8 +2,10 @@
 
 #include <cuda_fp16.hpp>
 #include <cuda_bf16.hpp>
+#include <cuda_runtime_api.h>
 #include <math_constants.h>
 
+#include <kernels/matrix/host.hpp>
 #include <kernels/scheduling.cuh>
 #include <util/matrix.hpp>
 
@@ -23,6 +25,18 @@ __device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, s
     return &((__nv_bfloat16*)data)[row * stride + col];
 }
 
+__device__ const float* get_addr_float(const void* data, size_t stride, size_t row, size_t col) {
+    return &((float*)data)[row * stride + col];
+}
+
+__device__ const half* get_addr_half(const void* data, size_t stride, size_t row, size_t col) {
+    return &((half*)data)[row * stride + col];
+}
+
+__device__ const __nv_bfloat16* get_addr_bf16(const void* data, size_t stride, size_t row, size_t col) {
+    return &((__nv_bfloat16*)data)[row * stride + col];
+}
+
 __device__ void* get_addr(matrix_view& view, size_t row, size_t col) {
     switch (view.type) {
         case DataType::Float:
@@ -38,17 +52,17 @@ __device__ void* get_addr(matrix_view& view, size_t row, size_t col) {
 __device__ const void* get_addr(const const_matrix_view& view, size_t row, size_t col) {
     switch (view.type) {
         case DataType::Float:
-            return get_addr_float(const_cast<void*>(view.data), view.stride, row, col);
+            return get_addr_float(view.data, view.stride, row, col);
         case DataType::Half:
-            return get_addr_half(const_cast<void*>(view.data), view.stride, row, col);
+            return get_addr_half(view.data, view.stride, row, col);
         case DataType::BFloat16:
-            return get_addr_bf16(const_cast<void*>(view.data), view.stride, row, col);
+            return get_addr_bf16(view.data, view.stride, row, col);
     }
     return nullptr;
 }
 
 __device__ float get_float(const void* data, size_t stride, size_t row, size_t col) {
-    return ((const float*)data)[row * stride + col];
+    return *get_addr_float(const_cast<void*>(data), stride, row, col);
 }
 
 __device__ half get_half(const void* data, size_t stride, size_t row, size_t col) {
@@ -60,27 +74,27 @@ __device__ __nv_bfloat16 get_bf16(const void* data, size_t stride, size_t row, s
 }
 
 __device__ void set_float(void* data, size_t stride, size_t row, size_t col, float value) {
-    ((float*)data)[row * stride + col] = value;
+    *get_addr_float(data, stride, row, col) = value;
 }
 
 __device__ void set_half(void* data, size_t stride, size_t row, size_t col, half value) {
-    ((half*)data)[row * stride + col] = value;
+    *get_addr_half(data, stride, row, col) = value;
 }
 
 __device__ void set_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
-    ((__nv_bfloat16*)data)[row * stride + col] = value;
+    *get_addr_bf16(data, stride, row, col) = value;
 }
 
 __device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value) {
-    ((float*)data)[row * stride + col] += value;
+    *get_addr_float(data, stride, row, col) += value;
 }
 
 __device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value) {
-    ((half*)data)[row * stride + col] += value;
+    *get_addr_half(data, stride, row, col) += value;
 }
 
 __device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
-    ((__nv_bfloat16*)data)[row * stride + col] += value;
+    *get_addr_bf16(data, stride, row, col) += value;
 }
 
 __device__ void offset_elem(const matrix_view& view, size_t row, size_t col, float value) {
@@ -98,18 +112,18 @@ __device__ void offset_elem(const matrix_view& view, size_t row, size_t col, flo
 }
 
 __device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value) {
-    float* addr = &((float*)data)[row * stride + col];
+    float* addr = get_addr_float(data, stride, row, col);
     atomicAdd(addr, value);
 }
 
 __device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value) {
-    half* addr = &((half*)data)[row * stride + col];
-    atomicAdd((unsigned int*)addr, __half_as_ushort(value));
+    half* addr = get_addr_half(data, stride, row, col);
+    atomicAdd(addr, value);
 }
 
 __device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
-    __nv_bfloat16* addr = &((__nv_bfloat16*)data)[row * stride + col];
-    atomicAdd((unsigned int*)addr, __bfloat16_as_ushort(value));
+    __nv_bfloat16* addr = get_addr_bf16(data, stride, row, col);
+    atomicAdd(addr, value);
 }
 
 __device__ void offset_elem_atomic(const matrix_view& view, size_t row, size_t col, float value) {

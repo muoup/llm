@@ -12,7 +12,7 @@
 namespace kernel::matrix {
 
 void check_errors(const char* step);
-    
+
 // ===== Memory Management =====
 ::matrix async_allocate(size_t rows,
                         size_t cols,

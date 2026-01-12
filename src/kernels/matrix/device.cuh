@@ -14,6 +14,10 @@ __device__ float* get_addr_float(void* data, size_t stride, size_t row, size_t c
 __device__ half* get_addr_half(void* data, size_t stride, size_t row, size_t col);
 __device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, size_t col);
 
+__device__ const float* get_addr_float(const void* data, size_t stride, size_t row, size_t col);
+__device__ const half* get_addr_half(const void* data, size_t stride, size_t row, size_t col);
+__device__ const __nv_bfloat16* get_addr_bf16(const void* data, size_t stride, size_t row, size_t col);
+
 __device__ void* get_addr(matrix_view& view, size_t row, size_t col);
 __device__ const void* get_addr(const const_matrix_view& view, size_t row, size_t col);
 

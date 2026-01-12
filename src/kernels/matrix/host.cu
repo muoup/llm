@@ -12,7 +12,6 @@
 namespace kernel::matrix {
 
 // ===== Memory Management =====
-
 ::matrix async_allocate(size_t rows,
                         size_t cols,
                         DataType type,
@@ -62,7 +61,8 @@ void* allocate_buffer(size_t size, DataType type, kernel_stream_t stream) {
 }
 
 void free_buffer(void* buffer, kernel_stream_t stream) {
-    cudaFreeAsync(buffer, get_kernel_stream(stream));
+    cudaFree(buffer);
+    // cudaFreeAsync(buffer, get_kernel_stream(stream));
 }
 
 // ===== Data Transfer =====
