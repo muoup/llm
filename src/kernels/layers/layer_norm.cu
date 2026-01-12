@@ -1,11 +1,13 @@
-#include <cuda_runtime_api.h>
-#include "kernels/scheduling.hpp"
 #include "layer_norm.hpp"
 
+#include <cuda_runtime_api.h>
+
 #include <inference/layer_normalize.hpp>
+
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/matrix.hpp>
 #include <kernels/scheduling.cuh>
+#include <kernels/scheduling.hpp>
 
 
 __global__ void row_mean(const const_matrix_view input,
@@ -70,9 +72,9 @@ kernel::layer_norm::LayerNormResult kernel::layer_norm::layer_normalization(
     const LayerNorm &layer,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, stream);
-    ::matrix mean = matrix::async_allocate(input.rows, 1, stream);
-    ::matrix inv_variance = matrix::async_allocate(input.rows, 1, stream);
+    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, input.type, stream);
+    ::matrix mean = matrix::async_allocate(input.rows, 1, input.type, stream);
+    ::matrix inv_variance = matrix::async_allocate(input.rows, 1, input.type, stream);
 
     row_mean<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean);
     row_inv_variance<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, mean, inv_variance, epsilon);
@@ -198,9 +200,9 @@ kernel::layer_norm::layer_normalization_backward(
     const ::matrix& grad_normalized,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols, stream);
-    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols, stream);
-    ::matrix grad_beta = matrix::async_allocate(beta.rows, beta.cols, stream);
+    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols, layer_input.type, stream);
+    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols, layer_input.type, stream);
+    ::matrix grad_beta = matrix::async_allocate(beta.rows, beta.cols, layer_input.type, stream);
 
     constexpr size_t threads_per_block = 256;
 
@@ -262,8 +264,8 @@ kernel::layer_norm::RMSNormResult kernel::layer_norm::rms_normalization(
     const ::matrix& gamma,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, stream);
-    ::matrix inv_rms = matrix::async_allocate(input.rows, 1, stream);
+    ::matrix normalized_input = matrix::async_allocate(input.rows, input.cols, input.type, stream);
+    ::matrix inv_rms = matrix::async_allocate(input.rows, 1, input.type, stream);
 
     row_rms<<<input.rows, 1, 0, get_kernel_stream(stream)>>>(input, inv_rms, epsilon);
 
@@ -360,8 +362,8 @@ kernel::layer_norm::rms_normalization_backward(
     const ::matrix& grad_normalized,
     float epsilon,
     kernel_stream_t stream) {
-    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols, stream);
-    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols, stream);
+    ::matrix grad_input = matrix::async_allocate(layer_input.rows, layer_input.cols, layer_input.type, stream);
+    ::matrix grad_gamma = matrix::async_allocate(gamma.rows, gamma.cols, layer_input.type, stream);
 
     constexpr size_t threads_per_block = 256;
 

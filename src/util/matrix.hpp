@@ -24,26 +24,39 @@
     (void)(message);
 #endif
 
+enum class DataType { Float, Half, BFloat16 };
+
 struct const_matrix_view;
 struct matrix_view;
 
-constexpr size_t calculate_stride(const size_t rows, const size_t cols) {
-    // The Stride is Equal to the Least Multiple of (256 / sizeof(float)) Equal
-    // to or Greater Than i
-    constexpr size_t alignment = 256 / sizeof(float);
+constexpr size_t calculate_stride(const size_t rows,
+                                  const size_t cols,
+                                  DataType type);
 
-    return ((cols + alignment - 1) / alignment) * alignment;
+inline constexpr size_t get_type_size(DataType type) {
+    switch (type) {
+        case DataType::Float:
+            return sizeof(float);
+        case DataType::Half:
+            return sizeof(uint16_t);
+        case DataType::BFloat16:
+            return sizeof(uint16_t);
+    }
+    return sizeof(float);
 }
 
 struct matrix {
     std::uint64_t rows, cols, stride;
-
-    float* data;
+    DataType type;
+    void* data;
 
     constexpr static auto MATRIX_ELEMENT_ALIGNMENT = 256;
 
-    matrix() : rows(0), cols(0), stride(0), data(nullptr) {}
-    matrix(const size_t rows, const size_t cols);
+    matrix()
+        : rows(0), cols(0), stride(0), type(DataType::Float), data(nullptr) {}
+    matrix(const size_t rows,
+           const size_t cols,
+           DataType type = DataType::Float);
     matrix(matrix&&);
     matrix(const matrix& other) = delete;
 
@@ -60,8 +73,8 @@ struct matrix {
     void xavier_randomize();
     void zero();
 
-    float* data_ptr() { return data; }
-    const float* data_ptr() const { return data; }
+    void* data_ptr() { return data; }
+    const void* data_ptr() const { return data; }
 
     matrix& scale(const float factor);
     matrix& add(const matrix& offset);
@@ -82,7 +95,7 @@ struct matrix {
     void add_row_vector(const size_t row, const matrix& other);
     void set_horizontal_slice(const size_t col_start, const matrix& slice);
     const_matrix_view get_horizontal_slice(const size_t col_start,
-                                const size_t slice_cols) const;
+                                           const size_t slice_cols) const;
 
     matrix& softmax();
 
@@ -136,7 +149,7 @@ struct matrix {
     float norm() const;
 
     matrix transposed() const {
-        matrix transposed{ cols, rows };
+        matrix transposed{ cols, rows, type };
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 transposed.set(j, i, get(i, j));
@@ -177,48 +190,58 @@ struct matrix {
 
 struct matrix_view {
     size_t rows, cols, stride;
-    float* data;
+    DataType type;
+    void* data;
 
-    matrix_view() : rows(0), cols(0), stride(0), data(nullptr) {}
+    matrix_view()
+        : rows(0), cols(0), stride(0), type(DataType::Float), data(nullptr) {}
     matrix_view(matrix& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),
+          type(other.type),
           data(other.data) {}
     matrix_view(const size_t rows,
                 const size_t cols,
                 const size_t stride,
-                float* data)
-        : rows(rows), cols(cols), stride(stride), data(data) {}
+                DataType type,
+                void* data)
+        : rows(rows), cols(cols), stride(stride), type(type), data(data) {}
 
     matrix to_matrix() const;
 };
 
 struct const_matrix_view {
     size_t rows, cols, stride;
-    const float* data;
+    DataType type;
+    const void* data;
 
-    const_matrix_view() : rows(0), cols(0), stride(0), data(nullptr) {}
+    const_matrix_view()
+        : rows(0), cols(0), stride(0), type(DataType::Float), data(nullptr) {}
     const_matrix_view(const matrix_view& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),
+          type(other.type),
           data(other.data) {}
     const_matrix_view(matrix& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),
+          type(other.type),
           data(other.data) {}
     const_matrix_view(const matrix& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),
+          type(other.type),
           data(other.data) {}
     const_matrix_view(const size_t rows,
                       const size_t cols,
                       const size_t stride,
-                      const float* data)
-        : rows(rows), cols(cols), stride(stride), data(data) {}
+                      DataType type,
+                      const void* data)
+        : rows(rows), cols(cols), stride(stride), type(type), data(data) {}
 
     matrix to_matrix() const;
 };

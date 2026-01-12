@@ -4,6 +4,7 @@
 #include <kernels/matrix.hpp>
 #include <kernels/scheduling.cuh>
 #include <kernels/scheduling.hpp>
+
 #include <util/matrix.hpp>
 
 constexpr auto NORM_CLIP_MAX_MAG = 2.5f;
