@@ -10,6 +10,8 @@ T* gpu_allocate();
 template <typename T>
 void gpu_free(T* ptr);
 
+void gpu_free(void* ptr);
+
 using GPUFloatPool = kernel::ObjectPool<float*, 8, nullptr, 
                                       gpu_allocate<float>, gpu_free<float>>;
 using GPUHalfPool = kernel::ObjectPool<uint16_t*, 8, nullptr, 

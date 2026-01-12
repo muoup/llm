@@ -31,7 +31,11 @@ struct matrix_view;
 
 constexpr size_t calculate_stride(const size_t rows,
                                   const size_t cols,
-                                  DataType type);
+                                  DataType type) {
+    (void)rows;
+    (void)type;
+    return cols;
+}
 
 inline constexpr size_t get_type_size(DataType type) {
     switch (type) {
