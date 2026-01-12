@@ -49,6 +49,8 @@ inline constexpr size_t get_type_size(DataType type) {
     return sizeof(float);
 }
 
+DataType parse_data_type(const std::string& str);
+
 struct matrix {
     std::uint64_t rows, cols, stride;
     DataType type;

@@ -318,7 +318,9 @@ runBtn.addEventListener('click', async () => {
             '--heads',
             document.getElementById('init-heads').value,
             '--layers',
-            document.getElementById('init-layers').value
+            document.getElementById('init-layers').value,
+            '--dtype',
+            document.getElementById('init-dtype').value
         ];
     } else if (activeView === 'perf-model') {
         args = [

@@ -52,6 +52,7 @@ void InferenceModel::save(std::ostream& out) const {
 
     out.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
     out.write(reinterpret_cast<const char*>(&vocab_size), sizeof(vocab_size));
+    out.write(reinterpret_cast<const char*>(&m_dtype), sizeof(DataType));
 
     // Layers
     this->m_embedding_layer.save(out);
@@ -100,10 +101,13 @@ InferenceModel InferenceModel::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     in.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
 
+    DataType loaded_dtype;
+    in.read(reinterpret_cast<char*>(&loaded_dtype), sizeof(DataType));
+
     std::cout << "Instantiating model with vocab size " << vocab_size
               << " and dimensions " << dimensions << "." << std::endl;
 
-    InferenceModel model = InferenceModel();
+    InferenceModel model = InferenceModel(dimensions, vocab_size, loaded_dtype);
     model.m_dimensions = dimensions;
     model.m_embedding_layer = EmbeddingLayer::load(in);
     CHECK_ERRORS("Loading embedding layer...");

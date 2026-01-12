@@ -1,5 +1,6 @@
 #include "init_model.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -8,6 +9,7 @@
 #include <inference/feed_forward.hpp>
 #include <inference/inference.hpp>
 #include <tokenizer/tokenizer.hpp>
+#include <util/matrix.hpp>
 #include "model_factories/standard_model.hpp"
 
 ActivationFunction parse_activation(const std::string& str) {
@@ -35,6 +37,19 @@ const char* activation_to_string(ActivationFunction activation) {
     }
 }
 
+const char* dtype_to_string(DataType dtype) {
+    switch (dtype) {
+        case DataType::Float:
+            return "Float (FP32)";
+        case DataType::Half:
+            return "Half (FP16)";
+        case DataType::BFloat16:
+            return "BFloat16";
+        default:
+            return "Unknown";
+    }
+}
+
 int handle_init_model(int argc, char* argv[]) {
     std::string output_path = get_arg_value(argc, argv, "--output");
     std::string tokenizer_path = get_arg_value(argc, argv, "--tokenizer");
@@ -42,11 +57,13 @@ int handle_init_model(int argc, char* argv[]) {
     std::string heads_str = get_arg_value(argc, argv, "--heads");
     std::string layers_str = get_arg_value(argc, argv, "--layers");
     std::string activation_str = get_arg_value(argc, argv, "--activation");
+    std::string dtype_str = get_arg_value(argc, argv, "--dtype");
 
     if (output_path.empty() || tokenizer_path.empty()) {
         std::cerr << "Usage: ./llm init-model --output <path> --tokenizer "
                      "<path> [--dimensions <n>] [--heads <n>] [--layers <n>] "
-                     "[--activation <leaky_relu|gelu|swiglu>]"
+                     "[--activation <leaky_relu|gelu|swiglu>] "
+                     "[--dtype <float|half|bf16>]"
                   << std::endl;
         return 1;
     }
@@ -55,6 +72,7 @@ int handle_init_model(int argc, char* argv[]) {
     size_t heads = heads_str.empty() ? 4 : std::stoul(heads_str);
     size_t layers = layers_str.empty() ? 4 : std::stoul(layers_str);
     ActivationFunction activation = parse_activation(activation_str);
+    DataType dtype = parse_data_type(dtype_str);
 
     std::cout << "Loading tokenizer to determine vocab size: " << tokenizer_path
               << std::endl;
@@ -70,10 +88,11 @@ int handle_init_model(int argc, char* argv[]) {
     std::cout << "  Layers: " << layers << std::endl;
     std::cout << "  Activation: " << activation_to_string(activation)
               << std::endl;
+    std::cout << "  Data Type: " << dtype_to_string(dtype) << std::endl;
     std::cout << "  Vocab Size: " << _tokenizer.vocab_size() << std::endl;
 
     InferenceModel model = standard_attention_model(
-        dimensions, _tokenizer.vocab_size(), layers, heads, activation);
+        dimensions, _tokenizer.vocab_size(), layers, heads, activation, dtype);
 
     std::cout << "Total Parameters: " << model.parameter_count() << std::endl;
     std::cout << "Saving model to: " << output_path << std::endl;

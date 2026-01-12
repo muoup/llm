@@ -36,7 +36,8 @@ InferenceModel standard_attention_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t num_blocks,
                                         size_t attention_heads,
-                                        ActivationFunction activation) {
+                                        ActivationFunction activation,
+                                        DataType dtype) {
     size_t ffn_multiplier;
     if (activation == ActivationFunction::SwiGLU) {
         ffn_multiplier = (dimensions * 4 / 3) / dimensions;
@@ -46,7 +47,7 @@ InferenceModel standard_attention_model(size_t dimensions,
         ffn_multiplier = 4;
     }
 
-    InferenceModel model(dimensions, vocab_size);
+    InferenceModel model(dimensions, vocab_size, dtype);
 
     size_t last_layer_idx = 0;
 

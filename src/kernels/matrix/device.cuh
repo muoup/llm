@@ -25,10 +25,12 @@ inline __device__ void set_bf16(void* data, size_t stride, size_t row, size_t co
 inline __device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value);
 inline __device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value);
 inline __device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
+__device__ void offset_elem(void* data, size_t stride, size_t row, size_t col, float value);
 
 inline __device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value);
 inline __device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value);
 inline __device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
+__device__ void offset_elem_atomic(void* data, size_t stride, size_t row, size_t col, float value);
 
 inline __device__ float warp_reduce_sum(float val);
 inline __device__ float warp_reduce_max(float val);

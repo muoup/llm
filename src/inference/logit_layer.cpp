@@ -6,11 +6,13 @@
 #include <tokenizer/token.hpp>
 #include <util/logger.hpp>
 
-LogitLayer::LogitLayer(const size_t dimensions, const size_t vocab_size)
+LogitLayer::LogitLayer(const size_t dimensions,
+                       const size_t vocab_size,
+                       DataType dtype)
     : dimensions(dimensions),
       vocab_size(vocab_size),
-      w(dimensions, vocab_size),
-      b(1, vocab_size) {}
+      w(dimensions, vocab_size, dtype),
+      b(1, vocab_size, dtype) {}
 
 size_t LogitLayer::parameterCount() const {
     return (w.rows * w.cols) + (b.rows * b.cols);
@@ -49,16 +51,17 @@ std::pair<matrix, float> LogitLayer::backpropogate(
     matrix logit_weight_gradient
         = input.t_cross_multiplied(loss_result.logit_loss_gradient);
     kernel::optimizer::norm_clip(h_final_gradient);
-    
-    // Regularize weight gradient is now handled by AdamW implicitly via weight decay (decoupled)
-    // But if we want to keep explicit regularization logic separate:
-    // AdamW implements weight decay directly. The old regularize_weight_gradient was doing 2*strength*param.
-    // The new AdamW step handles weight decay.
-    // However, the old implementation might have been doing L2 regularization on top of gradient.
-    // AdamW decouples weight decay from gradient update.
-    // If the old one was L2 loss added to gradient, then AdamW weight decay parameter covers it.
-    // I will remove explicit regularization call here and let AdamW handle it.
-    
+
+    // Regularize weight gradient is now handled by AdamW implicitly via weight
+    // decay (decoupled) But if we want to keep explicit regularization logic
+    // separate: AdamW implements weight decay directly. The old
+    // regularize_weight_gradient was doing 2*strength*param. The new AdamW step
+    // handles weight decay. However, the old implementation might have been
+    // doing L2 regularization on top of gradient. AdamW decouples weight decay
+    // from gradient update. If the old one was L2 loss added to gradient, then
+    // AdamW weight decay parameter covers it. I will remove explicit
+    // regularization call here and let AdamW handle it.
+
     kernel::wait_for_all_streams();
 
     LOG_DEBUG("  Logit Layer Gradients:");

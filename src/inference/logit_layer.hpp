@@ -1,8 +1,8 @@
 #pragma once
 
+#include <inference/optimizer.hpp>
 #include <tokenizer/token.hpp>
 #include <util/matrix.hpp>
-#include <inference/optimizer.hpp>
 
 #include <iostream>
 #include <span>
@@ -11,7 +11,9 @@
 // the final matrix back to logits over the vocabulary.
 class LogitLayer {
    public:
-    LogitLayer(const size_t dimensions, const size_t vocab_size);
+    LogitLayer(const size_t dimensions,
+               const size_t vocab_size,
+               DataType dtype = DataType::Float);
 
     size_t parameterCount() const;
 

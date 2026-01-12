@@ -3,16 +3,16 @@
 #include <map>
 #include <string>
 
+#include <commands/init_model.hpp>
+#include <commands/perf_model.hpp>
 #include <commands/predict.hpp>
 #include <commands/train.hpp>
 #include <commands/train_tokenizer.hpp>
-#include <commands/init_model.hpp>
-#include <commands/perf_model.hpp>
 
 #include <kernels/layers/feed_forward.hpp>
 #include <kernels/matrix.hpp>
-#include <util/matrix.hpp>
 #include <util/logger.hpp>
+#include <util/matrix.hpp>
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
@@ -25,7 +25,9 @@ int main(int argc, char* argv[]) {
 
     if (argc < 2) {
         std::cerr << "Usage: ./llm <command> [options]" << std::endl;
-        std::cerr << "Commands: train-tokenizer, train, predict" << std::endl;
+        std::cerr << "Commands: train-tokenizer, train, predict, init-model, "
+                     "perf-model"
+                  << std::endl;
         return 1;
     }
 

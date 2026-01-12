@@ -1,6 +1,6 @@
 #include "embedding_layer.hpp"
 
-#include <kernels/matrix_device_kernels.cuh>
+#include <kernels/matrix/device.cuh>
 #include <kernels/scheduling.cuh>
 
 // static void positional_encoding(matrix& input) {
@@ -26,11 +26,11 @@ static __global__ void positional_encoding_kernel(matrix_view input) {
         const auto inner
             = token_i
               / std::pow(10000.0f, offset / static_cast<float>(input.cols));
-
-        kernel::matrix::device_offset_elem(input, token_i, offset,
-                                           std::sin(inner));
-        kernel::matrix::device_offset_elem(input, token_i, offset + 1,
-                                           std::cos(inner));
+              
+        kernel::matrix::device::offset_elem(input, token_i, offset,
+                                       std::sin(inner));
+        kernel::matrix::device::offset_elem(input, token_i, offset + 1,
+                                       std::cos(inner));
     }
 }
 

@@ -1,5 +1,6 @@
 #include "matrix.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
@@ -308,6 +309,7 @@ bool matrix::equals(const matrix& other, const float epsilon) const {
 void matrix::save(std::ostream& out) const {
     out.write(reinterpret_cast<const char*>(&rows), sizeof(size_t));
     out.write(reinterpret_cast<const char*>(&cols), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(&type), sizeof(DataType));
 
     size_t element_size = get_type_size(type);
     uint8_t* buffer = new uint8_t[buffer_size()];
@@ -318,10 +320,12 @@ void matrix::save(std::ostream& out) const {
 
 matrix matrix::load(std::istream& in) {
     size_t new_rows, new_cols;
+    DataType new_type;
     in.read(reinterpret_cast<char*>(&new_rows), sizeof(size_t));
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
+    in.read(reinterpret_cast<char*>(&new_type), sizeof(DataType));
 
-    matrix new_matrix = matrix(new_rows, new_cols);
+    matrix new_matrix = matrix(new_rows, new_cols, new_type);
     uint8_t* buffer_data = new uint8_t[new_matrix.buffer_size()];
     in.read(reinterpret_cast<char*>(buffer_data), new_matrix.buffer_size());
     kernel::matrix::load_into(new_matrix, buffer_data);
@@ -347,4 +351,20 @@ matrix matrix_view::to_matrix() const {
 
 matrix const_matrix_view::to_matrix() const {
     return kernel::matrix::clone(*this);
+}
+
+DataType parse_data_type(const std::string& str) {
+    std::string lower = str;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+    if (lower == "float" || lower == "fp32" || lower.empty())
+        return DataType::Float;
+    if (lower == "half" || lower == "fp16")
+        return DataType::Half;
+    if (lower == "bf16" || lower == "bfloat16")
+        return DataType::BFloat16;
+
+    std::cerr << "Unknown data type: " << str << ", defaulting to Float"
+              << std::endl;
+    return DataType::Float;
 }

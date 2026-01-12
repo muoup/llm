@@ -11,4 +11,5 @@ InferenceModel standard_attention_model(size_t dimensions,
                                         size_t num_blocks,
                                         size_t attention_heads,
                                         ActivationFunction activation
-                                        = ActivationFunction::GeLU);
+                                        = ActivationFunction::GeLU,
+                                        DataType dtype = DataType::Float);
