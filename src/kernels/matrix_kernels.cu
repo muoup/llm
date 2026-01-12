@@ -95,6 +95,10 @@ void kernel::matrix::free_buffer(float* data) {
     cudaFreeAsync(data, nullptr);
 }
 
+float* kernel::matrix::gpu_unified_float_ptr() {
+    return global_gpu_float_pool.acquire();
+}
+
 static __global__ void global_set(const matrix_view data,
                                   const size_t row,
                                   const size_t col,

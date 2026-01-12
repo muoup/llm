@@ -11,6 +11,8 @@
 
 namespace kernel::matrix {
 
+float* gpu_unified_float_ptr();
+    
 void check_errors(const char* step);
 
 float* get_addr(::matrix& mat, const size_t row, const size_t col);

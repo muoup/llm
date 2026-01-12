@@ -1,8 +1,11 @@
 #include "logit_layer.hpp"
 
+#include <kernels/matrix_kernels.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>
 #include <kernels/scheduling.cuh>
+
+#include <util/matrix.hpp>
 
 static __global__ void compute_loss_gradient_kernel(
     const token_id_t actual[],
@@ -37,33 +40,27 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     kernel_stream_t stream) {
     ::matrix logit_loss_gradient(predictions.rows, predictions.cols);
     ::matrix logit_bias_gradient(1, vocab_size);
-    
-    float* device_average_loss;
-    cudaMalloc(&device_average_loss, sizeof(float));
-    cudaMemsetAsync(device_average_loss, 0, sizeof(float), get_kernel_stream(stream));
+
+    float* device_average_loss = matrix::gpu_unified_float_ptr();
+    *device_average_loss = 0.0f;
 
     token_id_t* d_actual;
     cudaMalloc(&d_actual, actual.size() * sizeof(token_id_t));
     cudaMemcpyAsync(d_actual, actual.data(), actual.size() * sizeof(token_id_t),
-               cudaMemcpyHostToDevice, get_kernel_stream(stream));
+                    cudaMemcpyHostToDevice, get_kernel_stream(stream));
 
     dim3 block_size(16, 16);
     dim3 grid_size((predictions.cols + block_size.x - 1) / block_size.x,
                    (predictions.rows + block_size.y - 1) / block_size.y);
 
-    compute_loss_gradient_kernel<<<grid_size, block_size, 0, get_kernel_stream(stream)>>>(
+    compute_loss_gradient_kernel<<<grid_size, block_size, 0,
+                                   get_kernel_stream(stream)>>>(
         d_actual, predictions, logit_loss_gradient, logit_bias_gradient,
         device_average_loss);
 
-    float host_loss;
-    cudaMemcpyAsync(&host_loss, device_average_loss, sizeof(float), cudaMemcpyDeviceToHost, get_kernel_stream(stream));
-    cudaStreamSynchronize(get_kernel_stream(stream));
-    cudaFree(device_average_loss);
     cudaFree(d_actual);
 
-    return LossResult{
-        .logit_loss_gradient = std::move(logit_loss_gradient),
-        .logit_bias_gradient = std::move(logit_bias_gradient),
-        .average_loss = host_loss,
-    };
+    return LossResult{ .logit_loss_gradient = std::move(logit_loss_gradient),
+                       .logit_bias_gradient = std::move(logit_bias_gradient),
+                       .average_loss = *device_average_loss };
 }

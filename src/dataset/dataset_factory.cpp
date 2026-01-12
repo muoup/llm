@@ -7,7 +7,6 @@
 #include <memory>
 #include <string_view>
 
-// Implementation of the factory function
 std::unique_ptr<dataset> create_dataset(const std::string_view path, dataset_type type, size_t specified_size) {
     std::printf("Loading dataset from: %s\n", path.data());
     std::ifstream file(path.data());
