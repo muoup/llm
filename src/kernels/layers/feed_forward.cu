@@ -1,5 +1,4 @@
 #include "feed_forward.hpp"
-#include "kernels/matrix.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>
@@ -42,7 +41,7 @@ __global__ void sum_columns_kernel(const const_matrix_view base,
 }
 
 matrix kernel::feed_forward::sum_columns(const ::matrix& mat, kernel_stream_t stream) {
-    ::matrix result = matrix::async_allocate(1, mat.cols, stream);
+    ::matrix result = matrix::async_allocate(1, mat.cols, mat.type, stream);
 
     size_t threads_per_block = 256;
     size_t num_blocks = (mat.cols + threads_per_block - 1) / threads_per_block;

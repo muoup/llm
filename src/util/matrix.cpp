@@ -174,7 +174,7 @@ void matrix::add_row_vector(const size_t row, const matrix& other) {
     MATRIX_ASSERT(other.rows == 1 && other.cols == this->cols,
                   "Row vector dimensions do not match for adding row");
 
-    kernel::matrix::add_row_vector(*this, row, other, 0);
+    kernel::matrix::add_row_vector(*this, row, other, 0, 1.0f);
 }
 
 void matrix::set_horizontal_slice(const size_t col_start, const matrix& slice) {

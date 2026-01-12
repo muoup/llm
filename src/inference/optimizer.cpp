@@ -1,15 +1,16 @@
 #include "optimizer.hpp"
+
 #include <kernels/optimizer.hpp>
-#include "kernels/matrix.hpp"
+#include <kernels/matrix.hpp>
 
 void CentralOptimizer::update(matrix& parameter, const matrix& gradient, float weight_decay) {
     auto it = states.find(parameter.data);
     
     if (it == states.end()) {
         OptimizerState state;
-        state.m = kernel::matrix::async_allocate(parameter.rows, parameter.cols);
+        state.m = kernel::matrix::async_allocate(parameter.rows, parameter.cols, parameter.type);
         kernel::matrix::set_all(state.m, 0.0f);
-        state.v = kernel::matrix::async_allocate(parameter.rows, parameter.cols);
+        state.v = kernel::matrix::async_allocate(parameter.rows, parameter.cols, parameter.type);
         kernel::matrix::set_all(state.v, 0.0f);
         state.step = 0;
         

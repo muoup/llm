@@ -2,8 +2,6 @@
 
 #include <util/matrix.hpp>
 #include <unordered_map>
-#include <memory>
-#include <atomic>
 
 struct OptimizerState {
     matrix m;
@@ -24,5 +22,5 @@ public:
     float learning_rate;
 
 private:
-    std::unordered_map<float*, OptimizerState> states;
+    std::unordered_map<void*, OptimizerState> states;
 };

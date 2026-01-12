@@ -44,7 +44,7 @@ void randomize(::matrix& mat,
                kernel_stream_t stream = nullptr);
 
 // ===== Clone =====
-::matrix clone(const ::matrix& mat, kernel_stream_t stream = nullptr);
+::matrix clone(const ::const_matrix_view mat, kernel_stream_t stream = nullptr);
 
 // ===== Basic Operations =====
 void scale(::matrix& mat, float factor, kernel_stream_t stream = nullptr);

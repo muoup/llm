@@ -7,8 +7,8 @@
 #include <kernels/scheduling.hpp>
 #include <kernels/matrix.hpp>
 #include <util/matrix.hpp>
-#include <cuda_fp16.hpp>
-#include <cuda_bf16.hpp>
+#include <cuda_fp16.h>
+#include <cuda_bf16.h>
 
 namespace kernel::matrix {
 

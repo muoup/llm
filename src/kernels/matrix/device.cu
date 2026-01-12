@@ -1,8 +1,11 @@
 #include "device.cuh"
-#include <kernels/scheduling.cuh>
-#include <util/matrix.hpp>
+
 #include <cuda_fp16.hpp>
 #include <cuda_bf16.hpp>
+#include <math_constants.h>
+
+#include <kernels/scheduling.cuh>
+#include <util/matrix.hpp>
 
 namespace kernel::matrix::device {
 

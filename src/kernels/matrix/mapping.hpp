@@ -5,8 +5,8 @@
 #include <util/matrix.hpp>
 
 #ifdef __CUDACC__
-#include <cuda_bf16.hpp>
-#include <cuda_fp16.hpp>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 #endif
 
 namespace kernel::matrix {

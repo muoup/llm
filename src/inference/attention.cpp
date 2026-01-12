@@ -61,14 +61,14 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
 
     std::vector<matrix> returns;
     returns.reserve(2 + head_count * 4);
-    
+
     const kernel::kernel_stream_t global_stream = nullptr;
 
     // placeholder for the final output to prevent insert(0) additional overhead
     returns.emplace_back();
     // placeholder for the concatenated heads
-    returns.emplace_back(
-        kernel::matrix::async_allocate(input.rows, head_count * head_size, global_stream));
+    returns.emplace_back(kernel::matrix::async_allocate(
+        input.rows, head_count * head_size, input.type));
 
     for (size_t h = 0; h < head_count; ++h) {
         returns.emplace_back();  // q
@@ -76,7 +76,7 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns.emplace_back();  // v
         returns.emplace_back();  // scores
     }
-    
+
     for (size_t h = 0; h < head_count; ++h) {
         const AttentionHead& head = heads[h];
         const kernel::kernel_stream_t head_stream = nullptr;
@@ -120,14 +120,13 @@ ForwardingResult AttentionLayer::forward(std::span<const matrix> inputs,
         returns[2 + h * 4 + 1] = std::move(k);
         returns[2 + h * 4 + 2] = std::move(v);
         returns[2 + h * 4 + 3] = std::move(scores);
-
     }
 
     matrix& final_output = returns[0];
     matrix& concatenated_heads = returns[1];
 
-    final_output
-        = kernel::matrix::cross_multiplied(concatenated_heads, wo, global_stream);
+    final_output = kernel::matrix::cross_multiplied(concatenated_heads, wo,
+                                                    global_stream);
 
     LOG_DEBUG("  Attention Layer Forward:");
     LOG_DEBUG("    input norm: %f", input.norm());
@@ -172,9 +171,9 @@ std::vector<matrix> AttentionLayer::backpropogate(
         post_layer_gradient, wo, global_stream);
 
     matrix input_gradient = kernel::matrix::async_allocate(
-        layer_input.rows, layer_input.cols, global_stream);
+        layer_input.rows, layer_input.cols, layer_input.type);
     matrix raw_scores_gradient = kernel::matrix::async_allocate(
-        layer_input.rows, layer_input.rows, global_stream);
+        layer_input.rows, layer_input.rows, layer_input.type);
 
     for (size_t h = 0; h < head_count; ++h) {
         const matrix& q = result.outputs[2 + h * 4 + 0];
@@ -228,17 +227,15 @@ std::vector<matrix> AttentionLayer::backpropogate(
         matrix v_input_gradient = kernel::matrix::cross_t_multiplied(
             v_gradient, head.wv, head_stream);
 
-        kernel::matrix::add(input_gradient, q_input_gradient,
-                                   head_stream);
-        kernel::matrix::add(input_gradient, k_input_gradient,
-                                   head_stream);
-        kernel::matrix::add(input_gradient, v_input_gradient,
-                                   head_stream);
-        
+        kernel::matrix::add(input_gradient, q_input_gradient, head_stream);
+        kernel::matrix::add(input_gradient, k_input_gradient, head_stream);
+        kernel::matrix::add(input_gradient, v_input_gradient, head_stream);
+
         // Wait for streams before update, or update handles streams?
         // CentralOptimizer doesn't expose streams yet. AdamW kernel does.
-        // Assuming default stream for now for safety as CentralOptimizer update is simple.
-        kernel::wait_for_all_streams(); 
+        // Assuming default stream for now for safety as CentralOptimizer update
+        // is simple.
+        kernel::wait_for_all_streams();
 
         optimizer.update(head.wq, wq_gradient);
         optimizer.update(head.wk, wk_gradient);
