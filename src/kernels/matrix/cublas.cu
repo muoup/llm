@@ -1,5 +1,6 @@
 #include "cublas.hpp"
 
+#include <cublas_api.h>
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
 #include <curand.h>
@@ -7,28 +8,24 @@
 #include <cuda_fp16.hpp>
 
 #include <kernels/matrix/device.cuh>
-#include <kernels/matrix/pools.cuh>
-#include <kernels/matrix/kernels.hpp>
+#include <kernels/matrix/host.hpp>
+#include <kernels/pools.hpp>
 #include <kernels/scheduling.hpp>
 
 namespace kernel::matrix {
 
-static kernel::MatmulHandlePool<8> matmul_handle_pool;
-
-// Get global pools from pools.cu
-extern GPUFloatPool global_gpu_float_pool;
-extern GPUHalfPool global_gpu_half_pool;
-extern GPUBf16Pool global_gpu_bf16_pool;
-extern GPUBoolPool global_gpu_bool_pool;
+static kernel::MatmulHandlePool matmul_handle_pool = new_matmul_handle_pool(8);
 
 // ===== cuBLAS GEMM Wrappers =====
-
 static void check_cublas_errors(const char* step, cublasStatus_t status) {
+#ifdef MATRIX_CHECKS
     if (status != CUBLAS_STATUS_SUCCESS) {
         std::printf("cuBLAS Failure during: %s\n", step);
         std::printf("cuBLAS Error: %d\n", status);
+        std::fflush(stdout);
         std::abort();
     }
+#endif
 }
 
 ::matrix cublas_gemm_float(const const_matrix_view& a,

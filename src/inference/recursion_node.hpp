@@ -28,12 +28,14 @@ class RecursionNode final : public INode {
    public:
     RecursionNode(size_t dimensions,
                   size_t max_recursion_depth,
+                  DataType dtype,
                   std::vector<std::unique_ptr<INode>> loop_nodes)
         : dimensions(dimensions),
           max_recursion_depth(max_recursion_depth),
-          w(dimensions, 1),
-          b(1, 1),
+          w(dimensions, 1, dtype),
+          b(1, 1, dtype),
           loop(std::move(loop_nodes)) {}
+    RecursionNode() : dimensions(0), max_recursion_depth(0), w(0, 0, DataType::Float), b(0, 0, DataType::Float) {}
 
     NodeType getType() const override { return NodeType::Recursion; }
 
@@ -58,9 +60,6 @@ class RecursionNode final : public INode {
     void randomize(float min, float max) override;
     void save(std::ostream& out) const override;
     static RecursionNode load(std::istream& in);
-
-   private:
-    RecursionNode() : dimensions(0), max_recursion_depth(0), w(0, 0), b(0, 0) {}
 
     size_t dimensions, max_recursion_depth;
 

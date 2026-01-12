@@ -97,28 +97,28 @@ matrix matrix::clone() const {
 
 float matrix::sum() const {
     void* device_ptr = kernel::matrix::sum(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
 
 float matrix::max() const {
     void* device_ptr = kernel::matrix::max(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
 
 float matrix::min() const {
     void* device_ptr = kernel::matrix::min(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
 
 float matrix::absmax() const {
     void* device_ptr = kernel::matrix::absmax(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
@@ -207,21 +207,21 @@ matrix& matrix::element_wise_multiply(const matrix& other) {
 
 float matrix::abssum() const {
     void* device_ptr = kernel::matrix::abssum(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
 
 float matrix::variance() const {
     void* device_ptr = kernel::matrix::variance(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return host_result;
 }
 
 float matrix::norm() const {
     void* device_ptr = kernel::matrix::sum_of_squares(*this);
-    float host_result = kernel::get_device_ptr(device_ptr);
+    float host_result = kernel::dereference_device_ptr(this->type, device_ptr);
     kernel::matrix::free_buffer(device_ptr, nullptr);
     return std::sqrt(host_result);
 }
@@ -324,6 +324,20 @@ matrix matrix::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&new_rows), sizeof(size_t));
     in.read(reinterpret_cast<char*>(&new_cols), sizeof(size_t));
     in.read(reinterpret_cast<char*>(&new_type), sizeof(DataType));
+
+#ifdef MATRIX_CHECKS
+    switch (new_type) {
+        case DataType::Float:
+            std::puts("Loading matrix of type Float");
+            break;
+        case DataType::Half:
+            std::puts("Loading matrix of type Half");
+            break;
+        case DataType::BFloat16:
+            std::puts("Loading matrix of type BFloat16");
+            break;
+    }
+#endif
 
     matrix new_matrix = matrix(new_rows, new_cols, new_type);
     uint8_t* buffer_data = new uint8_t[new_matrix.buffer_size()];

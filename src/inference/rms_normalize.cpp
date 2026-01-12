@@ -6,7 +6,7 @@
 #include <inference/network_node.hpp>
 #include <iomanip>
 #include <kernels/layers/layer_norm.hpp>
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
 #include "kernels/scheduling.hpp"
@@ -15,10 +15,11 @@ constexpr size_t STREAMS_NEEDED = 3;
 
 RMSNorm::RMSNorm(std::unique_ptr<INode> inner_node,
                  size_t dimensions,
+                 DataType dtype,
                  float epsilon)
     : dimensions(dimensions),
       epsilon(epsilon),
-      gamma(1, dimensions),
+      gamma(1, dimensions, dtype),
       inner_node(std::move(inner_node)),
       streams(STREAMS_NEEDED) {
     if (this->inner_node) {

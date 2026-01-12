@@ -2,10 +2,11 @@
 
 #include <iostream>
 
-#include <inference/network_node.hpp>
 #include <kernels/layers/feed_forward.hpp>
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
+#include <kernels/matrix/cublas.hpp>
 #include <kernels/optimizer.hpp>
+#include <inference/network_node.hpp>
 #include <util/logger.hpp>
 
 NodeType FeedForwardLayer::getType() const {
@@ -14,17 +15,18 @@ NodeType FeedForwardLayer::getType() const {
 
 FeedForwardLayer::FeedForwardLayer(size_t dimensions,
                                    size_t projection_size,
+                                   DataType dtype,
                                    ActivationFunction activation)
-    : w1(dimensions, projection_size),
-      b1(1, projection_size),
-      w2(projection_size, dimensions),
-      b2(1, dimensions),
+    : w1(dimensions, projection_size, dtype),
+      b1(1, projection_size, dtype),
+      w2(projection_size, dimensions, dtype),
+      b2(1, dimensions, dtype),
       w3(),
       b3(),
       activation(activation) {
     if (activation == ActivationFunction::SwiGLU) {
-        w3 = matrix(projection_size, dimensions);
-        b3 = matrix(1, dimensions);
+        w3 = matrix(projection_size, dimensions, dtype);
+        b3 = matrix(1, dimensions, dtype);
     }
 }
 
@@ -228,13 +230,9 @@ FeedForwardLayer FeedForwardLayer::load(std::istream& in) {
     size_t dimensions = 0;
     size_t projection_size = 0;
 
-    auto w1_mat = matrix::load(in);
-    dimensions = w1_mat.rows;
-    projection_size = w1_mat.cols;
-
-    FeedForwardLayer layer(dimensions, projection_size, activation_type);
-    layer.w1 = std::move(w1_mat);
-
+    FeedForwardLayer layer;
+    
+    layer.w1 = matrix::load(in);
     CHECK_ERRORS("FeedForwardLayer Load - w1");
     layer.b1 = matrix::load(in);
     CHECK_ERRORS("FeedForwardLayer Load - b1");

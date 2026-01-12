@@ -1,9 +1,9 @@
 #include "optimizer.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
+#include <kernels/matrix/cublas.hpp>
 #include <kernels/scheduling.cuh>
-#include <kernels/scheduling.hpp>
 
 #include <util/matrix.hpp>
 

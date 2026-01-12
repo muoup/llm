@@ -33,7 +33,7 @@ ForwardingResult RecursionNode::forward(std::span<const matrix> inputs,
         // We don't for sure know the size of the final output of the loop, so
         // we need to lazy initialize it here.
         if (final_output.rows == 0) {
-            final_output = matrix(loop_input[0].rows, loop_input[0].cols);
+            final_output = matrix(loop_input[0].rows, loop_input[0].cols, loop_input[0].type);
         }
 
         auto p_n = loop_input[0].cross_multiplied(w);
@@ -113,13 +113,13 @@ std::vector<matrix> RecursionNode::backpropogate(
         const auto dp_n
             = y_gradient.t_cross_multiplied(y_n).sum() + dp_n_ponder;
 
-        matrix dP_n = matrix(y_n.rows, 1);
+        matrix dP_n = matrix(y_n.rows, 1, y_n.type);
         dP_n.set_all(dp_n * chance_acc);
 
         auto dw = y_n.t_cross_multiplied(dP_n);
         optimizer.update(w, dw);
 
-        auto db = matrix(1, 1);
+        auto db = matrix(1, 1, b.type);
         for (size_t r = 0; r < dP_n.cols; r++) {
             float col_sum = dP_n.col_sum(r);
             db.set(0, 0, db.get(0, 0) + col_sum);
@@ -178,12 +178,11 @@ void RecursionNode::save(std::ostream& out) const {
 }
 
 RecursionNode RecursionNode::load(std::istream& in) {
-    size_t dimensions;
-    size_t max_recursion_depth;
+    size_t dimensions, max_recursion_depth;
     in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     in.read(reinterpret_cast<char*>(&max_recursion_depth),
             sizeof(max_recursion_depth));
-
+    
     matrix w = matrix::load(in);
     matrix b = matrix::load(in);
 
@@ -195,8 +194,9 @@ RecursionNode RecursionNode::load(std::istream& in) {
         loop.emplace_back(load_node(in));
     }
 
-    RecursionNode recursion_node(dimensions, max_recursion_depth,
-                                 std::move(loop));
+    RecursionNode recursion_node;
+    recursion_node.dimensions = dimensions;
+    recursion_node.max_recursion_depth = max_recursion_depth;
     recursion_node.w = std::move(w);
     recursion_node.b = std::move(b);
 

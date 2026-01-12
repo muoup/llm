@@ -76,14 +76,14 @@ __device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t 
 }
 
 __device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value) {
-    ((half*)data)[row * stride + col] = __float2half(__half2float(((half*)data)[row * stride + col]) + __half2float(value));
+    ((half*)data)[row * stride + col] += value;
 }
 
 __device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
-    ((__nv_bfloat16*)data)[row * stride + col] = __float2bfloat16(__bfloat162float(((__nv_bfloat16*)data)[row * stride + col]) + __bfloat162float(value));
+    ((__nv_bfloat16*)data)[row * stride + col] += value;
 }
 
-__device__ void offset_elem(matrix_view& view, size_t row, size_t col, float value) {
+__device__ void offset_elem(const matrix_view& view, size_t row, size_t col, float value) {
     switch (view.type) {
         case DataType::Float:
             offset_elem_float(view.data, view.stride, row, col, value);
@@ -112,7 +112,7 @@ __device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, s
     atomicAdd((unsigned int*)addr, __bfloat16_as_ushort(value));
 }
 
-__device__ void offset_elem_atomic(matrix_view& view, size_t row, size_t col, float value) {
+__device__ void offset_elem_atomic(const matrix_view& view, size_t row, size_t col, float value) {
     switch (view.type) {
         case DataType::Float:
             offset_elem_atomic_float(view.data, view.stride, row, col, value);

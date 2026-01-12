@@ -7,7 +7,7 @@
 #include "inference/inference.hpp"
 #include "inference/rms_normalize.hpp"
 
-InferenceModel minimal_model(size_t vocab_size) {
+InferenceModel minimal_model(size_t vocab_size, DataType dtype) {
     const size_t dimensions = 128;
 
     InferenceModel model(dimensions, vocab_size);
@@ -15,16 +15,16 @@ InferenceModel minimal_model(size_t vocab_size) {
     model.add_connection(0, 1);
     model.add_connection(1, 2);
 
-    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1, true);
+    auto attn_layer = std::make_unique<AttentionLayer>(dimensions, 1, true, dtype);
     model.add_layer(
-        std::make_unique<LayerNorm>(std::move(attn_layer), dimensions));
+        std::make_unique<LayerNorm>(std::move(attn_layer), dimensions, dtype));
 
     auto ff_layer
-        = std::make_unique<FeedForwardLayer>(dimensions, dimensions * 4);
+        = std::make_unique<FeedForwardLayer>(dimensions, dimensions * 4, dtype);
     model.add_layer(
-        std::make_unique<LayerNorm>(std::move(ff_layer), dimensions));
+        std::make_unique<LayerNorm>(std::move(ff_layer), dimensions, dtype));
 
-    auto empty_norm = std::make_unique<LayerNorm>(nullptr, dimensions);
+    auto empty_norm = std::make_unique<LayerNorm>(nullptr, dimensions, dtype);
     model.add_layer(std::move(empty_norm));
 
     model.finalize();
@@ -36,8 +36,8 @@ InferenceModel standard_attention_model(size_t dimensions,
                                         size_t vocab_size,
                                         size_t num_blocks,
                                         size_t attention_heads,
-                                        ActivationFunction activation,
-                                        DataType dtype) {
+                                        DataType dtype,
+                                        ActivationFunction activation) {
     size_t ffn_multiplier;
     if (activation == ActivationFunction::SwiGLU) {
         ffn_multiplier = (dimensions * 4 / 3) / dimensions;
@@ -53,9 +53,9 @@ InferenceModel standard_attention_model(size_t dimensions,
 
     for (size_t i = 0; i < num_blocks; ++i) {
         auto attn_layer = std::make_unique<AttentionLayer>(
-            dimensions, attention_heads, true);
+            dimensions, attention_heads, true, dtype);
         auto attn_block
-            = std::make_unique<RMSNorm>(std::move(attn_layer), dimensions);
+            = std::make_unique<RMSNorm>(std::move(attn_layer), dimensions, dtype);
         size_t attn_block_idx = model.add_layer(std::move(attn_block));
 
         if (last_layer_idx != 0) {
@@ -63,9 +63,9 @@ InferenceModel standard_attention_model(size_t dimensions,
         }
 
         auto ff_layer = std::make_unique<FeedForwardLayer>(
-            dimensions, dimensions * ffn_multiplier, activation);
+            dimensions, dimensions * ffn_multiplier, dtype, activation);
         auto ff_block
-            = std::make_unique<RMSNorm>(std::move(ff_layer), dimensions);
+            = std::make_unique<RMSNorm>(std::move(ff_layer), dimensions, dtype);
         size_t ff_block_idx = model.add_layer(std::move(ff_block));
 
         model.add_connection(attn_block_idx, ff_block_idx);
@@ -74,7 +74,7 @@ InferenceModel standard_attention_model(size_t dimensions,
     }
 
     size_t standardized_norm
-        = model.add_layer(std::make_unique<LayerNorm>(nullptr, dimensions));
+        = model.add_layer(std::make_unique<LayerNorm>(nullptr, dimensions, dtype));
     model.add_connection(last_layer_idx, standardized_norm);
 
     model.randomize();

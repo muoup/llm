@@ -1,13 +1,14 @@
 #pragma once
 
+#include <kernels/pools.hpp>
 #include <inference/network_node.hpp>
 #include <util/matrix.hpp>
-#include "kernels/scheduling.hpp"
 
 class RMSNorm final : public INode {
    public:
     RMSNorm(std::unique_ptr<INode> inner,
             size_t dimensions,
+            DataType dtype,
             float epsilon = 1e-5f);
     RMSNorm();
 

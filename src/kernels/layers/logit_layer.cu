@@ -1,8 +1,9 @@
 #include "logit_layer.hpp"
 
-#include <kernels/matrix/pools.cuh>
+#include <kernels/pools.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>
+#include <kernels/pools.hpp>
 #include <kernels/scheduling.cuh>
 
 #include <util/matrix.hpp>
@@ -38,10 +39,10 @@ kernel::logit_layer::LossResult kernel::logit_layer::compute_loss_gradient(
     const std::span<const token_id_t> actual,
     size_t vocab_size,
     kernel_stream_t stream) {
-    ::matrix logit_loss_gradient(predictions.rows, predictions.cols);
-    ::matrix logit_bias_gradient(1, vocab_size);
+    ::matrix logit_loss_gradient(predictions.rows, predictions.cols, predictions.type);
+    ::matrix logit_bias_gradient(1, vocab_size, predictions.type);
 
-    float* device_average_loss = matrix::global_gpu_float_pool.acquire();
+    float* device_average_loss = kernel::global_gpu_float_pool.acquire();
     *device_average_loss = 0.0f;
 
     token_id_t* d_actual;

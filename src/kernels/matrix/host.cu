@@ -1,4 +1,4 @@
-#include "kernels.hpp"
+#include "host.hpp"
 
 #include <curand.h>
 #include <cuda_bf16.h>
@@ -6,7 +6,7 @@
 
 #include <kernels/scheduling.cuh>
 #include <kernels/matrix/device.cuh>
-#include <kernels/matrix/pools.cuh>
+#include <kernels/pools.hpp>
 #include <util/matrix.hpp>
 
 namespace kernel::matrix {
@@ -62,7 +62,7 @@ void* allocate_buffer(size_t size, DataType type, kernel_stream_t stream) {
 }
 
 void free_buffer(void* buffer, kernel_stream_t stream) {
-    gpu_free(buffer);
+    cudaFreeAsync(buffer, get_kernel_stream(stream));
 }
 
 // ===== Data Transfer =====
@@ -178,7 +178,7 @@ const void* get_addr(const ::matrix& mat, size_t row, size_t col) {
 // ===== Randomization =====
 
 void randomize(::matrix& mat, float min, float max, kernel_stream_t stream) {
-    curandGenerator_t generator;
+    curandGenerator_t generator = nullptr;
     curandCreateGenerator(&generator, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetStream(generator, (cudaStream_t)get_kernel_stream(stream));
 
@@ -208,7 +208,8 @@ void randomize(::matrix& mat, float min, float max, kernel_stream_t stream) {
                                             stream)>>>(
                     (float*)temp.data, (uint16_t*)mat.data, total_size);
             }
-            gpu_free(temp.data);
+            cudaFreeAsync(temp.data,
+                            (cudaStream_t)get_kernel_stream(stream));
         } break;
     }
 

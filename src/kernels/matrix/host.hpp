@@ -3,8 +3,16 @@
 #include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
 
+#ifdef MATRIX_CHECKS
+#define CHECK_ERRORS(step) kernel::matrix::check_errors(step)
+#else
+#define CHECK_ERRORS(step)
+#endif
+
 namespace kernel::matrix {
 
+void check_errors(const char* step);
+    
 // ===== Memory Management =====
 ::matrix async_allocate(size_t rows,
                         size_t cols,

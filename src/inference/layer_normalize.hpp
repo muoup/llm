@@ -1,13 +1,17 @@
 #pragma once
 
+#include <span>
+
 #include <inference/network_node.hpp>
 #include <util/matrix.hpp>
-#include "kernels/scheduling.hpp"
+
+#include <kernels/pools.hpp>
 
 class LayerNorm final : public INode {
    public:
     LayerNorm(std::unique_ptr<INode> inner,
               size_t dimensions,
+              DataType dtype,
               float epsilon = 1e-5f);
     LayerNorm();
 

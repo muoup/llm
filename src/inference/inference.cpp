@@ -13,7 +13,7 @@
 #include <inference/network_node.hpp>
 #include <inference/rms_normalize.hpp>
 
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
 #include <kernels/optimizer.hpp>
 #include "util/logger.hpp"
 

@@ -13,7 +13,8 @@ class LogitLayer {
    public:
     LogitLayer(const size_t dimensions,
                const size_t vocab_size,
-               DataType dtype = DataType::Float);
+               DataType dtype);
+    LogitLayer() : dimensions(0), vocab_size(0), w(0, 0, DataType::Float), b(0, 0, DataType::Float) {}
 
     size_t parameterCount() const;
 

@@ -89,7 +89,7 @@ LogitLayer LogitLayer::load(std::istream& in) {
     in.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
     in.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
 
-    LogitLayer layer(0, 0);
+    LogitLayer layer;
     layer.dimensions = dimensions;
     layer.vocab_size = vocab_size;
     layer.w = matrix::load(in);

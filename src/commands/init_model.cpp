@@ -92,7 +92,7 @@ int handle_init_model(int argc, char* argv[]) {
     std::cout << "  Vocab Size: " << _tokenizer.vocab_size() << std::endl;
 
     InferenceModel model = standard_attention_model(
-        dimensions, _tokenizer.vocab_size(), layers, heads, activation, dtype);
+        dimensions, _tokenizer.vocab_size(), layers, heads, dtype, activation);
 
     std::cout << "Total Parameters: " << model.parameter_count() << std::endl;
     std::cout << "Saving model to: " << output_path << std::endl;

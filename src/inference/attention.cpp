@@ -5,9 +5,10 @@
 #include <vector>
 
 #include <inference/network_node.hpp>
-#include <kernels/matrix.hpp>
 #include <kernels/optimizer.hpp>
-#include <kernels/scheduling.hpp>
+#include <kernels/pools.hpp>
+#include <kernels/matrix/host.hpp>
+#include <kernels/matrix/cublas.hpp>
 #include <util/logger.hpp>
 
 constexpr size_t STREAMS_PER_HEAD = 0;
@@ -18,18 +19,19 @@ NodeType AttentionLayer::getType() const {
 
 AttentionLayer::AttentionLayer(size_t dimensions,
                                size_t head_count,
-                               bool masked)
+                               bool masked,
+                               DataType dtype)
     : dimensions(dimensions),
       head_size(dimensions / head_count),
       head_count(head_count),
       masked(masked),
-      wo(matrix(head_size * head_count, dimensions)),
+      wo(matrix(head_size * head_count, dimensions, dtype)),
       streams(STREAMS_PER_HEAD * head_count) {
     for (size_t i = 0; i < head_count; ++i) {
         heads.emplace_back(AttentionHead{
-            matrix(dimensions, head_size),  // wq
-            matrix(dimensions, head_size),  // wk
-            matrix(dimensions, head_size)   // wv
+            matrix(dimensions, head_size, dtype),  // wq
+            matrix(dimensions, head_size, dtype),  // wk
+            matrix(dimensions, head_size, dtype)   // wv
         });
     }
 }

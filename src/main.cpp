@@ -10,7 +10,7 @@
 #include <commands/train_tokenizer.hpp>
 
 #include <kernels/layers/feed_forward.hpp>
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
 #include <util/logger.hpp>
 #include <util/matrix.hpp>
 

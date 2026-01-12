@@ -62,7 +62,7 @@ struct matrix {
         : rows(0), cols(0), stride(0), type(DataType::Float), data(nullptr) {}
     matrix(const size_t rows,
            const size_t cols,
-           DataType type = DataType::Float);
+           DataType type);
     matrix(matrix&&);
     matrix(const matrix& other) = delete;
 
@@ -225,12 +225,6 @@ struct const_matrix_view {
     const_matrix_view()
         : rows(0), cols(0), stride(0), type(DataType::Float), data(nullptr) {}
     const_matrix_view(const matrix_view& other)
-        : rows(other.rows),
-          cols(other.cols),
-          stride(other.stride),
-          type(other.type),
-          data(other.data) {}
-    const_matrix_view(matrix& other)
         : rows(other.rows),
           cols(other.cols),
           stride(other.stride),

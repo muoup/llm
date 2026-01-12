@@ -27,8 +27,10 @@ class FeedForwardLayer final : public INode {
    public:
     FeedForwardLayer(size_t dimensions,
                      size_t projection_size,
+                     DataType dtype,
                      ActivationFunction activation
                      = ActivationFunction::LeakyReLU);
+    FeedForwardLayer() : w1(), b1(), w2(), b2(), w3(), b3(), activation(ActivationFunction::LeakyReLU) {}
 
     NodeType getType() const override;
 

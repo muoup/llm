@@ -11,11 +11,11 @@ struct InferenceModel;
 // from token IDs to the embedding matrix.
 class EmbeddingLayer {
    public:
-    EmbeddingLayer() : m_embeddings(0, 0) {}
+    EmbeddingLayer() : m_embeddings(0, 0, DataType::Float) {}
     EmbeddingLayer(matrix&& embeddings) : m_embeddings(std::move(embeddings)) {}
     EmbeddingLayer(size_t dimensions,
                    size_t vocab_size,
-                   DataType dtype = DataType::Float)
+                   DataType dtype)
         : m_embeddings(vocab_size, dimensions, dtype) {}
 
     size_t parameterCount() const;

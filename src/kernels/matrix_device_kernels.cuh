@@ -2,13 +2,12 @@
 
 #include <cuda_runtime_api.h>
 #include <math_constants.h>
-
-#include <kernels/scheduling.cuh>
-#include <kernels/scheduling.hpp>
-#include <kernels/matrix.hpp>
-#include <util/matrix.hpp>
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
+
+#include <kernels/scheduling.cuh>
+#include <kernels/matrix/host.hpp>
+#include <util/matrix.hpp>
 
 namespace kernel::matrix {
 

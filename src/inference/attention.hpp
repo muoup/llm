@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernels/scheduling.hpp>
+#include <kernels/pools.hpp>
 #include <inference/network_node.hpp>
 #include <util/matrix.hpp>
 
@@ -24,7 +24,7 @@ struct AttentionHead {
 
 class AttentionLayer final : public INode {
    public:
-    AttentionLayer(size_t dimensions, size_t head_count, bool masked);
+    AttentionLayer(size_t dimensions, size_t head_count, bool masked, DataType dtype);
 
     size_t parameterCount() const override;
     NodeType getType() const override;

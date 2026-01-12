@@ -5,7 +5,7 @@
 #include <inference/layer_normalize.hpp>
 
 #include <kernels/matrix_device_kernels.cuh>
-#include <kernels/matrix.hpp>
+#include <kernels/matrix/host.hpp>
 #include <kernels/scheduling.cuh>
 #include <kernels/scheduling.hpp>
 
