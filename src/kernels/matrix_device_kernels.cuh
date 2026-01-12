@@ -5,7 +5,7 @@
 
 #include <kernels/scheduling.cuh>
 #include <kernels/scheduling.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/matrix.hpp>
 #include <util/matrix.hpp>
 
 namespace kernel::matrix {

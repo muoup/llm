@@ -1,5 +1,5 @@
 #include "feed_forward.hpp"
-#include "kernels/matrix_kernels.hpp"
+#include "kernels/matrix.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>

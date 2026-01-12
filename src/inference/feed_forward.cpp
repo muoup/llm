@@ -3,8 +3,8 @@
 #include <iostream>
 
 #include <inference/network_node.hpp>
-#include <kernels/feed_forward.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/layers/feed_forward.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
 

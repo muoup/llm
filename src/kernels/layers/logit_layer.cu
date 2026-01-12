@@ -1,6 +1,6 @@
 #include "logit_layer.hpp"
 
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/matrix_device_kernels.cuh>
 #include <kernels/optimizer.hpp>
 #include <kernels/scheduling.cuh>

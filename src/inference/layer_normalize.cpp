@@ -5,8 +5,8 @@
 #include <inference/inference.hpp>
 #include <inference/network_node.hpp>
 #include <iomanip>
-#include <kernels/layer_norm.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/layers/layer_norm.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/optimizer.hpp>
 #include <util/logger.hpp>
 #include "kernels/scheduling.hpp"

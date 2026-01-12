@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/scheduling.hpp>
 
 matrix::matrix(const size_t rows, const size_t cols)

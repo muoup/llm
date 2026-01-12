@@ -1,6 +1,6 @@
 #include "optimizer.hpp"
 #include <kernels/optimizer.hpp>
-#include "kernels/matrix_kernels.hpp"
+#include "kernels/matrix.hpp"
 
 void CentralOptimizer::update(matrix& parameter, const matrix& gradient, float weight_decay) {
     auto it = states.find(parameter.data);

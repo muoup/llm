@@ -9,8 +9,8 @@
 #include <commands/init_model.hpp>
 #include <commands/perf_model.hpp>
 
-#include <kernels/feed_forward.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/layers/feed_forward.hpp>
+#include <kernels/matrix.hpp>
 #include <util/matrix.hpp>
 #include <util/logger.hpp>
 

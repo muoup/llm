@@ -1,7 +1,7 @@
 #include "logit_layer.hpp"
 
-#include <kernels/feed_forward.hpp>
-#include <kernels/logit_layer.hpp>
+#include <kernels/layers/feed_forward.hpp>
+#include <kernels/layers/logit_layer.hpp>
 #include <kernels/optimizer.hpp>
 #include <tokenizer/token.hpp>
 #include <util/logger.hpp>

@@ -1,7 +1,7 @@
 #include "optimizer.hpp"
 
 #include <kernels/matrix_device_kernels.cuh>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/scheduling.cuh>
 #include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>

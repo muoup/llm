@@ -1,7 +1,7 @@
 #include "embedding.hpp"
 
-#include <kernels/embedding_layer.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/layers/embedding_layer.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/optimizer.hpp>
 
 #include <cassert>

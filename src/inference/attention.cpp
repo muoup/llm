@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <inference/network_node.hpp>
-#include <kernels/matrix_kernels.hpp>
+#include <kernels/matrix.hpp>
 #include <kernels/optimizer.hpp>
 #include <kernels/scheduling.hpp>
 #include <util/logger.hpp>
