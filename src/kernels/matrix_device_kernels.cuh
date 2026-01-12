@@ -14,11 +14,11 @@ namespace kernel::matrix {
 
 #define MATRIX_PROJECT(row, col, stride) ((row) * stride + (col))
 
-inline __device__ void* device_get_addr(void* data,
-                                       const size_t stride,
-                                       DataType type,
-                                       const size_t row,
-                                       const size_t col) {
+static __device__ void* device_get_addr(void* data,
+                                     const size_t stride,
+                                     DataType type,
+                                     const size_t row,
+                                     const size_t col) {
     size_t offset = MATRIX_PROJECT(row, col, stride);
     switch (type) {
         case DataType::Float:
@@ -31,11 +31,11 @@ inline __device__ void* device_get_addr(void* data,
     return nullptr;
 }
 
-inline __device__ const void* device_get_addr(const void* data,
-                                          const size_t stride,
-                                          DataType type,
-                                          const size_t row,
-                                          const size_t col) {
+static __device__ const void* device_get_addr(const void* data,
+                                        const size_t stride,
+                                        DataType type,
+                                        const size_t row,
+                                        const size_t col) {
     size_t offset = MATRIX_PROJECT(row, col, stride);
     switch (type) {
         case DataType::Float:
@@ -48,24 +48,24 @@ inline __device__ const void* device_get_addr(const void* data,
     return nullptr;
 }
 
-inline __device__ float* device_get_addr(matrix_view data,
+static __device__ float* device_get_addr(matrix_view data,
                                      const size_t row,
                                      const size_t col) {
     return (float*)device_get_addr(data.data, data.stride, data.type, row, col);
 }
 
-inline __device__ const float* device_get_addr(const_matrix_view data,
-                                           const size_t row,
-                                           const size_t col) {
+static __device__ const float* device_get_addr(const_matrix_view data,
+                                         const size_t row,
+                                         const size_t col) {
     return (const float*)device_get_addr(data.data, data.stride, data.type, row, col);
 }
 
-inline __device__ void device_set(void* data,
-                                 const size_t stride,
-                                 DataType type,
-                                 const size_t row,
-                                 const size_t col,
-                                 const float value) {
+static __device__ void device_set(void* data,
+                                const size_t stride,
+                                DataType type,
+                                const size_t row,
+                                const size_t col,
+                                const float value) {
     switch (type) {
         case DataType::Float:
             *(float*)device_get_addr(data, stride, type, row, col) = value;
@@ -79,18 +79,18 @@ inline __device__ void device_set(void* data,
     }
 }
 
-inline __device__ void device_set(matrix_view data,
-                                 const size_t row,
-                                 const size_t col,
-                                 const float value) {
+static __device__ void device_set(matrix_view data,
+                                const size_t row,
+                                const size_t col,
+                                const float value) {
     device_set(data.data, data.stride, data.type, row, col, value);
 }
 
-inline __device__ float device_get(const void* data,
-                                 const size_t stride,
-                                 DataType type,
-                                 const size_t row,
-                                 const size_t col) {
+static __device__ float device_get(const void* data,
+                                const size_t stride,
+                                DataType type,
+                                const size_t row,
+                                const size_t col) {
     switch (type) {
         case DataType::Float:
             return *(const float*)device_get_addr(data, stride, type, row, col);
@@ -102,24 +102,24 @@ inline __device__ float device_get(const void* data,
     return 0.0f;
 }
 
-inline __device__ float device_get(matrix_view data,
-                                 const size_t row,
-                                 const size_t col) {
+static __device__ float device_get(matrix_view data,
+                                const size_t row,
+                                const size_t col) {
     return device_get(data.data, data.stride, data.type, row, col);
 }
 
-inline __device__ float device_get(const const_matrix_view data,
-                                 const size_t row,
-                                 const size_t col) {
+static __device__ float device_get(const const_matrix_view data,
+                                const size_t row,
+                                const size_t col) {
     return device_get(data.data, data.stride, data.type, row, col);
 }
 
-inline __device__ void device_offset_elem(void* data,
-                                        const size_t stride,
-                                        DataType type,
-                                        const size_t row,
-                                        const size_t col,
-                                        float value) {
+static __device__ void device_offset_elem(void* data,
+                                      const size_t stride,
+                                      DataType type,
+                                      const size_t row,
+                                      const size_t col,
+                                      float value) {
     switch (type) {
         case DataType::Float:
             *(float*)device_get_addr(data, stride, type, row, col) += value;
@@ -137,28 +137,28 @@ inline __device__ void device_offset_elem(void* data,
     }
 }
 
-inline __device__ void device_offset_elem(matrix_view data,
-                                        const size_t row,
-                                        const size_t col,
-                                        float value) {
+static __device__ void device_offset_elem(matrix_view data,
+                                      const size_t row,
+                                      const size_t col,
+                                      float value) {
     device_offset_elem(data.data, data.stride, data.type, row, col, value);
 }
 
-inline __device__ void device_offset_elem_atomic(float* data,
-                                               const size_t stride,
-                                               const size_t row,
-                                               const size_t col,
-                                               float value) {
+static __device__ void device_offset_elem_atomic(float* data,
+                                             const size_t stride,
+                                             const size_t row,
+                                             const size_t col,
+                                             float value) {
     float* addr = (float*)device_get_addr(data, stride, DataType::Float, row, col);
     atomicAdd(addr, value);
 }
 
-inline __device__ void device_offset_elem_atomic(void* data,
-                                               const size_t stride,
-                                               DataType type,
-                                               const size_t row,
-                                               const size_t col,
-                                               float value) {
+static __device__ void device_offset_elem_atomic(void* data,
+                                             const size_t stride,
+                                             DataType type,
+                                             const size_t row,
+                                             const size_t col,
+                                             float value) {
     if (type == DataType::Float) {
         float* addr = (float*)device_get_addr(data, stride, type, row, col);
         atomicAdd(addr, value);
@@ -171,30 +171,30 @@ inline __device__ void device_offset_elem_atomic(void* data,
     }
 }
 
-inline __device__ void device_offset_elem_atomic(matrix_view data,
-                                               const size_t row,
-                                               const size_t col,
-                                               float value) {
+static __device__ void device_offset_elem_atomic(matrix_view data,
+                                             const size_t row,
+                                             const size_t col,
+                                             float value) {
     device_offset_elem_atomic(data.data, data.stride, data.type, row, col, value);
 }
 
 namespace device {
 
-inline __device__ float warp_reduce_sum(float val) {
+static __device__ float warp_reduce_sum(float val) {
     for (int offset = 16; offset > 0; offset /= 2)
-        val += __shfl_down_sync(0xffffffff, val, offset);
+        val += __shfl_down_sync(0xffffffff, val, offset, 32);
 
     return val;
 }
 
-inline __device__ float warp_reduce_max(float val) {
+static __device__ float warp_reduce_max(float val) {
     for (int offset = 16; offset > 0; offset /= 2)
-        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset, 32));
 
     return val;
 }
 
-inline __device__ float block_reduce_sum(float val) {
+static __device__ float block_reduce_sum(float val) {
     static __shared__ float shared[32];
     int lane = threadIdx.x % 32;
     int wid = threadIdx.x / 32;
@@ -216,7 +216,7 @@ inline __device__ float block_reduce_sum(float val) {
     return val;
 }
 
-inline __device__ float block_reduce_max(float val) {
+static __device__ float block_reduce_max(float val) {
     static __shared__ float shared[32];
     int lane = threadIdx.x % 32;
     int wid = threadIdx.x / 32;

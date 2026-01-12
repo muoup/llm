@@ -1,10 +1,9 @@
 #pragma once
+
 #include <cuda_runtime_api.h>
+
 #include <kernels/scheduling.cuh>
 #include <util/matrix.hpp>
-#include "device.cuh"
-#include "mapping.hpp"
-#include "pools.cuh"
 
 namespace kernel::matrix {
 

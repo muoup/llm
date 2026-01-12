@@ -73,8 +73,6 @@ struct DataMapper {
     }
 };
 
-#ifdef __CUDACC__
-
 template <DataMapper Mapper>
 __global__ void map_inplace_kernel(matrix_view data) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -100,7 +98,5 @@ template <DataMapper Mapper>
 
 template <DataMapper Mapper>
 void map_inplace(::matrix& input, kernel_stream_t stream);
-
-#endif  // __CUDACC__
 
 }  // namespace kernel::matrix

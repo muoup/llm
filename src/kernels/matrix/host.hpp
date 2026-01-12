@@ -1,6 +1,5 @@
 #pragma once
 
-#include <kernels/matrix/mapping.hpp>
 #include <kernels/scheduling.hpp>
 #include <util/matrix.hpp>
 

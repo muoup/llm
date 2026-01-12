@@ -8,34 +8,37 @@
 
 namespace kernel::matrix::device {
 
-// ===== Device Inline Helpers =====
+// ===== Device Helpers =====
 
-inline __device__ float* get_addr_float(void* data, size_t stride, size_t row, size_t col);
-inline __device__ half* get_addr_half(void* data, size_t stride, size_t row, size_t col);
-inline __device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, size_t col);
+__device__ float* get_addr_float(void* data, size_t stride, size_t row, size_t col);
+__device__ half* get_addr_half(void* data, size_t stride, size_t row, size_t col);
+__device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, size_t col);
 
-inline __device__ float get_float(const void* data, size_t stride, size_t row, size_t col);
-inline __device__ half get_half(const void* data, size_t stride, size_t row, size_t col);
-inline __device__ __nv_bfloat16 get_bf16(const void* data, size_t stride, size_t row, size_t col);
+__device__ void* get_addr(matrix_view& view, size_t row, size_t col);
+__device__ const void* get_addr(const const_matrix_view& view, size_t row, size_t col);
 
-inline __device__ void set_float(void* data, size_t stride, size_t row, size_t col, float value);
-inline __device__ void set_half(void* data, size_t stride, size_t row, size_t col, half value);
-inline __device__ void set_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
+__device__ float get_float(const void* data, size_t stride, size_t row, size_t col);
+__device__ half get_half(const void* data, size_t stride, size_t row, size_t col);
+__device__ __nv_bfloat16 get_bf16(const void* data, size_t stride, size_t row, size_t col);
 
-inline __device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value);
-inline __device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value);
-inline __device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
-__device__ void offset_elem(void* data, size_t stride, size_t row, size_t col, float value);
+__device__ void set_float(void* data, size_t stride, size_t row, size_t col, float value);
+__device__ void set_half(void* data, size_t stride, size_t row, size_t col, half value);
+__device__ void set_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
 
-inline __device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value);
-inline __device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value);
-inline __device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
-__device__ void offset_elem_atomic(void* data, size_t stride, size_t row, size_t col, float value);
+__device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value);
+__device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value);
+__device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
+__device__ void offset_elem(matrix_view& view, size_t row, size_t col, float value);
 
-inline __device__ float warp_reduce_sum(float val);
-inline __device__ float warp_reduce_max(float val);
-inline __device__ float block_reduce_sum(float val);
-inline __device__ float block_reduce_max(float val);
+__device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value);
+__device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value);
+__device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value);
+__device__ void offset_elem_atomic(matrix_view& view, size_t row, size_t col, float value);
+
+__device__ float warp_reduce_sum(float val);
+__device__ float warp_reduce_max(float val);
+__device__ float block_reduce_sum(float val);
+__device__ float block_reduce_max(float val);
 
 // ===== Device Kernels =====
 

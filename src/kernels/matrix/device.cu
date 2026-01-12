@@ -9,84 +9,136 @@
 
 namespace kernel::matrix::device {
 
-// ===== Device Inline Helpers =====
+// ===== Device Helpers =====
 
-inline __device__ float* get_addr_float(void* data, size_t stride, size_t row, size_t col) {
+__device__ float* get_addr_float(void* data, size_t stride, size_t row, size_t col) {
     return &((float*)data)[row * stride + col];
 }
 
-inline __device__ half* get_addr_half(void* data, size_t stride, size_t row, size_t col) {
+__device__ half* get_addr_half(void* data, size_t stride, size_t row, size_t col) {
     return &((half*)data)[row * stride + col];
 }
 
-inline __device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, size_t col) {
+__device__ __nv_bfloat16* get_addr_bf16(void* data, size_t stride, size_t row, size_t col) {
     return &((__nv_bfloat16*)data)[row * stride + col];
 }
 
-inline __device__ float get_float(const void* data, size_t stride, size_t row, size_t col) {
+__device__ void* get_addr(matrix_view& view, size_t row, size_t col) {
+    switch (view.type) {
+        case DataType::Float:
+            return get_addr_float(view.data, view.stride, row, col);
+        case DataType::Half:
+            return get_addr_half(view.data, view.stride, row, col);
+        case DataType::BFloat16:
+            return get_addr_bf16(view.data, view.stride, row, col);
+    }
+    return nullptr;
+}
+
+__device__ const void* get_addr(const const_matrix_view& view, size_t row, size_t col) {
+    switch (view.type) {
+        case DataType::Float:
+            return get_addr_float(const_cast<void*>(view.data), view.stride, row, col);
+        case DataType::Half:
+            return get_addr_half(const_cast<void*>(view.data), view.stride, row, col);
+        case DataType::BFloat16:
+            return get_addr_bf16(const_cast<void*>(view.data), view.stride, row, col);
+    }
+    return nullptr;
+}
+
+__device__ float get_float(const void* data, size_t stride, size_t row, size_t col) {
     return ((const float*)data)[row * stride + col];
 }
 
-inline __device__ half get_half(const void* data, size_t stride, size_t row, size_t col) {
+__device__ half get_half(const void* data, size_t stride, size_t row, size_t col) {
     return ((const half*)data)[row * stride + col];
 }
 
-inline __device__ __nv_bfloat16 get_bf16(const void* data, size_t stride, size_t row, size_t col) {
+__device__ __nv_bfloat16 get_bf16(const void* data, size_t stride, size_t row, size_t col) {
     return ((const __nv_bfloat16*)data)[row * stride + col];
 }
 
-inline __device__ void set_float(void* data, size_t stride, size_t row, size_t col, float value) {
+__device__ void set_float(void* data, size_t stride, size_t row, size_t col, float value) {
     ((float*)data)[row * stride + col] = value;
 }
 
-inline __device__ void set_half(void* data, size_t stride, size_t row, size_t col, half value) {
+__device__ void set_half(void* data, size_t stride, size_t row, size_t col, half value) {
     ((half*)data)[row * stride + col] = value;
 }
 
-inline __device__ void set_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
+__device__ void set_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
     ((__nv_bfloat16*)data)[row * stride + col] = value;
 }
 
-inline __device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value) {
+__device__ void offset_elem_float(void* data, size_t stride, size_t row, size_t col, float value) {
     ((float*)data)[row * stride + col] += value;
 }
 
-inline __device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value) {
+__device__ void offset_elem_half(void* data, size_t stride, size_t row, size_t col, half value) {
     ((half*)data)[row * stride + col] = __float2half(__half2float(((half*)data)[row * stride + col]) + __half2float(value));
 }
 
-inline __device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
+__device__ void offset_elem_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
     ((__nv_bfloat16*)data)[row * stride + col] = __float2bfloat16(__bfloat162float(((__nv_bfloat16*)data)[row * stride + col]) + __bfloat162float(value));
 }
 
-inline __device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value) {
+__device__ void offset_elem(matrix_view& view, size_t row, size_t col, float value) {
+    switch (view.type) {
+        case DataType::Float:
+            offset_elem_float(view.data, view.stride, row, col, value);
+            break;
+        case DataType::Half:
+            offset_elem_half(view.data, view.stride, row, col, __float2half(value));
+            break;
+        case DataType::BFloat16:
+            offset_elem_bf16(view.data, view.stride, row, col, __float2bfloat16(value));
+            break;
+    }
+}
+
+__device__ void offset_elem_atomic_float(void* data, size_t stride, size_t row, size_t col, float value) {
     float* addr = &((float*)data)[row * stride + col];
     atomicAdd(addr, value);
 }
 
-inline __device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value) {
+__device__ void offset_elem_atomic_half(void* data, size_t stride, size_t row, size_t col, half value) {
     half* addr = &((half*)data)[row * stride + col];
     atomicAdd((unsigned int*)addr, __half_as_ushort(value));
 }
 
-inline __device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
+__device__ void offset_elem_atomic_bf16(void* data, size_t stride, size_t row, size_t col, __nv_bfloat16 value) {
     __nv_bfloat16* addr = &((__nv_bfloat16*)data)[row * stride + col];
     atomicAdd((unsigned int*)addr, __bfloat16_as_ushort(value));
 }
 
-inline __device__ float warp_reduce_sum(float val) {
+__device__ void offset_elem_atomic(matrix_view& view, size_t row, size_t col, float value) {
+    switch (view.type) {
+        case DataType::Float:
+            offset_elem_atomic_float(view.data, view.stride, row, col, value);
+            break;
+        case DataType::Half:
+            offset_elem_atomic_half(view.data, view.stride, row, col, __float2half(value));
+            break;
+        case DataType::BFloat16:
+            offset_elem_atomic_bf16(view.data, view.stride, row, col, __float2bfloat16(value));
+            break;
+    }
+}
+
+__device__ float warp_reduce_sum(float val) {
     for (int offset = 16; offset > 0; offset /= 2)
-        val += __shfl_down_sync(0xffffffff, val, offset);
+        val += __shfl_down_sync(0xffffffff, val, offset, 32);
     return val;
 }
 
-inline __device__ float warp_reduce_max(float val) {
+__device__ float warp_reduce_max(float val) {
     for (int offset = 16; offset > 0; offset /= 2)
-        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset, 32));
     return val;
 }
 
-inline __device__ float block_reduce_sum(float val) {
+__device__ float block_reduce_sum(float val) {
     static __shared__ float shared[32];
     int lane = threadIdx.x % 32;
     int wid = threadIdx.x / 32;
@@ -101,7 +153,7 @@ inline __device__ float block_reduce_sum(float val) {
     return val;
 }
 
-inline __device__ float block_reduce_max(float val) {
+__device__ float block_reduce_max(float val) {
     static __shared__ float shared[32];
     int lane = threadIdx.x % 32;
     int wid = threadIdx.x / 32;

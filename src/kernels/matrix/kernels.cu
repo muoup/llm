@@ -1,12 +1,13 @@
+#include "kernels.hpp"
+
 #include <curand.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
+
 #include <kernels/scheduling.cuh>
-#include <stdexcept>
+#include <kernels/matrix/device.cuh>
+#include <kernels/matrix/pools.cuh>
 #include <util/matrix.hpp>
-#include "device.cuh"
-#include "kernels.hpp"
-#include "pools.cuh"
 
 namespace kernel::matrix {
 
